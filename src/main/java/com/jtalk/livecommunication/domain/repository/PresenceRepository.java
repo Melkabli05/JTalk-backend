@@ -49,8 +49,23 @@ public class PresenceRepository {
         return lastSeen != null && lastSeen >= notBefore.toEpochMilli();
     }
 
+    /** Bars a kicked user from joining this room again. */
+    public void ban(UUID roomId, String userId) {
+        RedisCommands<String, String> redis = connection.sync();
+        redis.sadd(bannedKey(roomId), userId);
+        redis.expire(bannedKey(roomId), ttlSeconds);
+    }
+
+    public boolean isBanned(UUID roomId, String userId) {
+        return connection.sync().sismember(bannedKey(roomId), userId);
+    }
+
     public void clear(UUID roomId) {
-        connection.sync().del(key(roomId));
+        connection.sync().del(key(roomId), bannedKey(roomId));
+    }
+
+    private static String bannedKey(UUID roomId) {
+        return "voiceroom:{" + roomId + "}:banned";
     }
 
     static String key(UUID roomId) {

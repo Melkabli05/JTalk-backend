@@ -22,7 +22,7 @@ com.jtalk.livecommunication
 │   ├── entity            VoiceRoom (persistent, @MappedEntity)
 │   ├── enums, model, event
 ├── config                typed @ConfigurationProperties, Clock
-└── security, exception   @CallerId (caller identity header); ProblemType enum for all API errors (RFC 9457)
+└── exception             ProblemType enum for all API errors (RFC 9457)
 ```
 
 `ArchitectureTest` enforces the layering (controller/listener -> service -> repository -> entity, never upwards;
@@ -55,8 +55,9 @@ Conventions the code follows (and `LiveKitMediaServiceTest` pins down):
 
 ## API
 
-Authentication is done upstream; the caller identity is read from the `X-User-Id` header.
-Never expose this service directly to clients. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
+Every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <JWT>`; the token's `sub` is the user id.
+Tokens are issued upstream (gateway / identity provider) and verified here with the shared HS256 secret in
+`JWT_SECRET` (32+ characters), or with a JWKS endpoint via `micronaut.security.token.jwt.signatures.jwks`. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
 
 | Method & path (under `/api/v1/voice-rooms`) | Who | Purpose |
 |---|---|---|
@@ -66,6 +67,7 @@ Never expose this service directly to clients. Errors are RFC 9457 `application/
 | `POST /{roomId}/participants/me` | any | Join: LiveKit URL, token, role |
 | `POST .../participants/me/heartbeat` / `DELETE .../participants/me` | member | Keep alive / leave |
 | `GET .../participants` | any | Who is here: role + `ACTIVE`/`RECONNECTING` |
+| `DELETE .../participants/{userId}` | host | Kick: frees their seat (promoting the next hand-raiser), disconnects them, revokes their LiveKit tokens and bars them from rejoining |
 | `GET .../stage` | any | Speakers and hand-raise queue |
 | `POST .../stage/hand-raises` / `DELETE .../hand-raises/me` | listener | Raise / lower hand |
 | `PUT .../stage/speakers/{userId}` / `DELETE ...` | host / self | Approve / remove or step down |
@@ -81,6 +83,7 @@ comes from the environment:
 
 ```bash
 export LIVEKIT_API_SECRET=<secret of the LiveKit Cloud key>
+export JWT_SECRET=<HS256 secret shared with whatever issues your user tokens, 32+ chars>
 ./gradlew run                                   # control plane
 MICRONAUT_ENVIRONMENTS=quic ./gradlew run       # + HTTPS and HTTP/3 on :8443 (self-signed, local only)
 ```
@@ -114,9 +117,8 @@ Redis must have keyspace notifications for expired keys (`notify-keyspace-events
   Data 5.2 ships an HTTP binder only for `Pageable`, not for `CursoredPageable`, so keyset pagination would need a
   hand-written cursor encoder and decoder. Ordering has an id tie-breaker (and a matching index) so pages are stable;
   a room created while someone is paging can still shift later pages by one.
-- **Caller identity is trusted from `X-User-Id`.** Authentication belongs to the API gateway. Adopting Micronaut
-  Security with JWTs (`Principal` binding, `@Secured`) is a one-annotation swap in `@CallerId` once an issuer and key
-  source are chosen; it is not done because that choice is not ours to guess.
+- **Tokens are verified, not issued, here.** This service does not mint user JWTs; it trusts whatever signs them with
+  `JWT_SECRET`. A kicked user is barred from rejoining that room only; they are not banned account-wide.
 - **Live stats are batched per room, not per request.** The discovery feed reads Postgres once and Redis as one
   pipelined batch. A single Lua call would be one command but breaks Redis Cluster, because each room's keys live in
   a different hash slot.

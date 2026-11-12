@@ -26,6 +26,10 @@ public class FakeMediaService implements MediaService {
     public final List<PermissionChange> permissionChanges = new CopyOnWriteArrayList<>();
     public final List<SubscriptionChange> subscriptionChanges = new CopyOnWriteArrayList<>();
     public final List<Signal> signals = new CopyOnWriteArrayList<>();
+    public record Removal(UUID roomId, String userId) {
+    }
+
+    public final List<Removal> removals = new CopyOnWriteArrayList<>();
     public final List<UUID> closedRooms = new CopyOnWriteArrayList<>();
 
     public void reset() {
@@ -33,6 +37,7 @@ public class FakeMediaService implements MediaService {
         subscriptionChanges.clear();
         signals.clear();
         closedRooms.clear();
+        removals.clear();
     }
 
     @Override
@@ -43,6 +48,11 @@ public class FakeMediaService implements MediaService {
     @Override
     public void updatePublishPermission(UUID roomId, String userId, boolean canPublish) {
         permissionChanges.add(new PermissionChange(roomId, userId, canPublish));
+    }
+
+    @Override
+    public void removeParticipant(UUID roomId, String userId) {
+        removals.add(new Removal(roomId, userId));
     }
 
     @Override

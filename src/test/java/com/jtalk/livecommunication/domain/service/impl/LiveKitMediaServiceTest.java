@@ -123,6 +123,18 @@ class LiveKitMediaServiceTest {
     }
 
     @Test
+    void removeParticipantDisconnectsThemAndRevokesTheirEarlierTokens() throws Exception {
+        service().removeParticipant(room, "mallory");
+
+        Received request = onlyRequest();
+        assertTrue(request.path().endsWith("/RemoveParticipant"), request.path());
+        var body = LivekitRoom.RoomParticipantIdentity.parseFrom(request.body());
+        assertEquals(room.toString(), body.getRoom());
+        assertEquals("mallory", body.getIdentity());
+        assertEquals(NOW.toEpochMilli(), body.getRevokeTokenTs(), "tokens issued before the kick must stop working");
+    }
+
+    @Test
     void setSubscriptionsSendsUpdateSubscriptionsAndSkipsEmptyLists() throws Exception {
         LiveKitMediaService service = service();
         service.setSubscriptions(room, "bob", List.of(), true);

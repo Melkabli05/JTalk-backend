@@ -3,6 +3,7 @@ package com.jtalk.livecommunication;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.jtalk.livecommunication.support.ApiTestBase;
+import com.jtalk.livecommunication.support.FakeMediaService;
 import com.jtalk.livecommunication.support.FakeMediaService.PermissionChange;
 import com.jtalk.livecommunication.support.FakeMediaService.SubscriptionChange;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -110,6 +111,39 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         delete(roomId, "/stage/speakers/alice", "alice");
         put(roomId, "/stage/speakers/bob", "host");
         assertEquals(List.of("bob"), getStage(roomId).get("speakers"));
+    }
+
+    // ---- moderation -------------------------------------------------------------------------------
+
+    @Test
+    void hostKicksAListenerWhoCannotComeBack() {
+        String roomId = createRoom("host", "Moderation", 2);
+        post(roomId, "/participants/me", "host");
+        post(roomId, "/participants/me", "mallory");
+        post(roomId, "/stage/hand-raises", "mallory");
+
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> delete(roomId, "/participants/host", "mallory"));
+        assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "cannot-kick-host", () -> delete(roomId, "/participants/host", "host"));
+        assertEquals(HttpStatus.NO_CONTENT, delete(roomId, "/participants/mallory", "host").status());
+
+        assertEquals(List.of("host"), getParticipants(roomId).stream().map(p -> p.get("userId")).toList());
+        assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
+        assertEquals(List.of(new FakeMediaService.Removal(uuid(roomId), "mallory")), media.removals);
+        assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", () -> post(roomId, "/participants/me", "mallory"));
+    }
+
+    @Test
+    void kickingASpeakerFreesTheirSeatForTheNextHandRaiser() {
+        String roomId = createRoom("host", "Kick speaker", 1);
+        post(roomId, "/participants/me", "host");
+        seatSpeaker(roomId, "host", "alice");
+        post(roomId, "/participants/me", "bob");
+        post(roomId, "/stage/hand-raises", "bob");
+
+        delete(roomId, "/participants/alice", "host");
+
+        assertEquals(List.of("bob"), getStage(roomId).get("speakers"));
+        assertTrue(media.permissionChanges.contains(new PermissionChange(uuid(roomId), "bob", true)));
     }
 
     // ---- whisper ----------------------------------------------------------------------------------

@@ -25,6 +25,12 @@ public interface ParticipantService {
 
     void leave(UUID roomId, String userId);
 
+    /**
+     * Host-only moderation: removes the user from the room (freeing their seat, and promoting the next hand-raiser
+     * if they were speaking), disconnects them from LiveKit and bars them from joining again.
+     */
+    void kick(UUID roomId, String hostId, String targetUserId);
+
     boolean isPresent(UUID roomId, String userId);
 
     List<Participant> listPresent(UUID roomId);

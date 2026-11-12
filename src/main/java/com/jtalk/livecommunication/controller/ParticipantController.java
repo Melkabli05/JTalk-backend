@@ -47,6 +47,13 @@ class ParticipantController {
         return HttpResponse.noContent();
     }
 
+    /** Host moderation: removes the participant from the room and bars them from rejoining. */
+    @Delete("/{targetUserId}")
+    HttpResponse<Void> kick(UUID roomId, String targetUserId, Principal principal) {
+        participants.kick(roomId, principal.getName(), targetUserId);
+        return HttpResponse.noContent();
+    }
+
     @Get
     List<ParticipantResponse> list(UUID roomId) {
         return mapper.toParticipantResponses(participants.listPresent(roomId));

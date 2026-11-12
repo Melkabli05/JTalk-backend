@@ -13,6 +13,7 @@ import com.jtalk.livecommunication.domain.service.ParticipantService;
 import com.jtalk.livecommunication.domain.service.StageLeaseService;
 import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
+import com.jtalk.livecommunication.exception.ProblemType;
 import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 
@@ -54,6 +55,9 @@ class ParticipantServiceImpl implements ParticipantService {
     @Override
     public Joined join(UUID roomId, String userId) {
         VoiceRoom room = rooms.getActive(roomId);
+        if (presence.isBanned(roomId, userId)) {
+            throw ProblemType.KICKED_FROM_ROOM.because(userId + " was removed from this room by the host");
+        }
         ParticipantRole role = roleOf(room, userId, stage.isOnStage(roomId, userId));
         MediaConnection connection = media.issueConnection(roomId, userId, role != ParticipantRole.LISTENER);
         presence.touch(roomId, userId, clock.instant());
@@ -71,6 +75,22 @@ class ParticipantServiceImpl implements ParticipantService {
     public void leave(UUID roomId, String userId) {
         presence.remove(roomId, userId);
         stage.clearUser(roomId, userId);
+    }
+
+    @Override
+    public void kick(UUID roomId, String hostId, String targetUserId) {
+        VoiceRoom room = rooms.getActiveAsHost(roomId, hostId);
+        if (room.isHost(targetUserId)) {
+            throw ProblemType.CANNOT_KICK_HOST.because("The host cannot be kicked from their own room");
+        }
+        presence.ban(roomId, targetUserId);
+        if (stage.isOnStage(roomId, targetUserId)) {
+            stage.releaseSeatAndPromoteNext(roomId, targetUserId);
+        } else {
+            stage.clearUser(roomId, targetUserId);
+        }
+        presence.remove(roomId, targetUserId);
+        media.removeParticipant(roomId, targetUserId);
     }
 
     @Override

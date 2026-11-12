@@ -24,6 +24,8 @@ public enum ProblemType {
     NOT_IN_HAND_RAISE_QUEUE(HttpStatus.NOT_FOUND, "Hand not raised"),
     HOST_DOES_NOT_NEED_SEAT(HttpStatus.UNPROCESSABLE_ENTITY, "Host does not need a seat"),
     CANNOT_REMOVE_SPEAKER(HttpStatus.FORBIDDEN, "Cannot remove another speaker"),
+    CANNOT_KICK_HOST(HttpStatus.UNPROCESSABLE_ENTITY, "The host cannot be kicked"),
+    KICKED_FROM_ROOM(HttpStatus.FORBIDDEN, "Removed from this room"),
     WHISPER_NOT_PERMITTED(HttpStatus.FORBIDDEN, "Whisper not permitted"),
     WHISPER_TO_SELF(HttpStatus.UNPROCESSABLE_ENTITY, "Cannot whisper to yourself"),
     WHISPER_TARGET_NOT_PRESENT(HttpStatus.NOT_FOUND, "Whisper target not in the room"),

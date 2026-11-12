@@ -18,6 +18,9 @@ public interface MediaService {
     /** Grants or revokes publish rights of a participant that is already connected. Idempotent. */
     void updatePublishPermission(UUID roomId, String userId, boolean canPublish);
 
+    /** Disconnects a participant and revokes every token issued to them so far, so they cannot reconnect with one. */
+    void removeParticipant(UUID roomId, String userId);
+
     /** Disconnects everyone and discards the media room. Idempotent. */
     void closeRoom(UUID roomId);
 

@@ -63,6 +63,11 @@ class LiveKitMediaService implements MediaService {
     }
 
     @Override
+    public void removeParticipant(UUID roomId, String userId) {
+        execute(roomService.removeParticipant(roomId.toString(), userId, clock.millis()), "remove participant");
+    }
+
+    @Override
     public void closeRoom(UUID roomId) {
         execute(roomService.deleteRoom(roomId.toString()), "delete room");
     }
