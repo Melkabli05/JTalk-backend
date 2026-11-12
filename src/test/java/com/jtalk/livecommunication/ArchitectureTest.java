@@ -22,6 +22,7 @@ class ArchitectureTest {
     private static final String SERVICE = ROOT + "domain.service..";
     private static final String SERVICE_IMPL = ROOT + "domain.service.impl..";
     private static final String REPOSITORY = ROOT + "domain.repository..";
+    private static final String MAPPER = ROOT + "domain.mapper..";
     private static final String MIXER = ROOT + "mixer..";
 
     // ---- control plane layering ----------------------------------------------------------------
@@ -39,12 +40,12 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule services_do_not_use_controllers_listeners_or_dtos = noClasses()
             .that().resideInAPackage(SERVICE)
-            .should().dependOnClassesThat().resideInAnyPackage(CONTROLLER, LISTENER, DTO);
+            .should().dependOnClassesThat().resideInAnyPackage(CONTROLLER, LISTENER, DTO, MAPPER);
 
     @ArchTest
     static final ArchRule repositories_do_not_use_upper_layers = noClasses()
             .that().resideInAPackage(REPOSITORY)
-            .should().dependOnClassesThat().resideInAnyPackage(SERVICE, CONTROLLER, LISTENER, INTEGRATION, DTO);
+            .should().dependOnClassesThat().resideInAnyPackage(SERVICE, CONTROLLER, LISTENER, INTEGRATION, DTO, MAPPER);
 
     @ArchTest
     static final ArchRule integrations_are_passive_clients_called_by_services = noClasses()
@@ -54,12 +55,12 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule entities_enums_and_models_are_plain = noClasses()
             .that().resideInAnyPackage(ROOT + "domain.entity..", ROOT + "domain.enums..", ROOT + "domain.model..")
-            .should().dependOnClassesThat().resideInAnyPackage(SERVICE, REPOSITORY, CONTROLLER, LISTENER, INTEGRATION, DTO);
+            .should().dependOnClassesThat().resideInAnyPackage(SERVICE, REPOSITORY, CONTROLLER, LISTENER, INTEGRATION, DTO, MAPPER);
 
     @ArchTest
     static final ArchRule dtos_do_not_use_services_or_repositories = noClasses()
             .that().resideInAPackage(DTO)
-            .should().dependOnClassesThat().resideInAnyPackage(SERVICE, REPOSITORY, CONTROLLER, INTEGRATION);
+            .should().dependOnClassesThat().resideInAnyPackage(SERVICE, REPOSITORY, CONTROLLER, INTEGRATION, MAPPER);
 
     @ArchTest
     static final ArchRule only_service_interfaces_are_used_outside_service_impl = noClasses()
@@ -72,7 +73,7 @@ class ArchitectureTest {
     static final ArchRule mixer_is_self_contained = noClasses()
             .that().resideInAPackage(MIXER)
             .should().dependOnClassesThat().resideInAnyPackage(
-                    CONTROLLER, LISTENER, INTEGRATION, SERVICE, REPOSITORY, DTO, ROOT + "domain.entity..",
+                    CONTROLLER, LISTENER, INTEGRATION, SERVICE, REPOSITORY, DTO, MAPPER, ROOT + "domain.entity..",
                     ROOT + "config..", ROOT + "security..", ROOT + "exception..", "io.micronaut..");
 
     @ArchTest

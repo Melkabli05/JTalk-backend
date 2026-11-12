@@ -11,23 +11,19 @@ import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.exception.ProblemType;
 import io.micronaut.runtime.event.annotation.EventListener;
 import jakarta.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import org.zalando.problem.ThrowableProblem;
 
 import java.util.Optional;
 import java.util.UUID;
 
 @Singleton
+@RequiredArgsConstructor
 class StageServiceImpl implements StageService {
 
     private final VoiceRoomService rooms;
     private final StageRepository stage;
     private final MediaService media;
-
-    StageServiceImpl(VoiceRoomService rooms, StageRepository stage, MediaService media) {
-        this.rooms = rooms;
-        this.stage = stage;
-        this.media = media;
-    }
 
     @Override
     public int raiseHand(UUID roomId, String userId) {

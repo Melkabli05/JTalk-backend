@@ -8,11 +8,13 @@ import com.jtalk.livecommunication.exception.ProblemType;
 import io.livekit.server.WebhookReceiver;
 import jakarta.inject.Singleton;
 import livekit.LivekitWebhook.WebhookEvent;
+import lombok.RequiredArgsConstructor;
 
 import java.util.Optional;
 import java.util.UUID;
 
 @Singleton
+@RequiredArgsConstructor
 class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
 
     /** Mixer bots join as hidden participants with this identity prefix; their lifecycle is not a user's. */
@@ -22,16 +24,6 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
     private final StageLeaseService leases;
     private final ParticipantService participants;
     private final WhisperService whispers;
-
-    LiveKitWebhookServiceImpl(WebhookReceiver receiver,
-                              StageLeaseService leases,
-                              ParticipantService participants,
-                              WhisperService whispers) {
-        this.receiver = receiver;
-        this.leases = leases;
-        this.participants = participants;
-        this.whispers = whispers;
-    }
 
     @Override
     public void handle(String body, String authorizationHeader) {

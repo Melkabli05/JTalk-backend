@@ -3,6 +3,7 @@ package com.jtalk.livecommunication.controller;
 import com.jtalk.livecommunication.domain.dto.response.HandRaiseResponse;
 import com.jtalk.livecommunication.domain.dto.response.StageResponse;
 import com.jtalk.livecommunication.domain.service.StageService;
+import com.jtalk.livecommunication.domain.mapper.ApiMapper;
 import com.jtalk.livecommunication.security.CallerId;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Controller;
@@ -13,23 +14,22 @@ import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Put;
 import io.micronaut.validation.Validated;
+import lombok.RequiredArgsConstructor;
 
 import java.util.UUID;
 
 @Controller("/api/v1/voice-rooms/{roomId}/stage")
 @ExecuteOn(TaskExecutors.VIRTUAL)
 @Validated
+@RequiredArgsConstructor
 class StageController {
 
     private final StageService stage;
-
-    StageController(StageService stage) {
-        this.stage = stage;
-    }
+    private final ApiMapper mapper;
 
     @Get
     StageResponse get(UUID roomId) {
-        return StageResponse.from(stage.getStage(roomId));
+        return mapper.toResponse(stage.getStage(roomId));
     }
 
     @Post("/hand-raises")

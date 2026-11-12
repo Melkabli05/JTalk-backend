@@ -8,8 +8,7 @@ import io.lettuce.core.RedisFuture;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import jakarta.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -26,9 +25,9 @@ import java.util.concurrent.TimeUnit;
  * Auto-flush is deliberately left on: switching it off would stall every other request sharing the connection.
  */
 @Singleton
+@Slf4j
 public class LiveStatsRepository {
 
-    private static final Logger LOG = LoggerFactory.getLogger(LiveStatsRepository.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     private record Pending(RedisFuture<List<String>> speakers, RedisFuture<Long> handRaises, RedisFuture<Long> present) {
@@ -75,7 +74,7 @@ public class LiveStatsRepository {
                     p.present.get(0, TimeUnit.MILLISECONDS),
                     p.handRaises.get(0, TimeUnit.MILLISECONDS));
         } catch (Exception e) {
-            LOG.warn("Live stats for room {} unavailable", roomId, e);
+            log.warn("Live stats for room {} unavailable", roomId, e);
             return RoomLiveStats.EMPTY;
         }
     }

@@ -3,6 +3,7 @@ package com.jtalk.livecommunication.controller;
 import com.jtalk.livecommunication.domain.dto.response.JoinRoomResponse;
 import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
+import com.jtalk.livecommunication.domain.mapper.ApiMapper;
 import com.jtalk.livecommunication.security.CallerId;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Controller;
@@ -12,6 +13,7 @@ import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.validation.Validated;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.UUID;
@@ -19,18 +21,15 @@ import java.util.UUID;
 @Controller("/api/v1/voice-rooms/{roomId}/participants")
 @ExecuteOn(TaskExecutors.VIRTUAL)
 @Validated
+@RequiredArgsConstructor
 class ParticipantController {
 
     private final ParticipantService participants;
-
-    ParticipantController(ParticipantService participants) {
-        this.participants = participants;
-    }
+    private final ApiMapper mapper;
 
     @Post("/me")
     JoinRoomResponse join(UUID roomId, @CallerId String userId) {
-        var joined = participants.join(roomId, userId);
-        return new JoinRoomResponse(joined.connection().url(), joined.connection().token(), joined.role());
+        return mapper.toResponse(participants.join(roomId, userId));
     }
 
     @Post("/me/heartbeat")
@@ -47,6 +46,6 @@ class ParticipantController {
 
     @Get
     List<ParticipantResponse> list(UUID roomId) {
-        return participants.listPresent(roomId).stream().map(ParticipantResponse::from).toList();
+        return mapper.toParticipantResponses(participants.listPresent(roomId));
     }
 }

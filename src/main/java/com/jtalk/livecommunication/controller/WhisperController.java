@@ -12,19 +12,17 @@ import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.validation.Validated;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 import java.util.UUID;
 
 @Controller("/api/v1/voice-rooms/{roomId}/whisper")
 @ExecuteOn(TaskExecutors.VIRTUAL)
 @Validated
+@RequiredArgsConstructor
 class WhisperController {
 
     private final WhisperService whispers;
-
-    WhisperController(WhisperService whispers) {
-        this.whispers = whispers;
-    }
 
     @Post
     HttpResponse<Void> start(UUID roomId,

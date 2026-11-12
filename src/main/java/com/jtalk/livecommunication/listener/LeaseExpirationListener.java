@@ -12,8 +12,7 @@ import io.micronaut.scheduling.TaskExecutors;
 import jakarta.annotation.PreDestroy;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.ExecutorService;
 
@@ -25,9 +24,9 @@ import java.util.concurrent.ExecutorService;
  * services often forbid; set {@code notify-keyspace-events} to include {@code Ex} there.
  */
 @Singleton
+@Slf4j
 public class LeaseExpirationListener {
 
-    private static final Logger LOG = LoggerFactory.getLogger(LeaseExpirationListener.class);
     private static final String NOTIFY_CONFIG = "notify-keyspace-events";
 
     private final RedisClient client;
@@ -63,7 +62,7 @@ public class LeaseExpirationListener {
         try {
             leases.reclaim(lease.roomId(), lease.userId());
         } catch (RuntimeException e) {
-            LOG.error("Failed to reclaim stage seat of {} in room {}", lease.userId(), lease.roomId(), e);
+            log.error("Failed to reclaim stage seat of {} in room {}", lease.userId(), lease.roomId(), e);
         }
     }
 
@@ -76,7 +75,7 @@ public class LeaseExpirationListener {
                 redis.configSet(NOTIFY_CONFIG, current + "Ex");
             }
         } catch (RuntimeException e) {
-            LOG.warn("Could not enable Redis keyspace notifications; grace leases will not expire until "
+            log.warn("Could not enable Redis keyspace notifications; grace leases will not expire until "
                     + "'notify-keyspace-events' includes 'Ex' on the Redis server", e);
         }
     }

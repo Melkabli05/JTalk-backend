@@ -12,17 +12,15 @@ import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.http.annotation.Header;
 import io.micronaut.http.annotation.Post;
+import lombok.RequiredArgsConstructor;
 
 /** Receives LiveKit webhooks. The signature is verified in the service; the raw body is needed for that. */
 @Controller("/webhooks/livekit")
 @ExecuteOn(TaskExecutors.VIRTUAL)
+@RequiredArgsConstructor
 class LiveKitWebhookController {
 
     private final LiveKitWebhookService webhooks;
-
-    LiveKitWebhookController(LiveKitWebhookService webhooks) {
-        this.webhooks = webhooks;
-    }
 
     @Post
     @Consumes({"application/webhook+json", MediaType.APPLICATION_JSON})

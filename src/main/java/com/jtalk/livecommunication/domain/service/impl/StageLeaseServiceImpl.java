@@ -4,21 +4,18 @@ import com.jtalk.livecommunication.domain.repository.LeaseRepository;
 import com.jtalk.livecommunication.domain.service.StageLeaseService;
 import com.jtalk.livecommunication.domain.service.StageService;
 import jakarta.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 @Singleton
+@RequiredArgsConstructor
 class StageLeaseServiceImpl implements StageLeaseService {
 
     private final LeaseRepository leases;
     private final StageService stage;
-
-    StageLeaseServiceImpl(LeaseRepository leases, StageService stage) {
-        this.leases = leases;
-        this.stage = stage;
-    }
 
     @Override
     public boolean onDisconnect(UUID roomId, String userId) {

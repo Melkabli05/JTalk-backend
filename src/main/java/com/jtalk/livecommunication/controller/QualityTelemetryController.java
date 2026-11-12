@@ -1,8 +1,8 @@
 package com.jtalk.livecommunication.controller;
 
 import com.jtalk.livecommunication.domain.dto.request.QualityReportRequest;
-import com.jtalk.livecommunication.domain.model.QualityReport;
 import com.jtalk.livecommunication.domain.service.AdaptiveSubscriptionService;
+import com.jtalk.livecommunication.domain.mapper.ApiMapper;
 import com.jtalk.livecommunication.security.CallerId;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Body;
@@ -12,25 +12,24 @@ import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.validation.Validated;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 import java.util.UUID;
 
 @Controller("/api/v1/voice-rooms/{roomId}/quality")
 @ExecuteOn(TaskExecutors.VIRTUAL)
 @Validated
+@RequiredArgsConstructor
 class QualityTelemetryController {
 
     private final AdaptiveSubscriptionService adaptiveSubscription;
-
-    QualityTelemetryController(AdaptiveSubscriptionService adaptiveSubscription) {
-        this.adaptiveSubscription = adaptiveSubscription;
-    }
+    private final ApiMapper mapper;
 
     @Post
     HttpResponse<Void> report(UUID roomId,
                               @CallerId String userId,
                               @Body @Valid QualityReportRequest request) {
-        adaptiveSubscription.onReport(roomId, userId, new QualityReport(request.lossPercent(), request.downstreamKbps()));
+        adaptiveSubscription.onReport(roomId, userId, mapper.toReport(request));
         return HttpResponse.noContent();
     }
 }

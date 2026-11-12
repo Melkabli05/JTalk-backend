@@ -13,8 +13,8 @@ import io.micronaut.context.event.ApplicationEventPublisher;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.model.Pageable;
 import jakarta.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Clock;
 import java.util.Collection;
@@ -23,27 +23,15 @@ import java.util.Map;
 import java.util.UUID;
 
 @Singleton
+@Slf4j
+@RequiredArgsConstructor
 class VoiceRoomServiceImpl implements VoiceRoomService {
-
-    private static final Logger LOG = LoggerFactory.getLogger(VoiceRoomServiceImpl.class);
 
     private final VoiceRoomRepository rooms;
     private final LiveStatsRepository liveStats;
     private final MediaService media;
     private final ApplicationEventPublisher<VoiceRoomClosed> closedEvents;
     private final Clock clock;
-
-    VoiceRoomServiceImpl(VoiceRoomRepository rooms,
-                         LiveStatsRepository liveStats,
-                         MediaService media,
-                         ApplicationEventPublisher<VoiceRoomClosed> closedEvents,
-                         Clock clock) {
-        this.liveStats = liveStats;
-        this.rooms = rooms;
-        this.media = media;
-        this.closedEvents = closedEvents;
-        this.clock = clock;
-    }
 
     @Override
     public VoiceRoom create(String name, String hostId, Integer maxSpeakers) {
@@ -99,7 +87,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
             media.closeRoom(roomId);
         } catch (RuntimeException e) {
             // The room is already closed in our source of truth; LiveKit empties idle rooms by itself.
-            LOG.warn("Room {} closed but media server cleanup failed", roomId, e);
+            log.warn("Room {} closed but media server cleanup failed", roomId, e);
         }
     }
 }

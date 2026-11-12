@@ -9,19 +9,16 @@ import com.jtalk.livecommunication.domain.service.MixerOrchestrationService;
 import com.jtalk.livecommunication.integration.MixerWorkerClient;
 import io.micronaut.runtime.event.annotation.EventListener;
 import jakarta.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 
 import java.util.UUID;
 
 @Singleton
+@RequiredArgsConstructor
 class MixerOrchestrationServiceImpl implements MixerOrchestrationService {
 
     private final MixerStateRepository state;
     private final MixerWorkerClient workers;
-
-    MixerOrchestrationServiceImpl(MixerStateRepository state, MixerWorkerClient workers) {
-        this.state = state;
-        this.workers = workers;
-    }
 
     @Override
     public void start(UUID roomId, MixerMode mode) {

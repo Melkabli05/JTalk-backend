@@ -16,8 +16,8 @@ import jakarta.inject.Singleton;
 import livekit.LivekitModels.DataPacket;
 import livekit.LivekitModels.ParticipantInfo;
 import livekit.LivekitModels.ParticipantPermission;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import retrofit2.Call;
 import retrofit2.Response;
 
@@ -29,19 +29,13 @@ import java.util.UUID;
 
 /** {@link MediaService} backed by LiveKit access tokens and the Room Service API. */
 @Singleton
+@Slf4j
+@RequiredArgsConstructor
 class LiveKitMediaService implements MediaService {
-
-    private static final Logger LOG = LoggerFactory.getLogger(LiveKitMediaService.class);
 
     private final LiveKitProperties properties;
     private final RoomServiceClient roomService;
     private final Clock clock;
-
-    LiveKitMediaService(LiveKitProperties properties, RoomServiceClient roomService, Clock clock) {
-        this.properties = properties;
-        this.roomService = roomService;
-        this.clock = clock;
-    }
 
     @Override
     public MediaConnection issueConnection(UUID roomId, String userId, boolean canPublish) {
@@ -108,12 +102,12 @@ class LiveKitMediaService implements MediaService {
             if (!response.isSuccessful() && response.code() != HttpStatus.NOT_FOUND.getCode()) {
                 ServerError error = ServerError.from(response);   // LiveKit's own error code and message
                 String reason = error != null ? error.getCode() + ": " + error.getMessage() : "HTTP " + response.code();
-                LOG.warn("LiveKit failed to {}: {}", operation, reason);
+                log.warn("LiveKit failed to {}: {}", operation, reason);
                 throw ProblemType.MEDIA_SERVER_ERROR.because("LiveKit failed to " + operation + " (" + reason + ")");
             }
             return response;
         } catch (IOException e) {
-            LOG.warn("LiveKit unreachable while trying to {}", operation, e);
+            log.warn("LiveKit unreachable while trying to {}", operation, e);
             throw ProblemType.MEDIA_SERVER_UNREACHABLE.because("LiveKit unreachable while trying to " + operation);
         }
     }

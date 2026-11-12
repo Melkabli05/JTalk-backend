@@ -12,8 +12,8 @@ import com.jtalk.livecommunication.domain.service.WhisperService;
 import com.jtalk.livecommunication.exception.ProblemType;
 import io.micronaut.serde.ObjectMapper;
 import jakarta.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -21,9 +21,10 @@ import java.util.List;
 import java.util.UUID;
 
 @Singleton
+@Slf4j
+@RequiredArgsConstructor
 class WhisperServiceImpl implements WhisperService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(WhisperServiceImpl.class);
     private static final String TOPIC = "whisper";
 
     private final VoiceRoomService rooms;
@@ -32,20 +33,6 @@ class WhisperServiceImpl implements WhisperService {
     private final WhisperRepository whispers;
     private final MediaService media;
     private final ObjectMapper json;
-
-    WhisperServiceImpl(VoiceRoomService rooms,
-                       StageService stage,
-                       ParticipantService participants,
-                       WhisperRepository whispers,
-                       MediaService media,
-                       ObjectMapper json) {
-        this.rooms = rooms;
-        this.stage = stage;
-        this.participants = participants;
-        this.whispers = whispers;
-        this.media = media;
-        this.json = json;
-    }
 
     @Override
     public void start(UUID roomId, String speakerId, String targetId) {
@@ -76,7 +63,7 @@ class WhisperServiceImpl implements WhisperService {
     public void onWhisperTrackPublished(UUID roomId, String speakerId, String trackName, String trackSid) {
         String targetId = trackName.substring(TRACK_PREFIX.length());
         if (!whispers.find(roomId, speakerId).filter(targetId::equals).isPresent()) {
-            LOG.warn("Ignoring whisper track {} from {}: no matching whisper session", trackName, speakerId);
+            log.warn("Ignoring whisper track {} from {}: no matching whisper session", trackName, speakerId);
             return;
         }
         participants.listPresent(roomId).stream()
