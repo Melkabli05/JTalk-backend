@@ -84,21 +84,21 @@ class VoiceRoomApiTest extends ApiTestBase {
         String roomId = createRoom("host", "Old name", 4);
 
         Map<String, Object> updated = http.retrieve(HttpRequest.PATCH(path(roomId, ""), Map.of("name", "  New name ", "maxSpeakers", 3))
-                .header("X-User-Id", "host"), MAP);
+                .bearerAuth(token("host")), MAP);
         assertEquals("New name", updated.get("name"));
         assertEquals(3, updated.get("maxSpeakers"));
 
         // Partial update keeps what is not sent.
         Map<String, Object> renamedOnly = http.retrieve(HttpRequest.PATCH(path(roomId, ""), Map.of("name", "Only name"))
-                .header("X-User-Id", "host"), MAP);
+                .bearerAuth(token("host")), MAP);
         assertEquals(3, renamedOnly.get("maxSpeakers"));
 
         assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> http.exchange(
-                HttpRequest.PATCH(path(roomId, ""), Map.of("name", "Hijack")).header("X-User-Id", "alice")));
+                HttpRequest.PATCH(path(roomId, ""), Map.of("name", "Hijack")).bearerAuth(token("alice"))));
         assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(
-                HttpRequest.PATCH(path(roomId, ""), Map.of("name", "   ")).header("X-User-Id", "host")));
+                HttpRequest.PATCH(path(roomId, ""), Map.of("name", "   ")).bearerAuth(token("host"))));
         assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(
-                HttpRequest.PATCH(path(roomId, ""), Map.of("maxSpeakers", 99)).header("X-User-Id", "host")));
+                HttpRequest.PATCH(path(roomId, ""), Map.of("maxSpeakers", 99)).bearerAuth(token("host"))));
         assertEquals("Only name", http.retrieve(HttpRequest.GET(path(roomId, "")), MAP).get("name"));
     }
 
@@ -143,17 +143,20 @@ class VoiceRoomApiTest extends ApiTestBase {
     }
 
     @Test
-    void aMissingOrBlankCallerIdIsRejected() {
+    void requestsWithoutAValidTokenAreRejected() {
         var body = Map.of("name", "No caller");
-        assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(HttpRequest.POST("/api/v1/voice-rooms", body)));
-        assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(HttpRequest.POST("/api/v1/voice-rooms", body).header("X-User-Id", "")));
+        var missing = assertThrows(HttpClientResponseException.class, () -> http.exchange(HttpRequest.POST("/api/v1/voice-rooms", body)));
+        assertEquals(HttpStatus.UNAUTHORIZED, missing.getStatus());
+        var forged = assertThrows(HttpClientResponseException.class, () -> http.exchange(
+                HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(token("host", "another-secret-another-secret-another-secret"))));
+        assertEquals(HttpStatus.UNAUTHORIZED, forged.getStatus());
     }
 
     @Test
     void validationErrorsAreProblemDetails() {
         var ex = assertThrows(HttpClientResponseException.class, () -> http.exchange(
                 HttpRequest.POST("/api/v1/voice-rooms", Map.of("name", " ", "maxSpeakers", 99))
-                        .header("X-User-Id", "host"), MAP));
+                        .bearerAuth(token("host")), MAP));
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
         assertEquals("application/problem+json", ex.getResponse().getContentType().orElseThrow().toString());
     }

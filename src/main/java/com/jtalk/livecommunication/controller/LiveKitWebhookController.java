@@ -12,10 +12,13 @@ import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.http.annotation.Header;
 import io.micronaut.http.annotation.Post;
+import io.micronaut.security.annotation.Secured;
+import io.micronaut.security.rules.SecurityRule;
 import lombok.RequiredArgsConstructor;
 
 /** Receives LiveKit webhooks. The signature is verified in the service; the raw body is needed for that. */
 @Controller("/webhooks/livekit")
+@Secured(SecurityRule.IS_ANONYMOUS)
 @ExecuteOn(TaskExecutors.VIRTUAL)
 @RequiredArgsConstructor
 class LiveKitWebhookController {

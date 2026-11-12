@@ -1,5 +1,7 @@
 package com.jtalk.livecommunication.support;
 
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
 import io.micronaut.core.type.Argument;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
@@ -12,6 +14,7 @@ import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -24,6 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /** Shared plumbing for end-to-end tests: real PostgreSQL + Redis (Test Resources) and a fake LiveKit. */
 @MicronautTest
 public abstract class ApiTestBase {
+
+    private static final String JWT_SECRET = "test-jwt-secret-test-jwt-secret-0123456789";
 
     protected static final Argument<Map<String, Object>> MAP = Argument.mapOf(String.class, Object.class);
     protected static final Argument<List<Map<String, Object>>> MAP_LIST = Argument.listOf(MAP);
@@ -48,7 +53,7 @@ public abstract class ApiTestBase {
                 ? Map.of("name", name)
                 : Map.of("name", name, "maxSpeakers", maxSpeakers);
         HttpResponse<Map<String, Object>> response = http.exchange(
-                HttpRequest.POST("/api/v1/voice-rooms", body).header("X-User-Id", hostId), MAP);
+                HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(token(hostId)), MAP);
         assertEquals(HttpStatus.CREATED, response.status());
         assertNotNull(response.header("Location"));
         return (String) response.body().get("id");
@@ -59,23 +64,23 @@ public abstract class ApiTestBase {
     }
 
     protected Map<String, Object> post(String roomId, String suffix, String userId) {
-        return http.retrieve(HttpRequest.POST(path(roomId, suffix), "").header("X-User-Id", userId), MAP);
+        return http.retrieve(HttpRequest.POST(path(roomId, suffix), "").bearerAuth(token(userId)), MAP);
     }
 
     protected HttpResponse<?> postJson(String roomId, String suffix, String userId, Object body) {
-        return http.exchange(HttpRequest.POST(path(roomId, suffix), body).header("X-User-Id", userId));
+        return http.exchange(HttpRequest.POST(path(roomId, suffix), body).bearerAuth(token(userId)));
     }
 
     protected HttpResponse<?> put(String roomId, String suffix, String userId) {
-        return http.exchange(HttpRequest.PUT(path(roomId, suffix), "").header("X-User-Id", userId));
+        return http.exchange(HttpRequest.PUT(path(roomId, suffix), "").bearerAuth(token(userId)));
     }
 
     protected HttpResponse<?> delete(String roomId, String suffix, String userId) {
-        return http.exchange(HttpRequest.DELETE(path(roomId, suffix)).header("X-User-Id", userId));
+        return http.exchange(HttpRequest.DELETE(path(roomId, suffix)).bearerAuth(token(userId)));
     }
 
     protected HttpResponse<?> deleteRoom(String roomId, String userId) {
-        return http.exchange(HttpRequest.DELETE("/api/v1/voice-rooms/" + roomId).header("X-User-Id", userId));
+        return http.exchange(HttpRequest.DELETE("/api/v1/voice-rooms/" + roomId).bearerAuth(token(userId)));
     }
 
     protected Map<String, Object> getStage(String roomId) {
@@ -120,6 +125,18 @@ public abstract class ApiTestBase {
                 throw new AssertionError("Interrupted while waiting for: " + what, e);
             }
         }
+    }
+
+    /** A bearer token for this user, signed with the secret from application-test.yml. */
+    public static String token(String userId) {
+        return token(userId, JWT_SECRET);
+    }
+
+    public static String token(String userId, String secret) {
+        return JWT.create()
+                .withSubject(userId)
+                .withExpiresAt(new Date(System.currentTimeMillis() + 3_600_000))
+                .sign(Algorithm.HMAC256(secret));
     }
 
     protected static UUID uuid(String id) {

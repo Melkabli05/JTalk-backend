@@ -1,6 +1,17 @@
 micronaut:
   application:
     name: live-communication-service
+  security:
+    # Callers authenticate with a JWT bearer token issued upstream (API gateway / identity provider); the token's
+    # subject is the user id. Tokens are verified with this shared HS256 secret (32+ characters), or switch to a
+    # JWKS endpoint with micronaut.security.token.jwt.signatures.jwks.
+    authentication: bearer
+    token:
+      jwt:
+        signatures:
+          secret:
+            generator:
+              secret: ${JWT_SECRET}
 
 # PostgreSQL and Redis connections are intentionally NOT configured here:
 #  - locally (./gradlew run, tests) Micronaut Test Resources starts containers for them;

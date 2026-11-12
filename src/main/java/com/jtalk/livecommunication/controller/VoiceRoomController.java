@@ -7,7 +7,6 @@ import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.domain.mapper.ApiMapper;
-import com.jtalk.livecommunication.security.CallerId;
 import io.micronaut.data.model.Pageable;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Body;
@@ -18,16 +17,20 @@ import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Patch;
 import io.micronaut.http.annotation.Post;
+import io.micronaut.security.annotation.Secured;
+import io.micronaut.security.rules.SecurityRule;
 import io.micronaut.validation.Validated;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+import java.security.Principal;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @Controller("/api/v1/voice-rooms")
+@Secured(SecurityRule.IS_AUTHENTICATED)
 @ExecuteOn(TaskExecutors.VIRTUAL)
 @Validated
 @RequiredArgsConstructor
@@ -37,9 +40,9 @@ class VoiceRoomController {
     private final ApiMapper mapper;
 
     @Post
-    HttpResponse<VoiceRoomResponse> create(@CallerId String userId,
+    HttpResponse<VoiceRoomResponse> create(Principal principal,
                                            @Body @Valid CreateVoiceRoomRequest request) {
-        VoiceRoom room = rooms.create(request.name(), userId, request.maxSpeakers());
+        VoiceRoom room = rooms.create(request.name(), principal.getName(), request.maxSpeakers());
         return HttpResponse.created(mapper.toResponse(room, RoomLiveStats.EMPTY), URI.create("/api/v1/voice-rooms/" + room.id()));
     }
 
@@ -59,15 +62,15 @@ class VoiceRoomController {
 
     @Patch("/{roomId}")
     VoiceRoomResponse update(UUID roomId,
-                             @CallerId String userId,
+                             Principal principal,
                              @Body @Valid UpdateVoiceRoomRequest request) {
-        VoiceRoom room = rooms.update(roomId, userId, request.name(), request.maxSpeakers());
+        VoiceRoom room = rooms.update(roomId, principal.getName(), request.name(), request.maxSpeakers());
         return mapper.toResponse(room, rooms.liveStats(List.of(roomId)).get(roomId));
     }
 
     @Delete("/{roomId}")
-    HttpResponse<Void> close(UUID roomId, @CallerId String userId) {
-        rooms.close(roomId, userId);
+    HttpResponse<Void> close(UUID roomId, Principal principal) {
+        rooms.close(roomId, principal.getName());
         return HttpResponse.noContent();
     }
 }

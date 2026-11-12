@@ -1,3 +1,12 @@
+micronaut:
+  security:
+    token:
+      jwt:
+        signatures:
+          secret:
+            generator:
+              secret: test-jwt-secret-test-jwt-secret-0123456789
+
 livekit:
   url: ws://localhost:7880
   api-key: test-key
