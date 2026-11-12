@@ -11,7 +11,8 @@ import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.exception.ProblemType;
 import io.micronaut.context.event.ApplicationEventPublisher;
 import io.micronaut.core.annotation.Nullable;
-import io.micronaut.data.model.Pageable;
+import io.micronaut.data.model.CursoredPage;
+import io.micronaut.data.model.CursoredPageable;
 import io.micronaut.transaction.annotation.TransactionalEventListener;
 import io.micronaut.transaction.annotation.Transactional;
 import jakarta.inject.Singleton;
@@ -76,8 +77,8 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     }
 
     @Override
-    public List<VoiceRoom> listActive(Pageable pageable) {
-        return rooms.findByStatusOrderByCreatedAtDescAndIdDesc(VoiceRoomStatus.ACTIVE, pageable);
+    public CursoredPage<VoiceRoom> listActive(CursoredPageable pageable) {
+        return rooms.findByStatus(VoiceRoomStatus.ACTIVE, pageable);
     }
 
     /**

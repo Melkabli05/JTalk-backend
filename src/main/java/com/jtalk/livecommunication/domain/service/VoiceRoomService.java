@@ -3,7 +3,8 @@ package com.jtalk.livecommunication.domain.service;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import io.micronaut.core.annotation.Nullable;
-import io.micronaut.data.model.Pageable;
+import io.micronaut.data.model.CursoredPage;
+import io.micronaut.data.model.CursoredPageable;
 
 import java.util.Collection;
 import java.util.List;
@@ -34,8 +35,8 @@ public interface VoiceRoomService {
     /** Real-time numbers for each of the rooms (one batched Redis round trip); every id gets an entry. */
     Map<UUID, RoomLiveStats> liveStats(Collection<UUID> roomIds);
 
-    /** Active rooms, newest first. */
-    List<VoiceRoom> listActive(Pageable pageable);
+    /** One page of active rooms, newest first. */
+    CursoredPage<VoiceRoom> listActive(CursoredPageable pageable);
 
     /** Closes the room (host only) and notifies other modules so they drop their ephemeral state. */
     void close(UUID roomId, String requesterId);

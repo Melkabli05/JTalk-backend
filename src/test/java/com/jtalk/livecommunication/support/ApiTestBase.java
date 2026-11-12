@@ -87,6 +87,14 @@ public abstract class ApiTestBase {
         return http.retrieve(HttpRequest.GET(path(roomId, "/stage")), MAP);
     }
 
+    /** The rooms on one discovery page; {@code query} is e.g. {@code "?size=2"}. */
+    protected List<Map<String, Object>> listRooms(String query) {
+        Map<String, Object> page = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms" + query), MAP);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) page.get("content");
+        return content;
+    }
+
     protected List<Map<String, Object>> getParticipants(String roomId) {
         return http.retrieve(HttpRequest.GET(path(roomId, "/participants")), MAP_LIST);
     }

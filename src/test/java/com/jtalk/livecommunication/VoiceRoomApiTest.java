@@ -24,7 +24,7 @@ class VoiceRoomApiTest extends ApiTestBase {
         String roomId = createRoom("host", "Spanish exchange", 1);
 
         // Discovery
-        List<Map<String, Object>> active = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms"), MAP_LIST);
+        List<Map<String, Object>> active = listRooms("?size=100");
         assertTrue(active.stream().anyMatch(r -> roomId.equals(r.get("id"))));
 
         // Host and listener join; only the host may publish
@@ -75,7 +75,7 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertEquals(HttpStatus.NO_CONTENT, closed.status());
         assertEquals(List.of(UUID.fromString(roomId)), media.closedRooms);
         assertProblem(HttpStatus.CONFLICT, "voice-room-closed", () -> post(roomId, "/participants/me", "alice"));
-        active = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms"), MAP_LIST);
+        active = listRooms("?size=100");
         assertFalse(active.stream().anyMatch(r -> roomId.equals(r.get("id"))));
     }
 
@@ -119,7 +119,7 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertEquals(3, room.get("participantCount"));   // host, alice, bob
         assertEquals(1, room.get("handRaiseCount"));
 
-        List<Map<String, Object>> listed = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms?size=100"), MAP_LIST);
+        List<Map<String, Object>> listed = listRooms("?size=100");
         Map<String, Object> inList = listed.stream().filter(r -> roomId.equals(r.get("id"))).findFirst().orElseThrow();
         assertEquals(List.of("alice"), inList.get("speakers"));
         assertEquals(3, inList.get("participantCount"));
@@ -127,19 +127,26 @@ class VoiceRoomApiTest extends ApiTestBase {
     }
 
     @Test
-    void discoveryIsPagedWithoutOverlap() {
+    void discoveryUsesKeysetPaginationWithoutOverlap() {
         createRoom("host", "page-1", 2);
         createRoom("host", "page-2", 2);
         createRoom("host", "page-3", 2);
 
-        List<Map<String, Object>> first = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms?page=0&size=2"), MAP_LIST);
-        List<Map<String, Object>> second = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms?page=1&size=2"), MAP_LIST);
+        List<Map<String, Object>> first = listRooms("?size=2");
+        Map<String, Object> last = first.getLast();
+        List<Map<String, Object>> second = listRooms("?size=2&afterCreatedAt=" + last.get("createdAt") + "&afterId=" + last.get("id"));
 
         assertEquals(2, first.size());
+        assertEquals("page-3", first.getFirst().get("name"), "newest first");
         assertFalse(second.isEmpty());
         var firstIds = first.stream().map(r -> r.get("id")).toList();
         assertTrue(second.stream().noneMatch(r -> firstIds.contains(r.get("id"))), "pages must not overlap");
-        assertEquals("page-3", first.getFirst().get("name"), "newest first");
+        assertEquals("page-1", second.getFirst().get("name"), "the page after the last room continues the order");
+    }
+
+    @Test
+    void discoveryPageSizeIsBounded() {
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> listRooms("?size=1000"));
     }
 
     @Test

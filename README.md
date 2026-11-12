@@ -62,7 +62,7 @@ Tokens are issued upstream (gateway / identity provider) and verified here with 
 | Method & path (under `/api/v1/voice-rooms`) | Who | Purpose |
 |---|---|---|
 | `POST /` | any | Create a room (caller becomes host) |
-| `GET /?page=&size=` | any | List active rooms, newest first, each with live `speakers`, `participantCount`, `handRaiseCount` (one batched Redis round trip) |
+| `GET /?size=&afterCreatedAt=&afterId=` | any | Active rooms, newest first, keyset-paginated: for the next page pass the last room's `createdAt` and `id`. Each room carries live `speakers`, `participantCount`, `handRaiseCount` (one batched Redis round trip) |
 | `GET /{roomId}` / `PATCH /{roomId}` / `DELETE /{roomId}` | any / host / host | Read (with live numbers) / update `name`, `maxSpeakers` / close |
 | `POST /{roomId}/participants/me` | any | Join: LiveKit URL, token, role |
 | `POST .../participants/me/heartbeat` / `DELETE .../participants/me` | member | Keep alive / leave |
@@ -113,10 +113,6 @@ Redis must have keyspace notifications for expired keys (`notify-keyspace-events
 
 ## Deliberate decisions and known limits
 
-- **Offset paging, not keyset.** Room discovery uses Micronaut Data's built-in `Pageable` (`?page=&size=`). Micronaut
-  Data 5.2 ships an HTTP binder only for `Pageable`, not for `CursoredPageable`, so keyset pagination would need a
-  hand-written cursor encoder and decoder. Ordering has an id tie-breaker (and a matching index) so pages are stable;
-  a room created while someone is paging can still shift later pages by one.
 - **Tokens are verified, not issued, here.** This service does not mint user JWTs; it trusts whatever signs them with
   `JWT_SECRET`. A kicked user is barred from rejoining that room only; they are not banned account-wide.
 - **Live stats are batched per room, not per request.** The discovery feed reads Postgres once and Redis as one
