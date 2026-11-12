@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Singleton
@@ -87,10 +88,12 @@ class ParticipantServiceImpl implements ParticipantService {
     public List<Participant> listPresent(UUID roomId) {
         VoiceRoom room = rooms.get(roomId);
         var speakers = new HashSet<>(stage.getStage(roomId).speakers());
-        return presence.findPresent(roomId, presenceCutoff()).stream()
+        List<String> present = presence.findPresent(roomId, presenceCutoff());
+        Set<String> reconnecting = leases.reconnecting(roomId, present);
+        return present.stream()
                 .map(userId -> new Participant(userId,
                         roleOf(room, userId, speakers.contains(userId)),
-                        leases.isReconnecting(roomId, userId) ? PresenceStatus.RECONNECTING : PresenceStatus.ACTIVE))
+                        reconnecting.contains(userId) ? PresenceStatus.RECONNECTING : PresenceStatus.ACTIVE))
                 .toList();
     }
 

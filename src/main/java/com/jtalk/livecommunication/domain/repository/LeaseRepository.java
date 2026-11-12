@@ -1,11 +1,15 @@
 package com.jtalk.livecommunication.domain.repository;
 
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
+import io.lettuce.core.KeyValue;
 import io.lettuce.core.SetArgs;
 import io.lettuce.core.api.StatefulRedisConnection;
 import jakarta.inject.Singleton;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,8 +44,19 @@ public class LeaseRepository {
         return connection.sync().del(key(roomId, userId)) > 0;
     }
 
-    public boolean exists(UUID roomId, String userId) {
-        return connection.sync().exists(key(roomId, userId)) > 0;
+    /** Which of the users currently hold a lease: one MGET for all of them (their keys share a hash slot). */
+    public Set<String> usersWithLease(UUID roomId, List<String> userIds) {
+        if (userIds.isEmpty()) {
+            return Set.of();
+        }
+        List<KeyValue<String, String>> leases = connection.sync().mget(userIds.stream().map(id -> key(roomId, id)).toArray(String[]::new));
+        Set<String> holders = new HashSet<>();
+        for (int i = 0; i < userIds.size(); i++) {
+            if (leases.get(i).hasValue()) {
+                holders.add(userIds.get(i));
+            }
+        }
+        return holders;
     }
 
     /** Parses the key of an expired Redis entry; empty if it is not a lease key. */

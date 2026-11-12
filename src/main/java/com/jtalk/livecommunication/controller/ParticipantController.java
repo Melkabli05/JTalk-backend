@@ -3,17 +3,15 @@ package com.jtalk.livecommunication.controller;
 import com.jtalk.livecommunication.domain.dto.response.JoinRoomResponse;
 import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
-import com.jtalk.livecommunication.security.RequestHeaders;
+import com.jtalk.livecommunication.security.CallerId;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
-import io.micronaut.http.annotation.Header;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.validation.Validated;
-import jakarta.validation.constraints.NotBlank;
 
 import java.util.List;
 import java.util.UUID;
@@ -30,19 +28,19 @@ class ParticipantController {
     }
 
     @Post("/me")
-    JoinRoomResponse join(UUID roomId, @Header(RequestHeaders.USER_ID) @NotBlank String userId) {
+    JoinRoomResponse join(UUID roomId, @CallerId String userId) {
         var joined = participants.join(roomId, userId);
         return new JoinRoomResponse(joined.connection().url(), joined.connection().token(), joined.role());
     }
 
     @Post("/me/heartbeat")
-    HttpResponse<Void> heartbeat(UUID roomId, @Header(RequestHeaders.USER_ID) @NotBlank String userId) {
+    HttpResponse<Void> heartbeat(UUID roomId, @CallerId String userId) {
         participants.heartbeat(roomId, userId);
         return HttpResponse.noContent();
     }
 
     @Delete("/me")
-    HttpResponse<Void> leave(UUID roomId, @Header(RequestHeaders.USER_ID) @NotBlank String userId) {
+    HttpResponse<Void> leave(UUID roomId, @CallerId String userId) {
         participants.leave(roomId, userId);
         return HttpResponse.noContent();
     }

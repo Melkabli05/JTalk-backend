@@ -7,7 +7,6 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VoiceRoomTest {
@@ -16,12 +15,11 @@ class VoiceRoomTest {
 
     @Test
     void opensActiveRoomWithDefaultSeats() {
-        VoiceRoom room = VoiceRoom.open("  English practice ", "host-1", null, NOW);
+        VoiceRoom room = VoiceRoom.open("  English practice ", "host-1", null);
 
         assertEquals("English practice", room.name());
         assertEquals(VoiceRoom.DEFAULT_SPEAKERS, room.maxSpeakers());
         assertEquals(VoiceRoomStatus.ACTIVE, room.status());
-        assertNotNull(room.id());
         assertTrue(room.isActive());
         assertTrue(room.isHost("host-1"));
         assertFalse(room.isHost("someone-else"));
@@ -29,7 +27,7 @@ class VoiceRoomTest {
 
     @Test
     void closingRecordsTimeAndDeactivates() {
-        VoiceRoom closed = VoiceRoom.open("room", "host", 4, NOW).close(NOW.plusSeconds(60));
+        VoiceRoom closed = VoiceRoom.open("room", "host", 4).close(NOW.plusSeconds(60));
 
         assertEquals(VoiceRoomStatus.CLOSED, closed.status());
         assertEquals(NOW.plusSeconds(60), closed.closedAt());

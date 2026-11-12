@@ -8,8 +8,7 @@ import com.jtalk.livecommunication.domain.repository.StageRepository;
 import com.jtalk.livecommunication.domain.service.MediaService;
 import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
-import com.jtalk.livecommunication.exception.Problems;
-import io.micronaut.http.HttpStatus;
+import com.jtalk.livecommunication.exception.ProblemType;
 import io.micronaut.runtime.event.annotation.EventListener;
 import jakarta.inject.Singleton;
 import org.zalando.problem.ThrowableProblem;
@@ -34,8 +33,7 @@ class StageServiceImpl implements StageService {
     public int raiseHand(UUID roomId, String userId) {
         VoiceRoom room = rooms.getActive(roomId);
         if (room.isHost(userId)) {
-            throw Problems.of(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "host-does-not-need-seat", "The host can always speak and does not need a stage seat");
+            throw ProblemType.HOST_DOES_NOT_NEED_SEAT.because("The host can always speak and does not need a stage seat");
         }
         int position = stage.raiseHand(roomId, userId);
         if (position < 0) {
@@ -55,11 +53,9 @@ class StageServiceImpl implements StageService {
         VoiceRoom room = rooms.getActiveAsHost(roomId, hostId);
         SeatResult result = stage.approve(roomId, userId, room.maxSpeakers());
         switch (result) {
-            case STAGE_FULL -> throw Problems.of(HttpStatus.CONFLICT,
-                    "stage-full", "All " + room.maxSpeakers() + " stage seats are taken");
+            case STAGE_FULL -> throw ProblemType.STAGE_FULL.because("All " + room.maxSpeakers() + " stage seats are taken");
             case ALREADY_ON_STAGE -> throw alreadyOnStage(userId);
-            case NOT_IN_QUEUE -> throw Problems.of(HttpStatus.NOT_FOUND,
-                    "not-in-hand-raise-queue", userId + " has not raised a hand");
+            case NOT_IN_QUEUE -> throw ProblemType.NOT_IN_HAND_RAISE_QUEUE.because(userId + " has not raised a hand");
             case SEATED -> {
                 try {
                     media.updatePublishPermission(roomId, userId, true);
@@ -75,7 +71,7 @@ class StageServiceImpl implements StageService {
     public void removeSpeaker(UUID roomId, String requesterId, String userId) {
         VoiceRoom room = rooms.getActive(roomId);
         if (!requesterId.equals(userId) && !room.isHost(requesterId)) {
-            throw Problems.of(HttpStatus.FORBIDDEN, "cannot-remove-speaker", "Only the host can remove another speaker from the stage");
+            throw ProblemType.CANNOT_REMOVE_SPEAKER.because("Only the host can remove another speaker from the stage");
         }
         stage.leaveStage(roomId, userId);
         if (!room.isHost(userId)) {
@@ -101,22 +97,17 @@ class StageServiceImpl implements StageService {
     }
 
     @Override
-    public void releaseSeat(UUID roomId, String userId) {
-        stage.leaveStage(roomId, userId);
-    }
-
-    @Override
-    public Optional<String> promoteNext(UUID roomId) {
+    public Optional<String> releaseSeatAndPromoteNext(UUID roomId, String userId) {
         VoiceRoom room = rooms.get(roomId);
         if (!room.isActive()) {
-            return Optional.empty();
+            return Optional.empty();   // the room-closed event clears the stage
         }
-        Optional<String> promoted = stage.promoteNext(roomId, room.maxSpeakers());
-        promoted.ifPresent(userId -> {
+        Optional<String> promoted = stage.releaseAndPromoteNext(roomId, userId, room.maxSpeakers());
+        promoted.ifPresent(promotedId -> {
             try {
-                media.updatePublishPermission(roomId, userId, true);
+                media.updatePublishPermission(roomId, promotedId, true);
             } catch (RuntimeException e) {
-                stage.leaveStage(roomId, userId);
+                stage.leaveStage(roomId, promotedId);
                 throw e;
             }
         });
@@ -129,6 +120,6 @@ class StageServiceImpl implements StageService {
     }
 
     private static ThrowableProblem alreadyOnStage(String userId) {
-        return Problems.of(HttpStatus.CONFLICT, "already-on-stage", userId + " is already on stage");
+        return ProblemType.ALREADY_ON_STAGE.because(userId + " is already on stage");
     }
 }

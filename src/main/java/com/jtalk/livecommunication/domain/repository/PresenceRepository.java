@@ -57,7 +57,7 @@ public class PresenceRepository {
         connection.sync().del(key(roomId));
     }
 
-    private static String key(UUID roomId) {
+    static String key(UUID roomId) {
         return "voiceroom:{" + roomId + "}:presence";
     }
 }

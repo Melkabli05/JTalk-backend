@@ -8,8 +8,6 @@ plugins {
 version = "0.1"
 group = "com.jtalk"
 
-
-
 repositories {
     mavenCentral()
 }
@@ -43,7 +41,6 @@ dependencies {
         runtimeOnly("io.netty:netty-codec-native-quic::$it")
     }
 
-    compileOnly("io.micronaut:micronaut-http-client")
     runtimeOnly("ch.qos.logback:logback-classic")
     runtimeOnly("org.yaml:snakeyaml")
     testImplementation("io.micronaut:micronaut-http-client")
@@ -51,8 +48,6 @@ dependencies {
     testImplementation("com.auth0:java-jwt:4.6.0")   // signs webhooks the way LiveKit does
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
-
-
 
 application {
     mainClass = "com.jtalk.livecommunication.LiveCommunicationServiceApplication"
@@ -63,9 +58,6 @@ java {
     targetCompatibility = JavaVersion.toVersion("25")
 }
 
-
-
-
 graalvmNative.toolchainDetection = false
 graalvmNative {
     binaries {
@@ -74,9 +66,6 @@ graalvmNative {
         }
     }
 }
-
-
-
 
 micronaut {
     runtime("netty")
@@ -118,17 +107,8 @@ tasks.named<io.micronaut.gradle.docker.MicronautDockerfile>("dockerfile") {
     baseImage = "eclipse-temurin:25-jre"
 }
 
-
-
-
-
-
-
 // https://docs.gradle.org/current/userguide/upgrading_major_version_9.html#test_task_fails_when_no_tests_are_discovered
 tasks.withType<AbstractTestTask>().configureEach {
     failOnNoDiscoveredTests = false
 }
-
-
-
 

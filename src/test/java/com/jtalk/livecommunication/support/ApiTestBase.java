@@ -94,7 +94,7 @@ public abstract class ApiTestBase {
     }
 
     /** @param code expected problem code, or null to only check status and content type */
-    protected void assertProblem(HttpStatus status, String code, Runnable call) {
+    protected Map<String, Object> assertProblem(HttpStatus status, String code, Runnable call) {
         var ex = assertThrows(HttpClientResponseException.class, call::run);
         assertEquals(status, ex.getStatus());
         assertEquals("application/problem+json", ex.getResponse().getContentType().orElseThrow().toString());
@@ -103,6 +103,7 @@ public abstract class ApiTestBase {
             assertEquals("urn:jtalk:live-communication:problem:" + code, problem.get("type"), problem.toString());
         }
         assertEquals(status.getCode(), problem.get("status"));
+        return problem;
     }
 
     /** Polls until the condition holds, failing after {@code timeoutMillis}. */

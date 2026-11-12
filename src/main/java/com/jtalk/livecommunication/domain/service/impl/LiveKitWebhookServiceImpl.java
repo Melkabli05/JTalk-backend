@@ -4,9 +4,8 @@ import com.jtalk.livecommunication.domain.service.LiveKitWebhookService;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
 import com.jtalk.livecommunication.domain.service.StageLeaseService;
 import com.jtalk.livecommunication.domain.service.WhisperService;
-import com.jtalk.livecommunication.exception.Problems;
+import com.jtalk.livecommunication.exception.ProblemType;
 import io.livekit.server.WebhookReceiver;
-import io.micronaut.http.HttpStatus;
 import jakarta.inject.Singleton;
 import livekit.LivekitWebhook.WebhookEvent;
 
@@ -63,7 +62,7 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
         try {
             return receiver.receive(body, authorizationHeader);
         } catch (Exception e) {
-            throw Problems.of(HttpStatus.UNAUTHORIZED, "invalid-webhook-signature", "Invalid LiveKit webhook signature");
+            throw ProblemType.INVALID_WEBHOOK_SIGNATURE.because("Invalid LiveKit webhook signature");
         }
     }
 

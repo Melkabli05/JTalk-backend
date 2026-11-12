@@ -80,6 +80,60 @@ class VoiceRoomApiTest extends ApiTestBase {
     }
 
     @Test
+    void hostCanUpdateRoomSettingsAndNobodyElse() {
+        String roomId = createRoom("host", "Old name", 4);
+
+        Map<String, Object> updated = http.retrieve(HttpRequest.PATCH(path(roomId, ""), Map.of("name", "  New name ", "maxSpeakers", 3))
+                .header("X-User-Id", "host"), MAP);
+        assertEquals("New name", updated.get("name"));
+        assertEquals(3, updated.get("maxSpeakers"));
+
+        // Partial update keeps what is not sent.
+        Map<String, Object> renamedOnly = http.retrieve(HttpRequest.PATCH(path(roomId, ""), Map.of("name", "Only name"))
+                .header("X-User-Id", "host"), MAP);
+        assertEquals(3, renamedOnly.get("maxSpeakers"));
+
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> http.exchange(
+                HttpRequest.PATCH(path(roomId, ""), Map.of("name", "Hijack")).header("X-User-Id", "alice")));
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(
+                HttpRequest.PATCH(path(roomId, ""), Map.of("name", "   ")).header("X-User-Id", "host")));
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(
+                HttpRequest.PATCH(path(roomId, ""), Map.of("maxSpeakers", 99)).header("X-User-Id", "host")));
+        assertEquals("Only name", http.retrieve(HttpRequest.GET(path(roomId, "")), MAP).get("name"));
+    }
+
+    @Test
+    void roomsShowLiveStageAndPresenceNumbers() {
+        String roomId = createRoom("host", "Live numbers", 2);
+        Map<String, Object> fresh = http.retrieve(HttpRequest.GET(path(roomId, "")), MAP);
+        assertEquals(List.of(), fresh.get("speakers"));   // an empty stage is still in the payload
+        assertEquals(0, fresh.get("participantCount"));
+
+        post(roomId, "/participants/me", "host");
+        seatSpeaker(roomId, "host", "alice");
+        post(roomId, "/participants/me", "bob");
+        post(roomId, "/stage/hand-raises", "bob");
+
+        Map<String, Object> room = http.retrieve(HttpRequest.GET(path(roomId, "")), MAP);
+        assertEquals(List.of("alice"), room.get("speakers"));
+        assertEquals(3, room.get("participantCount"));   // host, alice, bob
+        assertEquals(1, room.get("handRaiseCount"));
+
+        List<Map<String, Object>> listed = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms?size=100"), MAP_LIST);
+        Map<String, Object> inList = listed.stream().filter(r -> roomId.equals(r.get("id"))).findFirst().orElseThrow();
+        assertEquals(List.of("alice"), inList.get("speakers"));
+        assertEquals(3, inList.get("participantCount"));
+        assertEquals(1, inList.get("handRaiseCount"));
+    }
+
+    @Test
+    void aMissingOrBlankCallerIdIsRejected() {
+        var body = Map.of("name", "No caller");
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(HttpRequest.POST("/api/v1/voice-rooms", body)));
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(HttpRequest.POST("/api/v1/voice-rooms", body).header("X-User-Id", "")));
+    }
+
+    @Test
     void validationErrorsAreProblemDetails() {
         var ex = assertThrows(HttpClientResponseException.class, () -> http.exchange(
                 HttpRequest.POST("/api/v1/voice-rooms", Map.of("name", " ", "maxSpeakers", 99))
@@ -90,8 +144,11 @@ class VoiceRoomApiTest extends ApiTestBase {
 
     @Test
     void unknownRoomIsA404Problem() {
-        assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found",
-                () -> http.exchange(HttpRequest.GET("/api/v1/voice-rooms/" + UUID.randomUUID()), MAP));
+        UUID missing = UUID.randomUUID();
+        var problem = assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found",
+                () -> http.exchange(HttpRequest.GET("/api/v1/voice-rooms/" + missing), MAP));
+        assertEquals("Voice room not found", problem.get("title"));
+        assertTrue(String.valueOf(problem.get("detail")).contains(missing.toString()));
     }
 
     @Test

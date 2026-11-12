@@ -2,7 +2,7 @@ package com.jtalk.livecommunication.domain.service.impl;
 
 import com.jtalk.livecommunication.config.LiveKitProperties;
 import com.jtalk.livecommunication.domain.service.MediaService;
-import com.jtalk.livecommunication.exception.Problems;
+import com.jtalk.livecommunication.exception.ProblemType;
 import io.livekit.server.AccessToken;
 import io.livekit.server.CanPublish;
 import io.livekit.server.CanPublishData;
@@ -10,6 +10,7 @@ import io.livekit.server.CanSubscribe;
 import io.livekit.server.RoomJoin;
 import io.livekit.server.RoomName;
 import io.livekit.server.RoomServiceClient;
+import io.livekit.server.ServerError;
 import io.micronaut.http.HttpStatus;
 import jakarta.inject.Singleton;
 import livekit.LivekitModels.DataPacket;
@@ -31,7 +32,6 @@ import java.util.UUID;
 class LiveKitMediaService implements MediaService {
 
     private static final Logger LOG = LoggerFactory.getLogger(LiveKitMediaService.class);
-    private static final int HTTP_NOT_FOUND = 404;
 
     private final LiveKitProperties properties;
     private final RoomServiceClient roomService;
@@ -105,13 +105,16 @@ class LiveKitMediaService implements MediaService {
     private static <T> Response<T> execute(Call<T> call, String operation) {
         try {
             Response<T> response = call.execute();
-            if (!response.isSuccessful() && response.code() != HTTP_NOT_FOUND) {
-                throw Problems.of(HttpStatus.BAD_GATEWAY, "media-server-error", "LiveKit failed to " + operation + ": HTTP " + response.code());
+            if (!response.isSuccessful() && response.code() != HttpStatus.NOT_FOUND.getCode()) {
+                ServerError error = ServerError.from(response);   // LiveKit's own error code and message
+                String reason = error != null ? error.getCode() + ": " + error.getMessage() : "HTTP " + response.code();
+                LOG.warn("LiveKit failed to {}: {}", operation, reason);
+                throw ProblemType.MEDIA_SERVER_ERROR.because("LiveKit failed to " + operation + " (" + reason + ")");
             }
             return response;
         } catch (IOException e) {
             LOG.warn("LiveKit unreachable while trying to {}", operation, e);
-            throw Problems.of(HttpStatus.BAD_GATEWAY, "media-server-unreachable", "LiveKit unreachable while trying to " + operation);
+            throw ProblemType.MEDIA_SERVER_UNREACHABLE.because("LiveKit unreachable while trying to " + operation);
         }
     }
 }

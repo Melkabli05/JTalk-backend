@@ -5,6 +5,8 @@ import com.jtalk.livecommunication.domain.service.StageLeaseService;
 import com.jtalk.livecommunication.domain.service.StageService;
 import jakarta.inject.Singleton;
 
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Singleton
@@ -34,12 +36,11 @@ class StageLeaseServiceImpl implements StageLeaseService {
 
     @Override
     public void reclaim(UUID roomId, String userId) {
-        stage.releaseSeat(roomId, userId);
-        stage.promoteNext(roomId);
+        stage.releaseSeatAndPromoteNext(roomId, userId);
     }
 
     @Override
-    public boolean isReconnecting(UUID roomId, String userId) {
-        return leases.exists(roomId, userId);
+    public Set<String> reconnecting(UUID roomId, List<String> userIds) {
+        return leases.usersWithLease(roomId, userIds);
     }
 }

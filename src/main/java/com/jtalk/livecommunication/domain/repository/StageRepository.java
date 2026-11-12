@@ -29,7 +29,7 @@ public class StageRepository {
     private final String ttlSeconds;
     private final LuaScript raiseHandScript;
     private final LuaScript approveScript;
-    private final LuaScript promoteNextScript;
+    private final LuaScript releaseAndPromoteScript;
 
     public StageRepository(StatefulRedisConnection<String, String> connection,
                            Clock clock,
@@ -40,7 +40,7 @@ public class StageRepository {
         this.ttlSeconds = Long.toString(properties.stateTtl().toSeconds());
         this.raiseHandScript = LuaScript.load(resources, "lua/raise_hand.lua");
         this.approveScript = LuaScript.load(resources, "lua/approve_speaker.lua");
-        this.promoteNextScript = LuaScript.load(resources, "lua/promote_next.lua");
+        this.releaseAndPromoteScript = LuaScript.load(resources, "lua/release_and_promote.lua");
     }
 
     public int raiseHand(UUID roomId, String userId) {
@@ -67,12 +67,12 @@ public class StageRepository {
         };
     }
 
-    /** Seats the longest-waiting hand-raiser if a seat is free; returns who was seated. */
-    public Optional<String> promoteNext(UUID roomId, int maxSeats) {
-        String userId = promoteNextScript.execute(redis(), ScriptOutputType.VALUE,
+    /** Frees the user's seat and seats the longest-waiting hand-raiser in one atomic step; returns who was seated. */
+    public Optional<String> releaseAndPromoteNext(UUID roomId, String userId, int maxSeats) {
+        String promoted = releaseAndPromoteScript.execute(redis(), ScriptOutputType.VALUE,
                 new String[]{stageKey(roomId), queueKey(roomId)},
-                Integer.toString(maxSeats), nowMillis(), ttlSeconds);
-        return Optional.ofNullable(userId);
+                userId, Integer.toString(maxSeats), nowMillis(), ttlSeconds);
+        return Optional.ofNullable(promoted);
     }
 
     public boolean leaveStage(UUID roomId, String userId) {
@@ -102,11 +102,11 @@ public class StageRepository {
         return Long.toString(clock.millis());
     }
 
-    private static String stageKey(UUID roomId) {
+    static String stageKey(UUID roomId) {
         return "voiceroom:{" + roomId + "}:stage";
     }
 
-    private static String queueKey(UUID roomId) {
+    static String queueKey(UUID roomId) {
         return "voiceroom:{" + roomId + "}:hand-queue";
     }
 }

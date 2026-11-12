@@ -1,5 +1,7 @@
 package com.jtalk.livecommunication.domain.service;
 
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -17,5 +19,6 @@ public interface StageLeaseService {
     /** The lease expired: frees the seat and promotes the next hand-raiser. */
     void reclaim(UUID roomId, String userId);
 
-    boolean isReconnecting(UUID roomId, String userId);
+    /** Which of these users are currently inside a grace lease (one Redis round trip for all of them). */
+    Set<String> reconnecting(UUID roomId, List<String> userIds);
 }

@@ -32,12 +32,10 @@ public interface StageService {
     /** Drops every trace of a user who left the room. Local state only; they are no longer connected. */
     void clearUser(UUID roomId, String userId);
 
-    /** Frees the user's seat without touching the media server (they are already gone). */
-    void releaseSeat(UUID roomId, String userId);
-
     /**
-     * Seats the longest-waiting hand-raiser if a seat is free and grants them publish rights.
-     * Returns who was seated; empty if nobody was waiting, the stage is full or the room is closed.
+     * A speaker is gone for good (their grace lease expired): frees the seat and, atomically, seats the
+     * longest-waiting hand-raiser and grants them publish rights. Returns who was seated; empty if nobody was
+     * waiting, a seat is still taken, or the room is closed.
      */
-    Optional<String> promoteNext(UUID roomId);
+    Optional<String> releaseSeatAndPromoteNext(UUID roomId, String userId);
 }

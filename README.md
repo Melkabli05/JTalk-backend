@@ -22,7 +22,7 @@ com.jtalk.livecommunication
 │   ├── enums, model, event
 ├── integration           passive clients of external systems (Redis Stream producer for the mixer)
 ├── config                typed @ConfigurationProperties, Clock
-├── security, exception   caller-identity header, RFC 9457 problem helper
+├── security, exception   caller-identity header; ProblemType enum for all API errors (RFC 9457)
 └── mixer                 Media Plane: separate entry point, plain Java (no Micronaut), self-contained
 ```
 
@@ -32,11 +32,20 @@ control plane except the shared enums and the assignment record.
 
 Persistent room metadata (PostgreSQL) is kept separate from ephemeral real-time state (Redis).
 
+Conventions the code follows (and `LiveKitMediaServiceTest` pins down):
+- **LiveKit calls go through one adapter** (`LiveKitMediaService`). The SDK returns a Retrofit `Call` that sends
+  nothing until executed, so every call is executed there, a failure is decoded with `ServerError` into a 502
+  problem carrying LiveKit's own code and message, and a 404 means "nothing to do". The test runs the real adapter
+  against an in-process server and checks each request's path, payload and signing grant.
+- **No network I/O inside a database transaction.** Services use no `@Transactional`; each repository call is its own
+  short transaction, and LiveKit/Redis calls happen outside it. Events are published only after the write.
+- **One place for API errors** (`ProblemType`), no custom exception classes.
+
 ## Features
 
 | Feature | How it works |
 |---|---|
-| **Stage** | Atomic Lua scripts for hand-raise, approval and promotion; host never needs a seat. |
+| **Stage** | Atomic Lua scripts for hand-raise, approval, and release-and-promote (one call frees a seat and seats the next hand-raiser); scripts run by SHA and fall back to sending the source after a Redis restart. Host never needs a seat. |
 | **30 s grace lease** | LiveKit `participant_left` for a seated speaker creates a Redis key with a TTL instead of freeing the seat. Rejoining (or `participant_joined`) cancels it. When it expires, Redis emits a keyspace event; `LeaseExpirationListener` frees the seat and promotes the next hand-raiser. The participant list shows `RECONNECTING` meanwhile. |
 | **Webhooks** | `POST /webhooks/livekit`, signature verified with the LiveKit SDK. Events handled: `participant_left`, `participant_joined`, `track_published` (whisper tracks). LiveKit does not guarantee webhook delivery (it retries, then gives up). |
 | **Whisper** | Speaker -> one present participant. The server validates and stores the session, sends a `whisper` data message to both clients, and when the speaker publishes a `whisper_target_<id>` track it unsubscribes everyone except speaker and target (`UpdateSubscriptions`). |
@@ -47,13 +56,13 @@ Persistent room metadata (PostgreSQL) is kept separate from ephemeral real-time 
 ## API
 
 Authentication is done upstream; the caller identity is read from the `X-User-Id` header.
-Never expose this service directly to clients. Errors are RFC 9457 `application/problem+json`.
+Never expose this service directly to clients. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
 
 | Method & path (under `/api/v1/voice-rooms`) | Who | Purpose |
 |---|---|---|
 | `POST /` | any | Create a room (caller becomes host) |
-| `GET /?page=&size=` | any | List active rooms, newest first |
-| `GET /{roomId}` / `DELETE /{roomId}` | any / host | Read / close |
+| `GET /?page=&size=` | any | List active rooms, newest first, each with live `speakers`, `participantCount`, `handRaiseCount` (one batched Redis round trip) |
+| `GET /{roomId}` / `PATCH /{roomId}` / `DELETE /{roomId}` | any / host / host | Read (with live numbers) / update `name`, `maxSpeakers` / close |
 | `POST /{roomId}/participants/me` | any | Join: LiveKit URL, token, role |
 | `POST .../participants/me/heartbeat` / `DELETE .../participants/me` | member | Keep alive / leave |
 | `GET .../participants` | any | Who is here: role + `ACTIVE`/`RECONNECTING` |
@@ -86,6 +95,19 @@ Tunables with defaults: `voice-room.{presence-timeout,state-ttl,lease-ttl,whispe
 
 Redis must have keyspace notifications for expired keys (`notify-keyspace-events` containing `Ex`). The service tries
 `CONFIG SET` at startup and logs a warning if that is forbidden (typical on managed Redis); set it there instead.
+
+## Production runtime
+
+- **Who does what.** HTTP/3 here only carries the *control plane* (room and stage calls, faster reconnects after a
+  Wi-Fi to 4G switch). Voice packets travel over WebRTC (UDP, TURN-over-TLS as fallback) through LiveKit. Bad
+  connections are handled by pruning subscriptions in LiveKit, not by server-side mixing.
+- **JVM:** `java -XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0 -jar live-communication-service.jar`
+  (generational ZGC is the default in Java 25; compact object headers are a product flag there).
+- **Redis:** `notify-keyspace-events Ex` (see Running) so grace leases can expire into seat reclaims.
+- **Ports:** the API gateway exposes `8080/TCP` and, with the `quic` profile, `8443/TCP+UDP`. LiveKit nodes need
+  `7880/TCP`, `443/TCP` (TURN/TLS) and the configured UDP media range.
+- **Databases:** PostgreSQL and Redis never share a transaction; services hold no database transaction while calling
+  LiveKit or Redis.
 
 ## What is not finished, and why
 

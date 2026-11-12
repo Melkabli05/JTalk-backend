@@ -9,8 +9,7 @@ import com.jtalk.livecommunication.domain.service.ParticipantService;
 import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.domain.service.WhisperService;
-import com.jtalk.livecommunication.exception.Problems;
-import io.micronaut.http.HttpStatus;
+import com.jtalk.livecommunication.exception.ProblemType;
 import io.micronaut.serde.ObjectMapper;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -52,13 +51,13 @@ class WhisperServiceImpl implements WhisperService {
     public void start(UUID roomId, String speakerId, String targetId) {
         VoiceRoom room = rooms.getActive(roomId);
         if (!room.isHost(speakerId) && !stage.isOnStage(roomId, speakerId)) {
-            throw Problems.of(HttpStatus.FORBIDDEN, "whisper-not-permitted", "Only the host and stage speakers can whisper");
+            throw ProblemType.WHISPER_NOT_PERMITTED.because("Only the host and stage speakers can whisper");
         }
         if (speakerId.equals(targetId)) {
-            throw Problems.of(HttpStatus.UNPROCESSABLE_ENTITY, "whisper-to-self", "You cannot whisper to yourself");
+            throw ProblemType.WHISPER_TO_SELF.because("You cannot whisper to yourself");
         }
         if (!participants.isPresent(roomId, targetId)) {
-            throw Problems.of(HttpStatus.NOT_FOUND, "whisper-target-not-present", targetId + " is not in the room");
+            throw ProblemType.WHISPER_TARGET_NOT_PRESENT.because(targetId + " is not in the room");
         }
         whispers.start(roomId, speakerId, targetId);
         send("start", roomId, speakerId, targetId);
