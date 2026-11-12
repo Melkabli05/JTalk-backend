@@ -75,7 +75,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     @Override
     public List<VoiceRoom> listActive(Pageable pageable) {
-        return rooms.findByStatusOrderByCreatedAtDesc(VoiceRoomStatus.ACTIVE, pageable);
+        return rooms.findByStatusOrderByCreatedAtDescAndIdDesc(VoiceRoomStatus.ACTIVE, pageable);
     }
 
     @Override

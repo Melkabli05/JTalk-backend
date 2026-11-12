@@ -108,8 +108,18 @@ Redis must have keyspace notifications for expired keys (`notify-keyspace-events
 - **Databases:** PostgreSQL and Redis never share a transaction; services hold no database transaction while calling
   LiveKit or Redis.
 
-## What is not finished, and why
+## Deliberate decisions and known limits
 
+- **Offset paging, not keyset.** Room discovery uses Micronaut Data's built-in `Pageable` (`?page=&size=`). Micronaut
+  Data 5.2 ships an HTTP binder only for `Pageable`, not for `CursoredPageable`, so keyset pagination would need a
+  hand-written cursor encoder and decoder. Ordering has an id tie-breaker (and a matching index) so pages are stable;
+  a room created while someone is paging can still shift later pages by one.
+- **Caller identity is trusted from `X-User-Id`.** Authentication belongs to the API gateway. Adopting Micronaut
+  Security with JWTs (`Principal` binding, `@Secured`) is a one-annotation swap in `@CallerId` once an issuer and key
+  source are chosen; it is not done because that choice is not ours to guess.
+- **Live stats are batched per room, not per request.** The discovery feed reads Postgres once and Redis as one
+  pipelined batch. A single Lua call would be one command but breaks Redis Cluster, because each room's keys live in
+  a different hash slot.
 - **Whisper privacy has a small leak window.** LiveKit documents no per-track permission API, so exclusivity is
   enforced after the fact: the server unsubscribes everyone else when the `track_published` webhook arrives. Until
   then (and for anyone who joins while the whisper is running) clients with the default `autoSubscribe` may receive

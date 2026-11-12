@@ -127,6 +127,22 @@ class VoiceRoomApiTest extends ApiTestBase {
     }
 
     @Test
+    void discoveryIsPagedWithoutOverlap() {
+        createRoom("host", "page-1", 2);
+        createRoom("host", "page-2", 2);
+        createRoom("host", "page-3", 2);
+
+        List<Map<String, Object>> first = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms?page=0&size=2"), MAP_LIST);
+        List<Map<String, Object>> second = http.retrieve(HttpRequest.GET("/api/v1/voice-rooms?page=1&size=2"), MAP_LIST);
+
+        assertEquals(2, first.size());
+        assertFalse(second.isEmpty());
+        var firstIds = first.stream().map(r -> r.get("id")).toList();
+        assertTrue(second.stream().noneMatch(r -> firstIds.contains(r.get("id"))), "pages must not overlap");
+        assertEquals("page-3", first.getFirst().get("name"), "newest first");
+    }
+
+    @Test
     void aMissingOrBlankCallerIdIsRejected() {
         var body = Map.of("name", "No caller");
         assertProblem(HttpStatus.BAD_REQUEST, null, () -> http.exchange(HttpRequest.POST("/api/v1/voice-rooms", body)));

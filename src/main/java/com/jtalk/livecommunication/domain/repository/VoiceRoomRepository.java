@@ -13,5 +13,10 @@ import java.util.UUID;
 @JdbcRepository(dialect = Dialect.POSTGRES)
 public interface VoiceRoomRepository extends CrudRepository<VoiceRoom, UUID> {
 
-    List<VoiceRoom> findByStatusOrderByCreatedAtDesc(VoiceRoomStatus status, Pageable pageable);
+    /**
+     * Newest first, with the id as a tie-breaker so rooms created in the same instant keep a stable order across
+     * pages. Paging uses Micronaut Data's built-in {@code Pageable} binding (there is no HTTP binder for cursored
+     * pageables, so keyset pagination would need a hand-written cursor codec).
+     */
+    List<VoiceRoom> findByStatusOrderByCreatedAtDescAndIdDesc(VoiceRoomStatus status, Pageable pageable);
 }
