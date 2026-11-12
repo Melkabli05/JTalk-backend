@@ -9,7 +9,7 @@ import com.jtalk.livecommunication.domain.service.MediaService;
 import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.exception.ProblemType;
-import io.micronaut.runtime.event.annotation.EventListener;
+import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import org.zalando.problem.ThrowableProblem;
@@ -110,7 +110,7 @@ class StageServiceImpl implements StageService {
         return promoted;
     }
 
-    @EventListener
+    @TransactionalEventListener
     void onRoomClosed(VoiceRoomClosed event) {
         stage.clear(event.roomId());
     }

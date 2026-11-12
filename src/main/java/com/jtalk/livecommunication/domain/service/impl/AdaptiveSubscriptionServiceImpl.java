@@ -7,7 +7,7 @@ import com.jtalk.livecommunication.domain.repository.QualityRepository;
 import com.jtalk.livecommunication.domain.service.AdaptiveSubscriptionService;
 import com.jtalk.livecommunication.domain.service.MediaService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
-import io.micronaut.runtime.event.annotation.EventListener;
+import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 
@@ -67,7 +67,7 @@ class AdaptiveSubscriptionServiceImpl implements AdaptiveSubscriptionService {
         }
     }
 
-    @EventListener
+    @TransactionalEventListener
     void onRoomClosed(VoiceRoomClosed event) {
         quality.clear(event.roomId());
     }

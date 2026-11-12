@@ -12,6 +12,8 @@ import com.jtalk.livecommunication.exception.ProblemType;
 import io.micronaut.context.event.ApplicationEventPublisher;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.model.Pageable;
+import io.micronaut.transaction.annotation.TransactionalEventListener;
+import io.micronaut.transaction.annotation.Transactional;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -78,16 +80,26 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         return rooms.findByStatusOrderByCreatedAtDescAndIdDesc(VoiceRoomStatus.ACTIVE, pageable);
     }
 
+    /**
+     * The transaction covers only the database write. Everything else (clearing Redis state, deleting the LiveKit
+     * room) happens in {@code @TransactionalEventListener}s after the commit, so no network call ever holds a
+     * database connection, and nothing runs if the write rolls back.
+     */
     @Override
+    @Transactional
     public void close(UUID roomId, String requesterId) {
         VoiceRoom room = getActiveAsHost(roomId, requesterId);
         rooms.update(room.close(clock.instant()));
         closedEvents.publishEvent(new VoiceRoomClosed(roomId));
+    }
+
+    @TransactionalEventListener
+    void onRoomClosed(VoiceRoomClosed event) {
         try {
-            media.closeRoom(roomId);
+            media.closeRoom(event.roomId());
         } catch (RuntimeException e) {
             // The room is already closed in our source of truth; LiveKit empties idle rooms by itself.
-            log.warn("Room {} closed but media server cleanup failed", roomId, e);
+            log.warn("Room {} closed but media server cleanup failed", event.roomId(), e);
         }
     }
 }

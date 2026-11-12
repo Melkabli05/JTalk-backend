@@ -13,7 +13,7 @@ import com.jtalk.livecommunication.domain.service.ParticipantService;
 import com.jtalk.livecommunication.domain.service.StageLeaseService;
 import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
-import io.micronaut.runtime.event.annotation.EventListener;
+import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 
 import java.time.Clock;
@@ -91,7 +91,7 @@ class ParticipantServiceImpl implements ParticipantService {
                 .toList();
     }
 
-    @EventListener
+    @TransactionalEventListener
     void onRoomClosed(VoiceRoomClosed event) {
         presence.clear(event.roomId());
     }
