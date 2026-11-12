@@ -2,11 +2,9 @@ package com.jtalk.livecommunication;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
-import com.jtalk.livecommunication.domain.service.MediaService.MediaTrack;
 import com.jtalk.livecommunication.support.ApiTestBase;
 import com.jtalk.livecommunication.support.FakeMediaService.PermissionChange;
 import com.jtalk.livecommunication.support.FakeMediaService.SubscriptionChange;
-import io.lettuce.core.Range;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
@@ -25,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** Grace leases, LiveKit webhooks, whisper, adaptive subscription and the audience mix trigger. */
+/** Grace leases, LiveKit webhooks, whisper and adaptive subscription. */
 class RealtimeFeaturesApiTest extends ApiTestBase {
 
     private static final String API_KEY = "test-key";
@@ -175,59 +173,45 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     // ---- adaptive subscription --------------------------------------------------------------------
 
     @Test
-    void strugglingListenerIsMovedToTheMixedTrackAndBackAfterRecovering() throws InterruptedException {
+    void strugglingListenerIsPrunedToThePrimaryTrackAndRestoredAfterRecovering() throws InterruptedException {
         String roomId = createRoom("host", "Quality", 2);
-        post(roomId, "/participants/me", "host");
-        seatSpeaker(roomId, "host", "alice");
         post(roomId, "/participants/me", "bob");
-        media.tracks = List.of(
-                new MediaTrack("host", "TR_host", "mic"),
-                new MediaTrack("alice", "TR_alice", "mic"),
-                new MediaTrack("bob", "TR_bob", "mic"),
-                new MediaTrack("mixer-1", "TR_mix", "mcu_mono_fallback"));
 
-        report(roomId, "bob", 20, 100);   // >15% loss
-
-        assertTrue(media.subscriptionChanges.contains(
-                new SubscriptionChange(uuid(roomId), "bob", List.of("TR_host", "TR_alice"), false)));
-        assertTrue(media.subscriptionChanges.contains(
-                new SubscriptionChange(uuid(roomId), "bob", List.of("TR_mix"), true)));
-        assertEquals(List.of("START FALLBACK"), mixerEvents(roomId, "FALLBACK"));
+        report(roomId, "bob", 20, 100, List.of("TR_host", "TR_alice", "TR_carol"), "TR_host");   // >15% loss
+        assertEquals(List.of(new SubscriptionChange(uuid(roomId), "bob", List.of("TR_alice", "TR_carol"), false)),
+                media.subscriptionChanges);
 
         media.subscriptionChanges.clear();
-        report(roomId, "bob", 1, 100);    // healthy streak starts, not long enough yet
+        report(roomId, "bob", 20, 100, List.of("TR_host"), "TR_host");   // nothing left to prune: no call to LiveKit
+        report(roomId, "bob", 1, 100, List.of("TR_host"), "TR_host");    // healthy streak starts, not long enough yet
         assertEquals(List.of(), media.subscriptionChanges);
-        Thread.sleep(1_200);              // recovery window is 1s in tests
-        report(roomId, "bob", 1, 100);
+        Thread.sleep(1_200);                                             // recovery window is 1s in tests
+        report(roomId, "bob", 1, 100, List.of("TR_host"), "TR_host");
 
-        assertTrue(media.subscriptionChanges.contains(
-                new SubscriptionChange(uuid(roomId), "bob", List.of("TR_host", "TR_alice"), true)));
-        assertTrue(media.subscriptionChanges.contains(
-                new SubscriptionChange(uuid(roomId), "bob", List.of("TR_mix"), false)));
-        assertEquals(List.of("START FALLBACK", "STOP FALLBACK"), mixerEvents(roomId, "FALLBACK"));
+        assertEquals(1, media.subscriptionChanges.size());
+        SubscriptionChange restore = media.subscriptionChanges.getFirst();
+        assertTrue(restore.subscribe());
+        assertEquals(List.of("TR_alice", "TR_carol"), restore.trackSids().stream().sorted().toList());
     }
 
     @Test
     void lowDownstreamBandwidthAlsoCountsAsStruggling() {
         String roomId = createRoom("host", "Bandwidth", 2);
         post(roomId, "/participants/me", "bob");
-        media.tracks = List.of(new MediaTrack("host", "TR_host", "mic"), new MediaTrack("mixer-1", "TR_mix", "mcu_mono_fallback"));
 
-        report(roomId, "bob", 0, 10);     // <25 kbps
+        report(roomId, "bob", 0, 10, List.of("TR_a", "TR_b"), "TR_a");   // <25 kbps
 
-        assertTrue(media.subscriptionChanges.contains(new SubscriptionChange(uuid(roomId), "bob", List.of("TR_mix"), true)));
+        assertEquals(List.of(new SubscriptionChange(uuid(roomId), "bob", List.of("TR_b"), false)), media.subscriptionChanges);
     }
 
     @Test
-    void listenerStaysOnSpeakerTracksUntilTheMixedTrackExists() {
-        String roomId = createRoom("host", "No mixer yet", 2);
+    void aReportWithoutTracksNeverCallsLiveKit() {
+        String roomId = createRoom("host", "No tracks", 2);
         post(roomId, "/participants/me", "bob");
-        media.tracks = List.of(new MediaTrack("host", "TR_host", "mic"));
 
-        report(roomId, "bob", 30, 100);
+        assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/quality", "bob", Map.of("lossPercent", 30, "downstreamKbps", 100)).status());
 
-        assertEquals(List.of(), media.subscriptionChanges);          // never silenced
-        assertEquals(List.of("START FALLBACK"), mixerEvents(roomId, "FALLBACK"));   // but the mixer is requested
+        assertEquals(List.of(), media.subscriptionChanges);
     }
 
     @Test
@@ -236,29 +220,12 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         assertProblem(HttpStatus.BAD_REQUEST, null, () -> postJson(roomId, "/quality", "bob", Map.of("lossPercent", 120, "downstreamKbps", 100)));
     }
 
-    // ---- audience broadcast -----------------------------------------------------------------------
-
-    @Test
-    void growingPastTheThresholdStartsTheBroadcastMixAndShrinkingStopsIt() {
-        String roomId = createRoom("host", "Audience", 2);   // threshold is 2 in tests
-
-        post(roomId, "/participants/me", "host");
-        assertEquals(List.of(), mixerEvents(roomId, "BROADCAST"));
-        post(roomId, "/participants/me", "alice");
-        assertEquals(List.of("START BROADCAST"), mixerEvents(roomId, "BROADCAST"));
-        post(roomId, "/participants/me", "bob");              // still above: no duplicate START
-        assertEquals(List.of("START BROADCAST"), mixerEvents(roomId, "BROADCAST"));
-
-        delete(roomId, "/participants/me", "bob");
-        delete(roomId, "/participants/me", "alice");          // 1 present < 80% of threshold
-        assertEquals(List.of("START BROADCAST", "STOP BROADCAST"), mixerEvents(roomId, "BROADCAST"));
-    }
-
     // ---- helpers ----------------------------------------------------------------------------------
 
-    private void report(String roomId, String userId, double lossPercent, int downstreamKbps) {
-        assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/quality", userId,
-                Map.of("lossPercent", lossPercent, "downstreamKbps", downstreamKbps)).status());
+    private void report(String roomId, String userId, double lossPercent, int downstreamKbps, List<String> subscribed, String primary) {
+        assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/quality", userId, Map.of(
+                "lossPercent", lossPercent, "downstreamKbps", downstreamKbps,
+                "subscribedTrackSids", subscribed, "primaryTrackSid", primary)).status());
     }
 
     private String statusOf(String roomId, String userId) {
@@ -266,15 +233,6 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
                 .filter(p -> userId.equals(p.get("userId")))
                 .map(p -> (String) p.get("status"))
                 .findFirst().orElseThrow();
-    }
-
-    /** Mixer assignments written to the Redis Stream for this room and mode, as "ACTION MODE", oldest first. */
-    private List<String> mixerEvents(String roomId, String mode) {
-        return redis.sync().xrange("mixer:assignments", Range.create("-", "+")).stream()
-                .map(message -> message.getBody())
-                .filter(body -> roomId.equals(body.get("roomId")) && mode.equals(body.get("mode")))
-                .map(body -> body.get("action") + " " + body.get("mode"))
-                .toList();
     }
 
     private void webhook(String event, String roomId, String identity) {

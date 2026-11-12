@@ -27,15 +27,12 @@ public class FakeMediaService implements MediaService {
     public final List<SubscriptionChange> subscriptionChanges = new CopyOnWriteArrayList<>();
     public final List<Signal> signals = new CopyOnWriteArrayList<>();
     public final List<UUID> closedRooms = new CopyOnWriteArrayList<>();
-    /** Tracks reported for every room by {@link #listTracks}; set by the test. */
-    public volatile List<MediaTrack> tracks = List.of();
 
     public void reset() {
         permissionChanges.clear();
         subscriptionChanges.clear();
         signals.clear();
         closedRooms.clear();
-        tracks = List.of();
     }
 
     @Override
@@ -51,11 +48,6 @@ public class FakeMediaService implements MediaService {
     @Override
     public void closeRoom(UUID roomId) {
         closedRooms.add(roomId);
-    }
-
-    @Override
-    public List<MediaTrack> listTracks(UUID roomId) {
-        return tracks;
     }
 
     @Override

@@ -13,10 +13,6 @@ public interface MediaService {
     record MediaConnection(String url, String token) {
     }
 
-    /** An audio track currently published in a room. */
-    record MediaTrack(String identity, String sid, String name) {
-    }
-
     MediaConnection issueConnection(UUID roomId, String userId, boolean canPublish);
 
     /** Grants or revokes publish rights of a participant that is already connected. Idempotent. */
@@ -24,9 +20,6 @@ public interface MediaService {
 
     /** Disconnects everyone and discards the media room. Idempotent. */
     void closeRoom(UUID roomId);
-
-    /** All tracks currently published in the room; empty if the media room does not exist yet. */
-    List<MediaTrack> listTracks(UUID roomId);
 
     /** Server-side (un)subscribes one participant from the given tracks. */
     void setSubscriptions(UUID roomId, String userId, List<String> trackSids, boolean subscribe);

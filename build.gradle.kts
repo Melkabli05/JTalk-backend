@@ -66,13 +66,6 @@ java {
 }
 
 graalvmNative.toolchainDetection = false
-graalvmNative {
-    binaries {
-        all {
-            buildArgs.add("-H:+SharedArenaSupport")
-        }
-    }
-}
 
 micronaut {
     runtime("netty")
@@ -93,20 +86,6 @@ micronaut {
         replaceLogbackXml = true
     }
 
-}
-
-// Media Plane: the off-heap mixer worker (plain Java, no Micronaut). Needs REDIS_URI and a RoomAudioTransport.
-tasks.register<JavaExec>("runMixer") {
-    group = "application"
-    description = "Runs the Media Plane mixer worker"
-    mainClass = "com.jtalk.livecommunication.mixer.MixerWorkerApplication"
-    classpath = sourceSets["main"].runtimeClasspath
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-XX:+UseCompactObjectHeaders")
-}
-
-// The FFM-based mixer code loads native libopus.
-tasks.withType<Test>().configureEach {
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 tasks.named<io.micronaut.gradle.docker.MicronautDockerfile>("dockerfile") {

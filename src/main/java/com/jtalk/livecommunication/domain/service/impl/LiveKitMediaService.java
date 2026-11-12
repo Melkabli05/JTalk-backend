@@ -14,7 +14,6 @@ import io.livekit.server.ServerError;
 import io.micronaut.http.HttpStatus;
 import jakarta.inject.Singleton;
 import livekit.LivekitModels.DataPacket;
-import livekit.LivekitModels.ParticipantInfo;
 import livekit.LivekitModels.ParticipantPermission;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,18 +65,6 @@ class LiveKitMediaService implements MediaService {
     @Override
     public void closeRoom(UUID roomId) {
         execute(roomService.deleteRoom(roomId.toString()), "delete room");
-    }
-
-    @Override
-    public List<MediaTrack> listTracks(UUID roomId) {
-        Response<List<ParticipantInfo>> response = execute(roomService.listParticipants(roomId.toString()), "list participants");
-        if (!response.isSuccessful() || response.body() == null) {
-            return List.of();
-        }
-        return response.body().stream()
-                .flatMap(participant -> participant.getTracksList().stream()
-                        .map(track -> new MediaTrack(participant.getIdentity(), track.getSid(), track.getName())))
-                .toList();
     }
 
     @Override

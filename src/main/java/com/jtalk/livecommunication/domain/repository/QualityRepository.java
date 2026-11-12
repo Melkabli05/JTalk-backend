@@ -5,6 +5,8 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
 import jakarta.inject.Singleton;
 
+import java.util.Collection;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -54,8 +56,32 @@ public class QualityRepository {
         return redis.hlen(key(roomId));
     }
 
+    /** Remembers tracks the server unsubscribed this user from, so they can be restored after recovery. */
+    public void addPruned(UUID roomId, String userId, Collection<String> trackSids) {
+        if (trackSids.isEmpty()) {
+            return;
+        }
+        RedisCommands<String, String> redis = connection.sync();
+        redis.sadd(prunedKey(roomId, userId), trackSids.toArray(String[]::new));
+        redis.expire(prunedKey(roomId, userId), ttlSeconds);
+    }
+
+    /** Returns and forgets the tracks pruned for this user. */
+    public Set<String> takePruned(UUID roomId, String userId) {
+        RedisCommands<String, String> redis = connection.sync();
+        Set<String> pruned = redis.smembers(prunedKey(roomId, userId));
+        redis.del(prunedKey(roomId, userId));
+        return pruned;
+    }
+
     public void clear(UUID roomId) {
-        connection.sync().del(key(roomId));
+        RedisCommands<String, String> redis = connection.sync();
+        redis.hkeys(key(roomId)).forEach(userId -> redis.del(prunedKey(roomId, userId)));
+        redis.del(key(roomId));
+    }
+
+    private static String prunedKey(UUID roomId, String userId) {
+        return "voiceroom:{" + roomId + "}:pruned:" + userId;
     }
 
     private static String key(UUID roomId) {

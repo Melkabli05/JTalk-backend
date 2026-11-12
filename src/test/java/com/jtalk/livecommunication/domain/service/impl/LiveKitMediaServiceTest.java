@@ -4,7 +4,6 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.jtalk.livecommunication.config.LiveKitProperties;
 import com.jtalk.livecommunication.domain.service.MediaService.MediaConnection;
-import com.jtalk.livecommunication.domain.service.MediaService.MediaTrack;
 import com.sun.net.httpserver.HttpServer;
 import io.livekit.server.RoomServiceClient;
 import livekit.LivekitModels;
@@ -156,21 +155,6 @@ class LiveKitMediaServiceTest {
         assertEquals(new String(payload), body.getData().toStringUtf8());
     }
 
-    @Test
-    void listTracksFlattensEveryParticipantsTracks() {
-        responseBody = LivekitRoom.ListParticipantsResponse.newBuilder()
-                .addParticipants(LivekitModels.ParticipantInfo.newBuilder().setIdentity("alice")
-                        .addTracks(LivekitModels.TrackInfo.newBuilder().setSid("TR_1").setName("mic")))
-                .addParticipants(LivekitModels.ParticipantInfo.newBuilder().setIdentity("mixer-1")
-                        .addTracks(LivekitModels.TrackInfo.newBuilder().setSid("TR_2").setName("mcu_mono_fallback")))
-                .build().toByteArray();
-
-        List<MediaTrack> tracks = service().listTracks(room);
-
-        assertTrue(onlyRequest().path().endsWith("/ListParticipants"));
-        assertEquals(List.of(new MediaTrack("alice", "TR_1", "mic"), new MediaTrack("mixer-1", "TR_2", "mcu_mono_fallback")), tracks);
-    }
-
     // ---- error handling ---------------------------------------------------------------------------
 
     @Test
@@ -195,7 +179,6 @@ class LiveKitMediaServiceTest {
 
         assertDoesNotThrow(() -> service.closeRoom(room));
         assertDoesNotThrow(() -> service.updatePublishPermission(room, "ghost", true));
-        assertEquals(List.of(), service.listTracks(room));
     }
 
     @Test

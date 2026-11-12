@@ -17,9 +17,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
 
-    /** Mixer bots join as hidden participants with this identity prefix; their lifecycle is not a user's. */
-    private static final String MIXER_IDENTITY_PREFIX = "mixer-";
-
     private final WebhookReceiver receiver;
     private final StageLeaseService leases;
     private final ParticipantService participants;
@@ -30,7 +27,7 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
         WebhookEvent event = verify(body, authorizationHeader);
         Optional<UUID> roomId = parseRoomId(event.getRoom().getName());
         String identity = event.getParticipant().getIdentity();
-        if (roomId.isEmpty() || identity.isBlank() || identity.startsWith(MIXER_IDENTITY_PREFIX)) {
+        if (roomId.isEmpty() || identity.isBlank()) {
             return;
         }
         switch (event.getEvent()) {

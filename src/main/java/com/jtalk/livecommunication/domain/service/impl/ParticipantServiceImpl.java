@@ -7,7 +7,6 @@ import com.jtalk.livecommunication.domain.enums.PresenceStatus;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.domain.model.Participant;
 import com.jtalk.livecommunication.domain.repository.PresenceRepository;
-import com.jtalk.livecommunication.domain.service.AudienceBroadcastService;
 import com.jtalk.livecommunication.domain.service.MediaService;
 import com.jtalk.livecommunication.domain.service.MediaService.MediaConnection;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
@@ -31,7 +30,6 @@ class ParticipantServiceImpl implements ParticipantService {
     private final VoiceRoomService rooms;
     private final StageService stage;
     private final StageLeaseService leases;
-    private final AudienceBroadcastService audience;
     private final PresenceRepository presence;
     private final MediaService media;
     private final Clock clock;
@@ -40,7 +38,6 @@ class ParticipantServiceImpl implements ParticipantService {
     ParticipantServiceImpl(VoiceRoomService rooms,
                            StageService stage,
                            StageLeaseService leases,
-                           AudienceBroadcastService audience,
                            PresenceRepository presence,
                            MediaService media,
                            Clock clock,
@@ -48,7 +45,6 @@ class ParticipantServiceImpl implements ParticipantService {
         this.rooms = rooms;
         this.stage = stage;
         this.leases = leases;
-        this.audience = audience;
         this.presence = presence;
         this.media = media;
         this.clock = clock;
@@ -62,7 +58,6 @@ class ParticipantServiceImpl implements ParticipantService {
         MediaConnection connection = media.issueConnection(roomId, userId, role != ParticipantRole.LISTENER);
         presence.touch(roomId, userId, clock.instant());
         leases.onReconnect(roomId, userId);
-        audience.recheck(roomId, presentCount(roomId));
         return new Joined(connection, role);
     }
 
@@ -76,7 +71,6 @@ class ParticipantServiceImpl implements ParticipantService {
     public void leave(UUID roomId, String userId) {
         presence.remove(roomId, userId);
         stage.clearUser(roomId, userId);
-        audience.recheck(roomId, presentCount(roomId));
     }
 
     @Override
@@ -100,10 +94,6 @@ class ParticipantServiceImpl implements ParticipantService {
     @EventListener
     void onRoomClosed(VoiceRoomClosed event) {
         presence.clear(event.roomId());
-    }
-
-    private long presentCount(UUID roomId) {
-        return presence.count(roomId, presenceCutoff());
     }
 
     private Instant presenceCutoff() {

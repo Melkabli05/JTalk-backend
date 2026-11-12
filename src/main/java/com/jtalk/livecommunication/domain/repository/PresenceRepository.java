@@ -49,10 +49,6 @@ public class PresenceRepository {
         return lastSeen != null && lastSeen >= notBefore.toEpochMilli();
     }
 
-    public long count(UUID roomId, Instant notBefore) {
-        return connection.sync().zcount(key(roomId), Range.create((double) notBefore.toEpochMilli(), Double.POSITIVE_INFINITY));
-    }
-
     public void clear(UUID roomId) {
         connection.sync().del(key(roomId));
     }
