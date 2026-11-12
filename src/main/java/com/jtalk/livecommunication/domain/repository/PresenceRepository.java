@@ -1,11 +1,14 @@
 package com.jtalk.livecommunication.domain.repository;
 
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
+import io.lettuce.core.LettuceFutures;
 import io.lettuce.core.Range;
 import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
 import jakarta.inject.Singleton;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -17,6 +20,8 @@ import java.util.UUID;
 @Singleton
 public class PresenceRepository {
 
+    private static final Duration TIMEOUT = Duration.ofSeconds(2);
+
     private final StatefulRedisConnection<String, String> connection;
     private final long ttlSeconds;
 
@@ -26,11 +31,12 @@ public class PresenceRepository {
         this.ttlSeconds = properties.stateTtl().toSeconds();
     }
 
+    /** The heartbeat, sent by every participant every few seconds: both commands go out together, one round trip. */
     public void touch(UUID roomId, String userId, Instant now) {
-        RedisCommands<String, String> redis = connection.sync();
-        String key = key(roomId);
-        redis.zadd(key, now.toEpochMilli(), userId);
-        redis.expire(key, ttlSeconds);
+        RedisAsyncCommands<String, String> redis = connection.async();
+        LettuceFutures.awaitAll(TIMEOUT,
+                redis.zadd(key(roomId), now.toEpochMilli(), userId),
+                redis.expire(key(roomId), ttlSeconds));
     }
 
     public void remove(UUID roomId, String userId) {
