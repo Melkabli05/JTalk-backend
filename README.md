@@ -49,8 +49,8 @@ Conventions the code follows (and `LiveKitMediaServiceTest` pins down):
 |---|---|
 | **Stage** | Atomic Lua scripts for hand-raise, approval, and release-and-promote (one call frees a seat and seats the next hand-raiser); scripts run by SHA and fall back to sending the source after a Redis restart. Host never needs a seat. |
 | **30 s grace lease** | LiveKit `participant_left` for a seated speaker creates a Redis key with a TTL instead of freeing the seat. Rejoining (or `participant_joined`) cancels it. When it expires, Redis emits a keyspace event; `LeaseExpirationListener` frees the seat and promotes the next hand-raiser. The participant list shows `RECONNECTING` meanwhile. |
-| **Webhooks** | `POST /webhooks/livekit`, signature verified with the LiveKit SDK. Events handled: `participant_left`, `participant_joined`, `track_published` (whisper tracks). LiveKit does not guarantee webhook delivery (it retries, then gives up). |
-| **Whisper** | Speaker -> one present participant. The server validates and stores the session, sends a `whisper` data message to both clients, and when the speaker publishes a `whisper_target_<id>` track it unsubscribes everyone except speaker and target (`UpdateSubscriptions`). |
+| **Webhooks** | `POST /webhooks/livekit`, signature verified with the LiveKit SDK. Events handled: `participant_left`, `participant_joined`. LiveKit does not guarantee webhook delivery (it retries, then gives up). |
+| **Whisper** | Speaker -> one present participant, in a **private two-person LiveKit room** created for that whisper, so the audio never touches the main room and nobody else can hear it. The speaker gets their connection in the response, the target gets theirs in a data message addressed only to them, and stopping deletes the room. |
 | **Adaptive subscription** | Clients POST quality reports with the tracks they are subscribed to and the one they want to keep. Loss > 15 % or downstream < 25 kbps prunes every other track (`UpdateSubscriptions`) and remembers what was pruned; loss < 3 % for 20 s restores it. Nothing to prune means no call to LiveKit, and the server never has to list a room's tracks. |
 
 ## API
@@ -71,7 +71,7 @@ Tokens are issued upstream (gateway / identity provider) and verified here with 
 | `GET .../stage` | any | Speakers and hand-raise queue |
 | `POST .../stage/hand-raises` / `DELETE .../hand-raises/me` | listener | Raise / lower hand |
 | `PUT .../stage/speakers/{userId}` / `DELETE ...` | host / self | Approve / remove or step down |
-| `POST .../whisper` `{targetUserId}` / `DELETE .../whisper` | speaker | Start / stop a whisper |
+| `POST .../whisper` `{targetUserId}` / `DELETE .../whisper` | speaker | Start (returns the speaker's `mediaUrl`/`mediaToken` for the private room) / stop a whisper |
 | `POST .../quality` `{lossPercent, downstreamKbps}` | member | Report downstream quality |
 | `POST /webhooks/livekit` | LiveKit | Signed webhook |
 
@@ -118,11 +118,8 @@ Redis must have keyspace notifications for expired keys (`notify-keyspace-events
 - **Live stats are batched per room, not per request.** The discovery feed reads Postgres once and Redis as one
   pipelined batch. A single Lua call would be one command but breaks Redis Cluster, because each room's keys live in
   a different hash slot.
-- **Whisper privacy has a small leak window.** LiveKit documents no per-track permission API, so exclusivity is
-  enforced after the fact: the server unsubscribes everyone else when the `track_published` webhook arrives. Until
-  then (and for anyone who joins while the whisper is running) clients with the default `autoSubscribe` may receive
-  the audio. For strict privacy, connect clients with `autoSubscribe` disabled and subscribe them server-side. The
-  same applies to the adaptive subscription swap: it is reliable only for clients that do not auto-subscribe.
+- **Adaptive subscription pruning is best-effort for auto-subscribing clients.** LiveKit documents no way to stop a client
+  re-subscribing to new tracks on its own; for a reliable prune, connect clients with `autoSubscribe` disabled.
 - **Webhooks are not guaranteed.** A lost `participant_left` means the lease is never started, so the seat is only
   freed when the user leaves or the host removes them.
 - **HTTP/3 binds, but no HTTP/3 request was made.** The `quic` profile starts a QUIC (UDP) and a TCP+TLS listener on

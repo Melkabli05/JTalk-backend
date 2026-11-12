@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -149,59 +150,53 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     // ---- whisper ----------------------------------------------------------------------------------
 
     @Test
-    void speakersCanWhisperToAPresentParticipant() {
+    void aWhisperGetsItsOwnPrivateRoomAndOnlyTheTargetIsTold() {
         String roomId = createRoom("host", "Whisper", 2);
         post(roomId, "/participants/me", "host");
         seatSpeaker(roomId, "host", "alice");
         post(roomId, "/participants/me", "bob");
+        post(roomId, "/participants/me", "carol");
 
         assertProblem(HttpStatus.FORBIDDEN, "whisper-not-permitted", () -> postJson(roomId, "/whisper", "bob", Map.of("targetUserId", "alice")));
         assertProblem(HttpStatus.NOT_FOUND, "whisper-target-not-present", () -> postJson(roomId, "/whisper", "alice", Map.of("targetUserId", "ghost")));
         assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "whisper-to-self", () -> postJson(roomId, "/whisper", "alice", Map.of("targetUserId", "alice")));
 
-        assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/whisper", "alice", Map.of("targetUserId", "bob")).status());
+        Map<String, Object> session = startWhisper(roomId, "alice", "bob");
+        assertEquals("whisper:alice>bob:alice:publish=true", session.get("mediaToken"));   // the speaker's side, from the response
+
         assertEquals(1, media.signals.size());
         var start = media.signals.getFirst();
         assertEquals("whisper", start.topic());
-        assertEquals(List.of("alice", "bob"), start.destinationIdentities());
+        assertEquals(List.of("bob"), start.destinationIdentities(), "only the target is told; nobody else in the room");
         assertTrue(start.payload().contains("\"action\":\"start\""), start.payload());
-        assertTrue(start.payload().contains("whisper_target_bob"), start.payload());
+        assertTrue(start.payload().contains("whisper:alice>bob:bob:publish=false"), "the target gets their own side");
+        assertFalse(start.payload().contains("publish=true"), "the speaker's token never goes to the target");
 
         assertEquals(HttpStatus.NO_CONTENT, delete(roomId, "/whisper", "alice").status());
+        assertEquals(List.of(new FakeMediaService.WhisperClose(uuid(roomId), "alice", "bob")), media.closedWhispers);
         assertEquals(2, media.signals.size());
         assertTrue(media.signals.get(1).payload().contains("\"action\":\"stop\""));
-        delete(roomId, "/whisper", "alice");   // idempotent: no third signal
+        assertEquals(List.of("bob"), media.signals.get(1).destinationIdentities());
+
+        delete(roomId, "/whisper", "alice");   // idempotent
+        assertEquals(1, media.closedWhispers.size());
         assertEquals(2, media.signals.size());
     }
 
     @Test
-    void whisperTrackIsHiddenFromEveryoneExceptSpeakerAndTarget() {
-        String roomId = createRoom("host", "Private whisper", 2);
+    void startingANewWhisperEndsThePreviousOne() {
+        String roomId = createRoom("host", "Switch whisper", 2);
         post(roomId, "/participants/me", "host");
         seatSpeaker(roomId, "host", "alice");
         post(roomId, "/participants/me", "bob");
         post(roomId, "/participants/me", "carol");
-        postJson(roomId, "/whisper", "alice", Map.of("targetUserId", "bob"));
 
-        assertEquals(HttpStatus.OK, sendWebhook("{\"event\":\"track_published\",\"room\":{\"name\":\"" + roomId
-                + "\"},\"participant\":{\"identity\":\"alice\"},\"track\":{\"sid\":\"TR_whisper\",\"name\":\"whisper_target_bob\"}}"));
+        startWhisper(roomId, "alice", "bob");
+        startWhisper(roomId, "alice", "carol");
 
-        List<String> unsubscribed = media.subscriptionChanges.stream()
-                .filter(change -> !change.subscribe() && change.trackSids().equals(List.of("TR_whisper")))
-                .map(SubscriptionChange::userId).sorted().toList();
-        assertEquals(List.of("carol", "host"), unsubscribed);   // not alice (speaker) and not bob (target)
-    }
-
-    @Test
-    void whisperTrackWithoutAMatchingSessionIsIgnored() {
-        String roomId = createRoom("host", "Rogue track", 2);
-        post(roomId, "/participants/me", "host");
-        post(roomId, "/participants/me", "bob");
-
-        sendWebhook("{\"event\":\"track_published\",\"room\":{\"name\":\"" + roomId
-                + "\"},\"participant\":{\"identity\":\"host\"},\"track\":{\"sid\":\"TR_x\",\"name\":\"whisper_target_bob\"}}");
-
-        assertEquals(List.of(), media.subscriptionChanges);
+        assertEquals(List.of(new FakeMediaService.WhisperClose(uuid(roomId), "alice", "bob")), media.closedWhispers);
+        assertEquals(List.of(List.of("bob"), List.of("bob"), List.of("carol")),
+                media.signals.stream().map(FakeMediaService.Signal::destinationIdentities).toList());   // start, stop, start
     }
 
     // ---- adaptive subscription --------------------------------------------------------------------
@@ -255,6 +250,10 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     }
 
     // ---- helpers ----------------------------------------------------------------------------------
+
+    private Map<String, Object> startWhisper(String roomId, String speakerId, String targetId) {
+        return http.retrieve(HttpRequest.POST(path(roomId, "/whisper"), Map.of("targetUserId", targetId)).bearerAuth(token(speakerId)), MAP);
+    }
 
     private void report(String roomId, String userId, double lossPercent, int downstreamKbps, List<String> subscribed, String primary) {
         assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/quality", userId, Map.of(

@@ -15,6 +15,15 @@ public interface MediaService {
 
     MediaConnection issueConnection(UUID roomId, String userId, boolean canPublish);
 
+    /**
+     * Connection to the private two-person LiveKit room of one whisper (nobody else can join it). The speaker may only
+     * publish and the target may only listen.
+     */
+    MediaConnection issueWhisperConnection(UUID roomId, String speakerId, String targetId, String userId);
+
+    /** Deletes the whisper's private room, disconnecting both. Idempotent. */
+    void closeWhisper(UUID roomId, String speakerId, String targetId);
+
     /** Grants or revokes publish rights of a participant that is already connected. Idempotent. */
     void updatePublishPermission(UUID roomId, String userId, boolean canPublish);
 

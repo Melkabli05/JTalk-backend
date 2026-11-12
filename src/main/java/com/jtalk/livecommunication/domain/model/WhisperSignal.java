@@ -1,8 +1,12 @@
 package com.jtalk.livecommunication.domain.model;
 
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 
-/** Data message sent to the whisper speaker and target so their clients can react. */
+/**
+ * Data message to the whisper target. "start" carries the connection to the private room; "stop" means disconnect
+ * from it.
+ */
 @Serdeable
-public record WhisperSignal(String action, String speakerId, String targetId, String track) {
+public record WhisperSignal(String action, String speakerId, @Nullable String mediaUrl, @Nullable String mediaToken) {
 }

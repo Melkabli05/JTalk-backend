@@ -167,6 +167,30 @@ class LiveKitMediaServiceTest {
         assertEquals(new String(payload), body.getData().toStringUtf8());
     }
 
+    @Test
+    void whisperRoomsArePrivateAndEachSideGetsOnlyItsOwnRights() {
+        LiveKitMediaService service = service();
+        Map<String, Object> speaker = JWT.decode(service.issueWhisperConnection(room, "alice", "bob", "alice").token()).getClaim("video").asMap();
+        Map<String, Object> target = JWT.decode(service.issueWhisperConnection(room, "alice", "bob", "bob").token()).getClaim("video").asMap();
+
+        assertEquals("whisper-" + room + "-alice-bob", speaker.get("room"));
+        assertEquals(speaker.get("room"), target.get("room"), "both sides meet in the same private room");
+        assertEquals(true, speaker.get("canPublish"));
+        assertEquals(false, speaker.get("canSubscribe"));
+        assertEquals(false, target.get("canPublish"));
+        assertEquals(true, target.get("canSubscribe"));
+        assertEquals(0, requests.size(), "issuing a token is local");
+    }
+
+    @Test
+    void closingAWhisperDeletesOnlyItsPrivateRoom() throws Exception {
+        service().closeWhisper(room, "alice", "bob");
+
+        Received request = onlyRequest();
+        assertTrue(request.path().endsWith("/DeleteRoom"), request.path());
+        assertEquals("whisper-" + room + "-alice-bob", LivekitRoom.DeleteRoomRequest.parseFrom(request.body()).getRoom());
+    }
+
     // ---- error handling ---------------------------------------------------------------------------
 
     @Test

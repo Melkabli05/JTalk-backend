@@ -3,7 +3,6 @@ package com.jtalk.livecommunication.domain.service.impl;
 import com.jtalk.livecommunication.domain.service.LiveKitWebhookService;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
 import com.jtalk.livecommunication.domain.service.StageLeaseService;
-import com.jtalk.livecommunication.domain.service.WhisperService;
 import com.jtalk.livecommunication.exception.ProblemType;
 import io.livekit.server.WebhookReceiver;
 import jakarta.inject.Singleton;
@@ -20,7 +19,6 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
     private final WebhookReceiver receiver;
     private final StageLeaseService leases;
     private final ParticipantService participants;
-    private final WhisperService whispers;
 
     @Override
     public void handle(String body, String authorizationHeader) {
@@ -38,11 +36,6 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
                 }
             }
             case "participant_joined" -> leases.onReconnect(roomId.get(), identity);
-            case "track_published" -> {
-                if (event.getTrack().getName().startsWith(WhisperService.TRACK_PREFIX)) {
-                    whispers.onWhisperTrackPublished(roomId.get(), identity, event.getTrack().getName(), event.getTrack().getSid());
-                }
-            }
             default -> { /* other events are not needed */ }
         }
     }

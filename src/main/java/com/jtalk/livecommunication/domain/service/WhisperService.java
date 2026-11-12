@@ -1,22 +1,19 @@
 package com.jtalk.livecommunication.domain.service;
 
+import com.jtalk.livecommunication.domain.service.MediaService.MediaConnection;
+
 import java.util.UUID;
 
 /**
- * Private side-channel from a stage speaker to one participant. The speaker publishes a track named
- * {@value #TRACK_PREFIX}{@code <targetId>}; the server then unsubscribes everyone except the speaker and
- * the target from it (LiveKit's documented {@code UpdateSubscriptions}), and signals both clients over a
- * data message so the target's client can duck the stage audio.
+ * Private side-channel from a stage speaker to one participant. Each whisper gets its own two-person LiveKit room, so
+ * the audio never touches the main room and nobody else can hear it. The speaker receives their connection in the
+ * response; the target receives theirs in a data message addressed only to them. Stopping deletes the room.
  */
 public interface WhisperService {
 
-    String TRACK_PREFIX = "whisper_target_";
-
-    void start(UUID roomId, String speakerId, String targetId);
+    /** Starts a whisper (ending the speaker's previous one, if any) and returns the speaker's connection. */
+    MediaConnection start(UUID roomId, String speakerId, String targetId);
 
     /** Idempotent. */
     void stop(UUID roomId, String speakerId);
-
-    /** A track named {@code whisper_target_*} was published: keep everyone but the speaker and target off it. */
-    void onWhisperTrackPublished(UUID roomId, String speakerId, String trackName, String trackSid);
 }

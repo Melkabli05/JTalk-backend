@@ -1,6 +1,8 @@
 package com.jtalk.livecommunication.controller;
 
 import com.jtalk.livecommunication.domain.dto.request.WhisperRequest;
+import com.jtalk.livecommunication.domain.dto.response.WhisperSessionResponse;
+import com.jtalk.livecommunication.domain.mapper.ApiMapper;
 import com.jtalk.livecommunication.domain.service.WhisperService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Body;
@@ -26,13 +28,11 @@ import java.util.UUID;
 class WhisperController {
 
     private final WhisperService whispers;
+    private final ApiMapper mapper;
 
     @Post
-    HttpResponse<Void> start(UUID roomId,
-                             Principal principal,
-                             @Body @Valid WhisperRequest request) {
-        whispers.start(roomId, principal.getName(), request.targetUserId());
-        return HttpResponse.noContent();
+    WhisperSessionResponse start(UUID roomId, Principal principal, @Body @Valid WhisperRequest request) {
+        return mapper.toResponse(whispers.start(roomId, principal.getName(), request.targetUserId()));
     }
 
     @Delete

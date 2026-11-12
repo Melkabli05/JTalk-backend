@@ -38,16 +38,18 @@ class LiveKitMediaService implements MediaService {
 
     @Override
     public MediaConnection issueConnection(UUID roomId, String userId, boolean canPublish) {
-        var token = new AccessToken(properties.apiKey(), properties.apiSecret());
-        token.setIdentity(userId);
-        token.setExpiration(Date.from(clock.instant().plus(properties.tokenTtl())));
-        token.addGrants(
-                new RoomJoin(true),
-                new RoomName(roomId.toString()),
-                new CanSubscribe(true),
-                new CanPublish(canPublish),
-                new CanPublishData(canPublish));
-        return new MediaConnection(properties.url(), token.toJwt());
+        return connection(roomId.toString(), userId, canPublish, true);
+    }
+
+    @Override
+    public MediaConnection issueWhisperConnection(UUID roomId, String speakerId, String targetId, String userId) {
+        boolean speaker = userId.equals(speakerId);
+        return connection(whisperRoom(roomId, speakerId, targetId), userId, speaker, !speaker);
+    }
+
+    @Override
+    public void closeWhisper(UUID roomId, String speakerId, String targetId) {
+        execute(roomService.deleteRoom(whisperRoom(roomId, speakerId, targetId)), "delete whisper room");
     }
 
     @Override
@@ -85,6 +87,24 @@ class LiveKitMediaService implements MediaService {
         // Parameter order in the SDK: destination SIDs first, then destination identities.
         execute(roomService.sendData(roomId.toString(), payload, DataPacket.Kind.RELIABLE,
                 List.of(), destinationIdentities, topic), "send data message");
+    }
+
+    private MediaConnection connection(String roomName, String userId, boolean canPublish, boolean canSubscribe) {
+        var token = new AccessToken(properties.apiKey(), properties.apiSecret());
+        token.setIdentity(userId);
+        token.setExpiration(Date.from(clock.instant().plus(properties.tokenTtl())));
+        token.addGrants(
+                new RoomJoin(true),
+                new RoomName(roomName),
+                new CanSubscribe(canSubscribe),
+                new CanPublish(canPublish),
+                new CanPublishData(canPublish));
+        return new MediaConnection(properties.url(), token.toJwt());
+    }
+
+    /** Not a UUID on purpose: the webhook handler ignores rooms that are not voice rooms. */
+    private static String whisperRoom(UUID roomId, String speakerId, String targetId) {
+        return "whisper-" + roomId + "-" + speakerId + "-" + targetId;
     }
 
     /** Runs the call; a 404 is tolerated (callers treat it as "nothing to do"), other failures become a 502. */

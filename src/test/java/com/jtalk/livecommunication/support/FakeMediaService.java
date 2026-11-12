@@ -29,6 +29,10 @@ public class FakeMediaService implements MediaService {
     public record Removal(UUID roomId, String userId) {
     }
 
+    public record WhisperClose(UUID roomId, String speakerId, String targetId) {
+    }
+
+    public final List<WhisperClose> closedWhispers = new CopyOnWriteArrayList<>();
     public final List<Removal> removals = new CopyOnWriteArrayList<>();
     public final List<UUID> closedRooms = new CopyOnWriteArrayList<>();
 
@@ -38,6 +42,7 @@ public class FakeMediaService implements MediaService {
         signals.clear();
         closedRooms.clear();
         removals.clear();
+        closedWhispers.clear();
     }
 
     @Override
@@ -48,6 +53,16 @@ public class FakeMediaService implements MediaService {
     @Override
     public void updatePublishPermission(UUID roomId, String userId, boolean canPublish) {
         permissionChanges.add(new PermissionChange(roomId, userId, canPublish));
+    }
+
+    @Override
+    public MediaConnection issueWhisperConnection(UUID roomId, String speakerId, String targetId, String userId) {
+        return new MediaConnection("ws://fake-livekit", "whisper:" + speakerId + ">" + targetId + ":" + userId + ":publish=" + userId.equals(speakerId));
+    }
+
+    @Override
+    public void closeWhisper(UUID roomId, String speakerId, String targetId) {
+        closedWhispers.add(new WhisperClose(roomId, speakerId, targetId));
     }
 
     @Override
