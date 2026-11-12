@@ -2,6 +2,7 @@ plugins {
     id("io.micronaut.application") version "5.0.2"
     id("com.gradleup.shadow") version "9.4.1"
     id("io.micronaut.aot") version "5.0.2"
+    id("io.micronaut.test-resources") version "5.0.2"
 }
 
 version = "0.1"
@@ -36,17 +37,25 @@ dependencies {
     // LiveKit: real-time audio (not managed by the Micronaut BOM)
     implementation("io.livekit:livekit-server:0.17.0")
 
+    // HTTP/3 (QUIC), only active in the "quic" environment. Netty's QUIC codec needs a native library per platform.
+    runtimeOnly("io.micronaut:micronaut-http-netty-http3")
+    listOf("linux-x86_64", "linux-aarch_64", "osx-x86_64", "osx-aarch_64").forEach {
+        runtimeOnly("io.netty:netty-codec-native-quic::$it")
+    }
+
     compileOnly("io.micronaut:micronaut-http-client")
     runtimeOnly("ch.qos.logback:logback-classic")
+    runtimeOnly("org.yaml:snakeyaml")
     testImplementation("io.micronaut:micronaut-http-client")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
+    testImplementation("com.auth0:java-jwt:4.6.0")   // signs webhooks the way LiveKit does
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 
 
 application {
-    mainClass = "com.jtalk.VoiceRoomServiceApplication"
+    mainClass = "com.jtalk.livecommunication.LiveCommunicationServiceApplication"
 }
 
 java {
@@ -74,7 +83,7 @@ micronaut {
     testRuntime("junit5")
     processing {
         incremental(true)
-        annotations("com.jtalk.*")
+        annotations("com.jtalk.livecommunication.*")
     }
     aot {
         // Please review carefully the optimizations enabled below
@@ -88,6 +97,20 @@ micronaut {
         replaceLogbackXml = true
     }
 
+}
+
+// Media Plane: the off-heap mixer worker (plain Java, no Micronaut). Needs REDIS_URI and a RoomAudioTransport.
+tasks.register<JavaExec>("runMixer") {
+    group = "application"
+    description = "Runs the Media Plane mixer worker"
+    mainClass = "com.jtalk.livecommunication.mixer.MixerWorkerApplication"
+    classpath = sourceSets["main"].runtimeClasspath
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-XX:+UseCompactObjectHeaders")
+}
+
+// The FFM-based mixer code loads native libopus.
+tasks.withType<Test>().configureEach {
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 tasks.named<io.micronaut.gradle.docker.MicronautDockerfile>("dockerfile") {

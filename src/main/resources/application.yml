@@ -1,0 +1,22 @@
+micronaut:
+  application:
+    name: live-communication-service
+
+# PostgreSQL and Redis connections are intentionally NOT configured here:
+#  - locally (./gradlew run, tests) Micronaut Test Resources starts containers for them;
+#  - deployed, set DATASOURCES_DEFAULT_URL / _USERNAME / _PASSWORD and REDIS_URI.
+# voice-room.* tunables have defaults in VoiceRoomProperties.
+datasources:
+  default:
+    dialect: POSTGRES
+
+flyway:
+  datasources:
+    default:
+      enabled: true
+
+# LiveKit Cloud project "jtalk". The secret is not in the repo: set LIVEKIT_API_SECRET in the environment.
+livekit:
+  url: wss://jtalk-eimd2bul.livekit.cloud
+  api-key: APIMcbg56rh8NAv
+  api-secret: ${LIVEKIT_API_SECRET}

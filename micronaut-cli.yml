@@ -1,5 +1,5 @@
 applicationType: default
-defaultPackage: com.jtalk
+defaultPackage: com.jtalk.livecommunication
 testFramework: junit
 sourceLanguage: java
 buildTool: gradle_kotlin

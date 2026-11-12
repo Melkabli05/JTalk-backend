@@ -1,0 +1,19 @@
+# HTTP/3 (QUIC) signaling. Enable with MICRONAUT_ENVIRONMENTS=quic.
+# HTTP/3 runs over UDP and always uses TLS. Clients still need a TCP+TLS endpoint first (to discover
+# HTTP/3 via Alt-Svc, or to fall back when UDP is blocked), so both listeners share port 8443.
+# The self-signed certificate is for local use only; configure a real certificate in production.
+micronaut:
+  server:
+    ssl:
+      enabled: true
+      build-self-signed: true
+    netty:
+      listeners:
+        https:
+          family: TCP
+          port: 8443
+          ssl: true
+        quic:
+          family: QUIC
+          port: 8443
+          ssl: true

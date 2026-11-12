@@ -1,0 +1,54 @@
+package com.jtalk.livecommunication.controller;
+
+import com.jtalk.livecommunication.domain.dto.response.JoinRoomResponse;
+import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
+import com.jtalk.livecommunication.domain.service.ParticipantService;
+import com.jtalk.livecommunication.security.RequestHeaders;
+import io.micronaut.http.HttpResponse;
+import io.micronaut.http.annotation.Controller;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
+import io.micronaut.http.annotation.Delete;
+import io.micronaut.http.annotation.Get;
+import io.micronaut.http.annotation.Header;
+import io.micronaut.http.annotation.Post;
+import io.micronaut.validation.Validated;
+import jakarta.validation.constraints.NotBlank;
+
+import java.util.List;
+import java.util.UUID;
+
+@Controller("/api/v1/voice-rooms/{roomId}/participants")
+@ExecuteOn(TaskExecutors.VIRTUAL)
+@Validated
+class ParticipantController {
+
+    private final ParticipantService participants;
+
+    ParticipantController(ParticipantService participants) {
+        this.participants = participants;
+    }
+
+    @Post("/me")
+    JoinRoomResponse join(UUID roomId, @Header(RequestHeaders.USER_ID) @NotBlank String userId) {
+        var joined = participants.join(roomId, userId);
+        return new JoinRoomResponse(joined.connection().url(), joined.connection().token(), joined.role());
+    }
+
+    @Post("/me/heartbeat")
+    HttpResponse<Void> heartbeat(UUID roomId, @Header(RequestHeaders.USER_ID) @NotBlank String userId) {
+        participants.heartbeat(roomId, userId);
+        return HttpResponse.noContent();
+    }
+
+    @Delete("/me")
+    HttpResponse<Void> leave(UUID roomId, @Header(RequestHeaders.USER_ID) @NotBlank String userId) {
+        participants.leave(roomId, userId);
+        return HttpResponse.noContent();
+    }
+
+    @Get
+    List<ParticipantResponse> list(UUID roomId) {
+        return participants.listPresent(roomId).stream().map(ParticipantResponse::from).toList();
+    }
+}

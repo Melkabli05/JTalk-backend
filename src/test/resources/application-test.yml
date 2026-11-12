@@ -1,0 +1,11 @@
+livekit:
+  url: ws://localhost:7880
+  api-key: test-key
+  api-secret: test-secret-test-secret-test-secret-0123
+
+voice-room:
+  lease-ttl: PT1S
+  quality:
+    recovery-window: PT1S
+  mixer:
+    audience-threshold: 2

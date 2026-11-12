@@ -4,5 +4,5 @@
 
 
 
-rootProject.name="voice-room-service"
+rootProject.name="live-communication-service"
 
