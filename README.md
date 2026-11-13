@@ -102,7 +102,7 @@ Needs JDK 25 and Docker. PostgreSQL and Redis are started automatically by Micro
 | Security | off; caller = `X-User-Id` header | on; JWT bearer token |
 | LiveKit | the hardcoded `jtalk` Cloud project | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
 | Test page | <http://localhost:8080/ui/index.html> | not served |
-| Mock data | Alice, Bob and Carol each host a room (`dev/DevDataSeeder`, through the real services, so PostgreSQL, Redis and LiveKit agree; safe to run on every start) | none |
+| Mock data | eleven people with language profiles and seven rooms in different states (a full stage, hand-raise queues, a quiet room with whispering off), seeded in the background by `dev/DevDataSeeder` through the real services, so PostgreSQL, Redis and LiveKit agree; safe to run on every start, and a scheduled task keeps them present | none |
 
 ```bash
 ./gradlew run                                      # dev profile
@@ -113,7 +113,12 @@ Behind a TLS-inspecting corporate proxy (for example Zscaler) the JVM rejects Li
 room creation fails with `media-server-unreachable` (`PKIX path building failed` in the log). Make the JVM trust the
 OS keychain instead of editing `cacerts`: `export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStoreType=KeychainStore -Djavax.net.ssl.trustStore=NONE"`.
 
-**Test UI** (`dev` only, `src/main/resources/public/index.html`, no build): pick who you are from the *Acting as* menu (the seeded Alice, Bob, Carol, or add more), so a single tab can drive host, speaker and listener; the page keeps every joined user present and refreshes itself. It covers rooms (create, list, paginate, edit, close), join/leave, stage seats, hand raising, promote/demote, kick, whisper, network mode and LiveKit audio. **Run smoke test** (or open `/ui/index.html?smoke`) walks the whole lifecycle with three fresh users against the real stack and prints a pass/fail per step.
+**Test UI** (`dev` only, `src/main/resources/public/index.html`, no build) - a Clubhouse / HelloTalk style client at <http://localhost:8080/ui/index.html>. Each **phone** on the page is a different person (pick them from the menu at the top of the phone; `＋ Phone` adds more), so you can watch host, speaker and listener side by side in one tab:
+
+- **Hallway:** room cards with language badges (`🇪🇸 Spanish practice for 🇬🇧 English speakers`), overlapping speaker avatars, live seat / audience / hand counts, language filter chips, and *Start a room*.
+- **Room:** stage with open seats you can tap to take, raised hands (the host gets an *Invite* button), the audience, and a bottom bar with *Leave quietly*, *Raise hand* and *Audio*. Tap any avatar for their profile (speaks / learning) and moderation: invite to stage, move to audience, whisper, remove. The `•••` sheet edits the room, switches low-bandwidth mode, ends the room, and adds **bot listeners** or has a bot raise a hand, to test with a crowd.
+- Every phone sends heartbeats and refreshes itself, like a real client; a promotion or demotion fetches a fresh LiveKit token. *Audio* connects the phone to LiveKit (speakers publish their microphone; the green ring follows who is talking).
+- **Developer tools** (bottom of the page): *Run API smoke test* walks the whole lifecycle through the HTTP API, and *Run UI self-test* drives two phones by clicking their real buttons. Open `/ui/index.html?smoke` or `?selftest` to run them on load, or `?enter=Spanish` to put every phone in the room whose title contains "Spanish".
 
 **Deployed** - the default profile; nothing from `dev` is active:
 
