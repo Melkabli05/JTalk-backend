@@ -105,6 +105,10 @@ MICRONAUT_ENVIRONMENTS=quic ./gradlew run       # + HTTPS and HTTP/3 on :8443 (s
 
 Configure LiveKit to send webhooks to `POST <your-host>/webhooks/livekit`.
 
+Behind a TLS-inspecting corporate proxy (for example Zscaler) the JVM rejects LiveKit Cloud's re-signed certificate and
+room creation fails with `media-server-unreachable` (`PKIX path building failed` in the log). Make the JVM trust the
+OS keychain instead of editing `cacerts`: `export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStoreType=KeychainStore -Djavax.net.ssl.trustStore=NONE"`.
+
 Deployed environments set `DATASOURCES_DEFAULT_URL/_USERNAME/_PASSWORD`, `REDIS_URI` and the `LIVEKIT_*` variables.
 Tunables with defaults: `voice-room.{presence-timeout,state-ttl,lease-ttl,whisper-ttl}`,
 `livekit.token-ttl`.
