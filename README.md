@@ -105,7 +105,7 @@ export JWT_SECRET=<HS256 secret shared with whatever issues your user tokens, 32
 MICRONAUT_ENVIRONMENTS=quic ./gradlew run       # + HTTPS and HTTP/3 on :8443 (self-signed, local only)
 ```
 
-**Test UI:** with the app running, open <http://localhost:8080/ui/index.html> - a single static page (`src/main/resources/public/index.html`) to create and list rooms, join, heartbeat, take seats, raise hands, promote, kick, whisper, switch network mode and connect LiveKit audio. Every browser tab is its own user (its id is kept per tab), so open two tabs to test host and listener together. Remove the `micronaut.router.static-resources` block in `application.yml` before production.
+**Test UI:** with the app running, open <http://localhost:8080/ui/index.html> - one static page (`src/main/resources/public/index.html`, no build). Pick who you are from the *Acting as* menu (Alice, Bob, Carol, or add more), so a single tab can drive host, speaker and listener; the page keeps every joined user present and refreshes itself. It covers rooms (create, list, paginate, edit, close), join/leave, stage seats, hand raising, promote/demote, kick, whisper, network mode and LiveKit audio. **Run smoke test** (or open `/ui/index.html?smoke`) walks the whole lifecycle with three fresh users against the real stack and prints a pass/fail per step. Remove the `micronaut.router.static-resources` block in `application.yml` before production.
 
 Configure LiveKit to send webhooks to `POST <your-host>/webhooks/livekit`.
 

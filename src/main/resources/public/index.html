@@ -5,41 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Live Communication Tester</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --ink:#1b1f24; --mute:#667085; --line:#dfe3e8; --accent:#2563eb; --ok:#15803d; --bad:#b91c1c; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --card:#181c22; --ink:#e7eaee; --mute:#98a2b3; --line:#2a3039; --accent:#60a5fa; --ok:#4ade80; --bad:#f87171; } }
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1b1f24; --mute:#667085; --line:#dfe3e8; --accent:#2563eb; --ok:#15803d; --bad:#b91c1c; --soft:#eef2ff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --card:#181c22; --ink:#e7eaee; --mute:#98a2b3; --line:#2a3039; --accent:#60a5fa; --ok:#4ade80; --bad:#f87171; --soft:#1e2a44; } }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
-  header { padding:12px 16px; background:var(--card); border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:2; }
-  header h1 { font-size:15px; margin:0 8px 0 0; }
-  main { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); gap:14px; padding:14px 16px; max-width:1300px; margin:0 auto; }
+  header { padding:10px 16px; background:var(--card); border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px; align-items:end; position:sticky; top:0; z-index:5; }
+  header h1 { font-size:15px; margin:0 8px 8px 0; }
+  main { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr); gap:14px; padding:14px 16px; max-width:1350px; margin:0 auto; }
   @media (max-width:900px) { main { grid-template-columns:1fr; } }
   section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
-  section h2 { font-size:13px; margin:0 0 10px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); }
+  section h2 { font-size:12px; margin:0 0 10px; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); display:flex; justify-content:space-between; align-items:center; }
   label { display:block; font-size:12px; color:var(--mute); margin:6px 0 2px; }
+  label.inline { display:flex; gap:6px; align-items:center; margin:4px 0; color:var(--ink); }
   input, select, button { font:inherit; padding:6px 9px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
-  input, select { width:100%; }
+  input[type=text], input:not([type]), input[type=number], select { width:100%; }
+  input[type=checkbox] { width:auto; }
   button { cursor:pointer; background:var(--accent); color:#fff; border-color:transparent; }
   button.sec { background:transparent; color:var(--ink); border-color:var(--line); }
   button.bad { background:var(--bad); }
-  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.small { padding:2px 8px; font-size:12px; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
   .row { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
   .row > * { flex:1 1 90px; } .row > button { flex:0 0 auto; }
   .btns { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
   ul { list-style:none; margin:0; padding:0; } li { padding:6px 0; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   li:first-child { border-top:0; } li .grow { flex:1 1 150px; min-width:0; }
-  .id { font-family:ui-monospace,Menlo,monospace; font-size:12px; cursor:pointer; } .me { color:var(--ok); font-weight:600; }
-  .tag { font-size:11px; padding:1px 7px; border-radius:99px; border:1px solid var(--line); color:var(--mute); }
+  .name { font-weight:600; cursor:pointer; } .me { color:var(--accent); }
+  .tag { font-size:11px; padding:1px 7px; border-radius:99px; border:1px solid var(--line); color:var(--mute); white-space:nowrap; }
+  .tag.live { color:var(--ok); border-color:var(--ok); } .tag.host { color:var(--accent); border-color:var(--accent); }
   .mute { color:var(--mute); } .ok { color:var(--ok); } .err { color:var(--bad); }
-  pre { margin:0; max-height:240px; overflow:auto; font:11.5px/1.4 ui-monospace,Menlo,monospace; white-space:pre-wrap; word-break:break-all; }
+  pre { margin:0; max-height:220px; overflow:auto; font:11.5px/1.4 ui-monospace,Menlo,monospace; white-space:pre-wrap; word-break:break-all; }
   h3 { font-size:12px; margin:12px 0 4px; color:var(--mute); }
+  #toasts { position:fixed; right:14px; bottom:14px; display:flex; flex-direction:column; gap:6px; z-index:10; max-width:min(420px,90vw); }
+  .toast { padding:8px 12px; border-radius:6px; background:var(--ink); color:var(--bg); font-size:13px; box-shadow:0 4px 14px #0004; }
+  .toast.err { background:var(--bad); color:#fff; }
+  .step { padding:3px 0; display:flex; gap:8px; } .step b { width:1.2em; }
+  details summary { cursor:pointer; color:var(--mute); font-size:12px; }
 </style>
 </head>
 <body>
 <header>
   <h1>Live Communication Tester</h1>
-  <div style="flex:2 1 300px"><label style="margin:0">Your user id (sent as X-User-Id; this tab only)</label><input id="uid" spellcheck="false"></div>
-  <button class="sec" id="newUser">New random user</button>
-  <div style="flex:1 1 220px"><label style="margin:0">LiveKit URL</label><input id="lkUrl" value="wss://jtalk-eimd2bul.livekit.cloud"></div>
+  <div style="flex:0 1 190px"><label style="margin:0">Acting as</label><select id="actor"></select></div>
+  <button class="sec" id="addUser" title="Add another test user">+ user</button>
+  <button class="sec" id="renameUser" title="Rename the current user">rename</button>
+  <button class="sec" id="copyId" title="Copy this user's UUID">copy id</button>
+  <label class="inline" style="margin:0 0 6px auto"><input type="checkbox" id="auto" checked> auto-refresh &amp; keep everyone present</label>
+  <button class="sec" id="smoke">Run smoke test</button>
 </header>
 
 <main>
@@ -53,45 +65,47 @@
       <div><label>Native language</label><input id="cNative" value="ar"></div>
       <div><label>Seats (2-12)</label><input id="cSeats" type="number" min="2" max="12" placeholder="default"></div>
     </div>
-    <label><input type="checkbox" id="cWhisper" checked style="width:auto"> allow whisper</label>
+    <label class="inline"><input type="checkbox" id="cWhisper" checked> allow whisper</label>
     <div class="btns"><button id="create">Create room</button></div>
-    <div class="mute">A host who already has an active room gets that room back.</div>
+    <div class="mute">A host who already has an active room gets that room back (re-join).</div>
   </section>
 
   <section>
-    <h2>Rooms</h2>
-    <div class="row"><div><label>Filter by target language</label><input id="fLang" placeholder="all"></div><button class="sec" id="refreshRooms">Refresh</button></div>
+    <h2><span>Rooms</span><button class="sec small" id="refreshRooms">Refresh</button></h2>
+    <label>Filter by target language</label><input id="fLang" placeholder="all">
     <ul id="rooms"><li class="mute">No rooms loaded.</li></ul>
+    <div class="btns"><button class="sec small" id="moreRooms" hidden>Load more</button></div>
   </section>
 
   <section>
-    <h2>API log</h2>
+    <h2><span>Smoke test</span></h2>
+    <div id="smokeOut" class="mute">Creates a throwaway room with three fresh users and walks the whole lifecycle: create, discovery, join, presence, hand raise, promote, whisper, network mode, kick and ban, close.</div>
+  </section>
+
+  <section>
+    <h2><span>API log</span><button class="sec small" id="clearLog">clear</button></h2>
     <pre id="log"></pre>
   </section>
 </div>
 
 <div>
-  <section id="roomBox">
+  <section>
     <h2>Current room</h2>
-    <div id="roomInfo" class="mute">Create or join a room.</div>
+    <div id="roomInfo" class="mute">Create a room, or open one from the list.</div>
     <div class="btns">
-      <button id="join" disabled>Join</button>
+      <button id="join" disabled>Join as this user</button>
       <button id="leave" class="sec" disabled>Leave</button>
       <button id="close" class="bad" disabled>Close room (host)</button>
       <button id="refresh" class="sec" disabled>Refresh</button>
     </div>
-    <label><input type="checkbox" id="hb" style="width:auto"> send a heartbeat every 10 s (keeps you "present")</label>
-  </section>
-
-  <section>
-    <h2>Audio (LiveKit)</h2>
-    <div class="btns">
-      <button id="connect" disabled>Connect audio</button>
-      <button id="disconnect" class="sec" disabled>Disconnect</button>
-      <span id="audioState" class="mute">not connected</span>
-    </div>
-    <div class="mute">Listeners hear the stage. Only seated speakers can publish; the browser asks for the microphone then.</div>
-    <div id="whisperBox"></div>
+    <details id="editBox"><summary>Edit room (host)</summary>
+      <div class="row">
+        <div><label>Title</label><input id="eTitle"></div>
+        <div><label>Topic</label><input id="eTopic"></div>
+        <div style="flex:0 1 90px"><label>Seats</label><input id="eSeats" type="number" min="2" max="12"></div>
+        <button id="eSave" class="sec" disabled>Save</button>
+      </div>
+    </details>
   </section>
 
   <section>
@@ -105,7 +119,7 @@
     <h3>Speakers</h3><ul id="speakers"><li class="mute">-</li></ul>
     <h3>Hand-raise queue</h3><ul id="queue"><li class="mute">-</li></ul>
     <h3>Whisper (speakers only)</h3>
-    <div class="row"><div><label>Target user id</label><input id="wTarget" spellcheck="false"></div><button id="wStart" class="sec" disabled>Start</button><button id="wStop" class="sec" disabled>Stop</button></div>
+    <div class="row"><div><select id="wTarget"></select></div><button id="wStart" class="sec" disabled>Start</button><button id="wStop" class="sec" disabled>Stop</button></div>
     <h3>Network mode</h3>
     <div class="row"><div><select id="netMode"><option>OPTIMAL</option><option>LOW_BANDWIDTH</option></select></div><button id="netSet" class="sec" disabled>Set</button></div>
   </section>
@@ -116,167 +130,247 @@
   </section>
 
   <section>
-    <h2>Realtime events (LiveKit data channel)</h2>
+    <h2>Audio (LiveKit)</h2>
+    <div class="btns">
+      <button id="connect" disabled>Connect audio</button>
+      <button id="disconnect" class="sec" disabled>Disconnect</button>
+      <span id="audioState" class="mute">not connected</span>
+    </div>
+    <div class="mute">Everyone hears the stage; only seated speakers publish (the browser asks for the microphone then).</div>
+    <div id="whisperBox"></div>
+    <details><summary>LiveKit URL</summary><input id="lkUrl" value="wss://jtalk-eimd2bul.livekit.cloud"></details>
+  </section>
+
+  <section>
+    <h2><span>Realtime events (LiveKit data channel)</span><button class="sec small" id="clearEvents">clear</button></h2>
     <pre id="events"></pre>
   </section>
 </div>
 </main>
+<div id="toasts"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.0/dist/livekit-client.umd.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const API = '/api/v1/voice-rooms';
-let session = null;        // { room, liveKitToken, role, canPublishAudio } of the current room
-let lkRoom = null, whisperRoom = null, hbTimer = null;
-
-// ---- identity (per tab) --------------------------------------------------------------------------
 const uuid = () => crypto.randomUUID();
-$('uid').value = sessionStorage.getItem('uid') || uuid();
-const me = () => $('uid').value.trim();
-const saveUid = () => sessionStorage.setItem('uid', me());
-saveUid(); $('uid').addEventListener('input', saveUid);
-$('newUser').onclick = () => { $('uid').value = uuid(); saveUid(); renderAll(); };
+const store = (k, v) => { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+
+// ---- personas: named test users, shared by all tabs ----------------------------------------------
+let users = load('users', null) || ['Alice', 'Bob', 'Carol'].map(name => ({ id: uuid(), name }));
+store('users', users);
+let actorId = sessionStorage.getItem('actor') || users[0].id;
+if (!users.some(u => u.id === actorId)) actorId = users[0].id;
+const me = () => actorId;
+const nameOf = id => users.find(u => u.id === id)?.name || (id ? id.slice(0, 8) : '?');
+
+function renderActor() {
+  $('actor').replaceChildren(...users.map(u => el('option', { value: u.id, textContent: u.name, selected: u.id === actorId })));
+}
+$('actor').onchange = () => { actorId = $('actor').value; sessionStorage.setItem('actor', actorId); onActorChanged(); };
+$('addUser').onclick = () => {
+  const name = prompt('Name for the new user?', 'User ' + (users.length + 1)); if (!name) return;
+  users.push({ id: uuid(), name }); store('users', users); actorId = users.at(-1).id; sessionStorage.setItem('actor', actorId); renderActor(); onActorChanged();
+};
+$('renameUser').onclick = () => {
+  const u = users.find(x => x.id === actorId), name = prompt('New name?', u.name); if (!name) return;
+  u.name = name; store('users', users); renderActor(); renderAll(); refreshRoom().catch(() => {});
+};
+$('copyId').onclick = () => { navigator.clipboard?.writeText(me()); toast('Copied ' + me()); };
 
 // ---- helpers -------------------------------------------------------------------------------------
-const short = id => id ? id.slice(0, 8) : '';
 function el(tag, props = {}, ...kids) {
   const e = Object.assign(document.createElement(tag), props);
   kids.flat().forEach(k => e.append(k));
   return e;
 }
-function idSpan(id) {
-  const s = el('span', { className: 'id' + (id === me() ? ' me' : ''), title: id + ' (click to copy)', textContent: short(id) + (id === me() ? ' (you)' : '') });
-  s.onclick = () => { navigator.clipboard?.writeText(id); $('wTarget').value = id; };
-  return s;
+function toast(text, bad) {
+  const t = el('div', { className: 'toast' + (bad ? ' err' : ''), textContent: text });
+  $('toasts').append(t); setTimeout(() => t.remove(), bad ? 6000 : 2500);
 }
 function logLine(box, text, cls) {
-  const line = el('div', { textContent: text }); if (cls) line.className = cls;
-  const b = $(box); b.prepend(line);
+  const b = $(box); b.prepend(el('div', { textContent: text, className: cls || '' }));
   while (b.childNodes.length > 80) b.lastChild.remove();
 }
-async function api(method, path, body) {
+$('clearLog').onclick = () => $('log').replaceChildren();
+$('clearEvents').onclick = () => $('events').replaceChildren();
+
+/** One HTTP call as a given user. Never throws; returns { ok, status, data }. */
+async function call(method, path, body, as = me(), quiet = false) {
   const t0 = performance.now();
   const res = await fetch(API + path, {
     method,
-    headers: { 'X-User-Id': me(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { 'X-User-Id': as, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
   let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  logLine('log', `${res.status} ${method} ${path} (${Math.round(performance.now() - t0)} ms)` +
-      (res.ok ? '' : ' - ' + (data?.detail || data?.message || data?.title || text)), res.ok ? 'ok' : 'err');
-  if (!res.ok) throw Object.assign(new Error(data?.detail || data?.title || res.status), { status: res.status, data });
-  return data;
+  const problem = data?.detail || data?.message || data?.title || (res.ok ? '' : text);
+  if (!quiet) logLine('log', `${res.status} ${nameOf(as)}: ${method} ${path} (${Math.round(performance.now() - t0)} ms)${res.ok ? '' : ' - ' + problem}`, res.ok ? 'ok' : 'err');
+  return { ok: res.ok, status: res.status, data, problem };
 }
-const safe = fn => async (...a) => { try { await fn(...a); } catch (e) { /* already logged */ } };
-const rid = () => session?.room.id;
-
-// ---- rooms ---------------------------------------------------------------------------------------
-$('create').onclick = safe(async () => {
-  const body = { title: $('cTitle').value, topic: $('cTopic').value, targetLanguage: $('cTarget').value,
-                 nativeLanguage: $('cNative').value, allowWhisper: $('cWhisper').checked };
-  if ($('cSeats').value) body.maxStageSeats = +$('cSeats').value;
-  setSession(await api('POST', '', body));
-  await loadRooms();
-});
-async function loadRooms() {
-  const lang = $('fLang').value.trim();
-  const page = await api('GET', '?size=50' + (lang ? '&targetLanguage=' + encodeURIComponent(lang) : ''));
-  const ul = $('rooms'); ul.replaceChildren();
-  if (!page.content.length) ul.append(el('li', { className: 'mute', textContent: 'No active rooms.' }));
-  page.content.forEach(r => ul.append(el('li', {},
-    el('div', { className: 'grow' }, el('b', { textContent: r.title }), ' ',
-      el('span', { className: 'tag', textContent: `${r.targetLanguage} / ${r.nativeLanguage}` }), ' ',
-      el('span', { className: 'mute', textContent: `${r.speakers.length}/${r.maxStageSeats} seats, ${r.participantCount} present, ${r.handRaiseCount} hands` }), el('br'),
-      el('span', { className: 'mute', textContent: 'host ' }), idSpan(r.hostId)),
-    el('button', { textContent: 'Open', className: 'sec', onclick: safe(async () => { session = { room: r }; renderAll(); await refreshRoom(); }) }))));
+/** The UI's version: shows a toast on failure and throws so the caller stops. */
+async function api(method, path, body) {
+  const r = await call(method, path, body);
+  if (!r.ok) { toast(`${r.status}: ${r.problem || 'request failed'}`, true); throw Object.assign(new Error(r.problem), r); }
+  return r.data;
 }
-$('refreshRooms').onclick = safe(loadRooms);
+const safe = fn => async (...a) => { try { await fn(...a); } catch (e) { if (!e.status) console.error(e); } };
 
-function setSession(s) { session = s; renderAll(); refreshRoom(); }
-$('join').onclick = safe(async () => setSession(await api('POST', `/${rid()}/participants/join`)));
-$('leave').onclick = safe(async () => { await api('POST', `/${rid()}/participants/leave`); await disconnectAudio(); await refreshRoom(); });
-$('close').onclick = safe(async () => { await api('DELETE', `/${rid()}`); await disconnectAudio(); session = null; renderAll(); loadRooms(); });
-$('refresh').onclick = safe(() => refreshRoom());
+// ---- state ---------------------------------------------------------------------------------------
+let room = null;                 // VoiceRoomResponse of the open room
+let sessions = {};               // userId -> { liveKitToken, role, canPublishAudio } for the open room
+let present = new Set();         // userIds that have joined the open room in this page (for the heartbeat)
+let stageData = { speakers: [], handRaiseQueue: [] }, peopleData = [];
+let lkRoom = null, whisperRoom = null;
+const rid = () => room?.id;
+const isHost = () => room?.hostId === me();
+const onStage = () => stageData.speakers.includes(me());
+
+function openRoom(r, session, asUser = me()) {
+  if (room?.id !== r.id) { sessions = {}; present = new Set(); disconnectAudio(); }
+  room = r;
+  if (session) { sessions[asUser] = session; present.add(asUser); }
+  renderAll(); refreshRoom().catch(() => {});
+}
+function onActorChanged() { renderActor(); renderAll(); refreshRoom().catch(() => {}); }
 
 async function refreshRoom() {
   if (!rid()) return;
-  const [room, stage, people] = await Promise.all([
-    api('GET', `/${rid()}`), api('GET', `/${rid()}/stage`), api('GET', `/${rid()}/participants`)]);
-  session = { ...session, room };
-  renderAll(); renderStage(stage); renderPeople(people);
+  const r = await call('GET', `/${rid()}`, null, me(), true);
+  if (r.status === 404) { toast('The room is closed.', true); room = null; renderAll(); loadRooms(); return; }
+  if (!r.ok) return;
+  const [stage, people] = await Promise.all([call('GET', `/${rid()}/stage`, null, me(), true), call('GET', `/${rid()}/participants`, null, me(), true)]);
+  room = r.data; stageData = stage.data || stageData; peopleData = people.data || [];
+  renderAll();
 }
 
 // ---- rendering -----------------------------------------------------------------------------------
+function who(id) {
+  const s = el('span', { className: 'name' + (id === me() ? ' me' : ''), title: id + ' - click to act as this user', textContent: nameOf(id) });
+  s.onclick = () => { if (users.some(u => u.id === id)) { $('actor').value = id; $('actor').onchange(); } else navigator.clipboard?.writeText(id); };
+  return s;
+}
+function row(id, ...extra) { return el('li', {}, el('span', { className: 'grow' }, who(id)), ...extra); }
+const btn = (text, cls, fn) => el('button', { textContent: text, className: cls + ' small', onclick: safe(fn) });
+
 function renderAll() {
-  const has = !!session;
-  const isHost = has && session.room.hostId === me();
+  const has = !!room, mySession = sessions[me()];
+  if (!has) { stageData = { speakers: [], handRaiseQueue: [] }; peopleData = []; }   // nothing of a closed room may linger
   $('roomInfo').replaceChildren(...(has ? [
-    el('b', { textContent: session.room.title }), ' ', el('span', { className: 'tag', textContent: session.room.status }), el('br'),
-    el('span', { className: 'mute', textContent: 'room ' + session.room.id }), el('br'),
-    el('span', { className: 'mute', textContent: 'host ' }), idSpan(session.room.hostId),
-    el('span', { className: 'mute', textContent: `   ${session.room.speakers.length}/${session.room.maxStageSeats} seats, ${session.room.participantCount} present` }),
-    ...(session.role ? [el('br'), el('span', { textContent: `you are ${session.role}${session.canPublishAudio ? ' (can publish audio)' : ''}` })] : []),
-  ] : ['Create or join a room.']));
-  ['join', 'leave', 'refresh', 'takeSeat', 'leaveSeat', 'raise', 'lower', 'wStart', 'wStop', 'netSet'].forEach(b => $(b).disabled = !has);
-  $('close').disabled = !isHost;
-  $('connect').disabled = !session?.liveKitToken || !!lkRoom;
+    el('b', { textContent: room.title }), ' ', el('span', { className: 'tag', textContent: room.status }),
+    ...(room.topic ? [el('span', { className: 'mute', textContent: '  ' + room.topic })] : []), el('br'),
+    el('span', { className: 'mute', textContent: 'host ' }), who(room.hostId),
+    el('span', { className: 'mute', textContent: `  -  ${stageData.speakers.length}/${room.maxStageSeats} seats, ${room.participantCount} present, ${room.handRaiseCount} hands, ${room.targetLanguage}/${room.nativeLanguage}` }), el('br'),
+    el('span', { className: 'mute', textContent: 'you (' + nameOf(me()) + '): ' + (mySession ? `${mySession.role}${mySession.canPublishAudio ? ', can publish audio' : ''}` : 'not joined as this user') }),
+  ] : ['Create a room, or open one from the list.']));
+  ['join', 'leave', 'refresh', 'netSet'].forEach(b => $(b).disabled = !has);
+  $('takeSeat').disabled = !has || onStage();
+  $('leaveSeat').disabled = !has || !onStage() || isHost();
+  $('raise').disabled = !has || onStage() || stageData.handRaiseQueue.includes(me());
+  $('lower').disabled = !has || !stageData.handRaiseQueue.includes(me());
+  $('close').disabled = !isHost();
+  $('eSave').disabled = !isHost();
+  $('wStart').disabled = !has || !onStage(); $('wStop').disabled = !has || !onStage();
+  $('connect').disabled = !mySession?.liveKitToken || !!lkRoom;
   $('disconnect').disabled = !lkRoom;
+  if (has && document.activeElement?.closest('#editBox') == null) { $('eTitle').value = room.title; $('eTopic').value = room.topic || ''; $('eSeats').value = room.maxStageSeats; }
+
+  const hostView = isHost();
+  $('speakers').replaceChildren(...(stageData.speakers.length ? stageData.speakers.map(id => row(id,
+    id === room.hostId ? el('span', { className: 'tag host', textContent: 'host' }) : '',
+    hostView && id !== me() ? btn('Demote', 'sec', async () => { await api('POST', `/${rid()}/stage/demote/${id}`); toast(nameOf(id) + ' demoted'); refreshRoom(); }) : '')) : [el('li', { className: 'mute', textContent: 'nobody' })]));
+  $('queue').replaceChildren(...(stageData.handRaiseQueue.length ? stageData.handRaiseQueue.map(id => row(id,
+    hostView ? btn('Promote', '', async () => { await api('POST', `/${rid()}/stage/promote/${id}`); toast(nameOf(id) + ' promoted'); refreshRoom(); }) : '')) : [el('li', { className: 'mute', textContent: 'empty' })]));
+  $('people').replaceChildren(...(peopleData.length ? peopleData.map(p => row(p.userId,
+    el('span', { className: 'tag', textContent: p.role }), el('span', { className: 'tag ' + (p.status === 'ONLINE' ? 'live' : ''), textContent: p.status }),
+    hostView && p.userId !== me() ? btn('Kick', 'bad', async () => { await api('DELETE', `/${rid()}/participants/${p.userId}`); toast(nameOf(p.userId) + ' kicked'); refreshRoom(); }) : '')) : [el('li', { className: 'mute', textContent: 'nobody present - join, and keep the heartbeat on' })]));
+  const targets = [...new Set([...peopleData.map(p => p.userId), ...stageData.speakers])].filter(id => id !== me());
+  const keep = $('wTarget').value;
+  $('wTarget').replaceChildren(...(targets.length ? targets.map(id => el('option', { value: id, textContent: nameOf(id) })) : [el('option', { value: '', textContent: '(no one else present)' })]));
+  if (targets.includes(keep)) $('wTarget').value = keep;
 }
-function personRow(id, ...buttons) { return el('li', {}, el('span', { className: 'grow' }, idSpan(id)), ...buttons); }
-function renderStage(stage) {
-  const isHost = session?.room.hostId === me();
-  const speakers = $('speakers'), queue = $('queue');
-  speakers.replaceChildren(...(stage.speakers.length ? stage.speakers.map(id => personRow(id,
-    id === session.room.hostId ? el('span', { className: 'tag', textContent: 'host' }) : '',
-    isHost && id !== me() ? el('button', { className: 'sec', textContent: 'Demote', onclick: safe(async () => { await api('POST', `/${rid()}/stage/demote/${id}`); refreshRoom(); }) }) : '')) : [el('li', { className: 'mute', textContent: 'nobody' })]));
-  queue.replaceChildren(...(stage.handRaiseQueue.length ? stage.handRaiseQueue.map(id => personRow(id,
-    isHost ? el('button', { textContent: 'Promote', onclick: safe(async () => { await api('POST', `/${rid()}/stage/promote/${id}`); refreshRoom(); }) }) : '')) : [el('li', { className: 'mute', textContent: 'empty' })]));
+
+// ---- rooms list ----------------------------------------------------------------------------------
+let cursor = null;
+async function loadRooms(more = false) {
+  const lang = $('fLang').value.trim();
+  const q = '?size=10' + (lang ? '&targetLanguage=' + encodeURIComponent(lang) : '') + (more && cursor ? `&afterCreatedAt=${encodeURIComponent(cursor.createdAt)}&afterId=${cursor.id}` : '');
+  const r = await call('GET', q);
+  if (!r.ok) return;
+  const ul = $('rooms'); if (!more) ul.replaceChildren();
+  r.data.content.forEach(x => ul.append(el('li', {},
+    el('div', { className: 'grow' }, el('b', { textContent: x.title }), ' ', el('span', { className: 'tag', textContent: `${x.targetLanguage}/${x.nativeLanguage}` }), el('br'),
+      el('span', { className: 'mute', textContent: `${x.speakers.length}/${x.maxStageSeats} seats, ${x.participantCount} present, ${x.handRaiseCount} hands  -  host ` }), who(x.hostId)),
+    btn('Open', 'sec', async () => { openRoom(x); }))));
+  if (!ul.childNodes.length) ul.append(el('li', { className: 'mute', textContent: 'No active rooms.' }));
+  const last = r.data.content.at(-1);
+  cursor = last ? { createdAt: last.createdAt, id: last.id } : cursor;
+  $('moreRooms').hidden = r.data.content.length < 10;
 }
-function renderPeople(people) {
-  const isHost = session?.room.hostId === me();
-  $('people').replaceChildren(...(people.length ? people.map(p => personRow(p.userId,
-    el('span', { className: 'tag', textContent: p.role }), el('span', { className: 'tag', textContent: p.status }),
-    isHost && p.userId !== me() ? el('button', { className: 'bad', textContent: 'Kick', onclick: safe(async () => { await api('DELETE', `/${rid()}/participants/${p.userId}`); refreshRoom(); }) }) : '')) : [el('li', { className: 'mute', textContent: 'nobody present (join, and send a heartbeat)' })]));
-}
+$('refreshRooms').onclick = safe(() => loadRooms());
+$('moreRooms').onclick = safe(() => loadRooms(true));
+$('fLang').oninput = () => loadRooms().catch(() => {});
+
+// ---- room actions --------------------------------------------------------------------------------
+$('create').onclick = safe(async () => {
+  const body = { title: $('cTitle').value, topic: $('cTopic').value, targetLanguage: $('cTarget').value, nativeLanguage: $('cNative').value, allowWhisper: $('cWhisper').checked };
+  if ($('cSeats').value) body.maxStageSeats = +$('cSeats').value;
+  const s = await api('POST', '', body);
+  openRoom(s.room, { liveKitToken: s.liveKitToken, role: s.role, canPublishAudio: s.canPublishAudio });
+  toast('Room ready: ' + s.room.title); loadRooms();
+});
+$('join').onclick = safe(async () => { const s = await api('POST', `/${rid()}/participants/join`); openRoom(s.room, { liveKitToken: s.liveKitToken, role: s.role, canPublishAudio: s.canPublishAudio }); toast(nameOf(me()) + ' joined'); });
+$('leave').onclick = safe(async () => { await api('POST', `/${rid()}/participants/leave`); present.delete(me()); delete sessions[me()]; await disconnectAudio(); toast(nameOf(me()) + ' left'); refreshRoom(); });
+$('close').onclick = safe(async () => { await api('DELETE', `/${rid()}`); await disconnectAudio(); room = null; toast('Room closed'); renderAll(); loadRooms(); });
+$('refresh').onclick = safe(refreshRoom);
+$('eSave').onclick = safe(async () => {
+  room = await api('PATCH', `/${rid()}`, { title: $('eTitle').value, topic: $('eTopic').value, maxStageSeats: +$('eSeats').value });
+  toast('Room updated'); refreshRoom(); loadRooms();
+});
 
 // ---- stage actions -------------------------------------------------------------------------------
-$('takeSeat').onclick = safe(async () => { setSession(await api('POST', `/${rid()}/stage/join`)); if (lkRoom) { await disconnectAudio(); await connectAudio(); } });
+$('takeSeat').onclick = safe(async () => {
+  const s = await api('POST', `/${rid()}/stage/join`);
+  sessions[me()] = { liveKitToken: s.liveKitToken, role: s.role, canPublishAudio: s.canPublishAudio }; present.add(me());
+  toast(nameOf(me()) + ' is on stage');
+  if (lkRoom) { await disconnectAudio(); await connectAudio(); }
+  refreshRoom();
+});
 $('leaveSeat').onclick = safe(async () => { await api('POST', `/${rid()}/stage/leave`); refreshRoom(); });
-$('raise').onclick = safe(async () => { await api('POST', `/${rid()}/stage/raise-hand`); refreshRoom(); });
+$('raise').onclick = safe(async () => { await api('POST', `/${rid()}/stage/raise-hand`); toast('Hand raised'); refreshRoom(); });
 $('lower').onclick = safe(async () => { await api('DELETE', `/${rid()}/stage/raise-hand`); refreshRoom(); });
-$('wStart').onclick = safe(() => api('POST', `/${rid()}/stage/whisper`, { targetUserId: $('wTarget').value.trim() }));
-$('wStop').onclick = safe(() => api('DELETE', `/${rid()}/stage/whisper`));
-$('netSet').onclick = safe(() => api('POST', `/${rid()}/stage/network-mode`, { mode: $('netMode').value }));
+$('wStart').onclick = safe(async () => { if (!$('wTarget').value) return toast('Pick someone to whisper to', true); await api('POST', `/${rid()}/stage/whisper`, { targetUserId: $('wTarget').value }); toast('Whisper started'); });
+$('wStop').onclick = safe(async () => { await api('DELETE', `/${rid()}/stage/whisper`); toast('Whisper stopped'); });
+$('netSet').onclick = safe(async () => { await api('POST', `/${rid()}/stage/network-mode`, { mode: $('netMode').value }); toast('Network mode ' + $('netMode').value); });
 
-// ---- heartbeat -----------------------------------------------------------------------------------
-$('hb').onchange = () => {
-  clearInterval(hbTimer);
-  if ($('hb').checked) {
-    const beat = () => rid() && api('POST', `/${rid()}/participants/heartbeat`).catch(() => {});
-    beat(); hbTimer = setInterval(beat, 10000);
-  }
-};
+// ---- background: heartbeat for everyone who joined, and refresh ----------------------------------
+setInterval(() => {
+  if (!$('auto').checked || !rid() || document.hidden) return;
+  present.forEach(u => call('POST', `/${rid()}/participants/heartbeat`, null, u, true));
+  refreshRoom().catch(() => {});
+}, 5000);
 
 // ---- audio ---------------------------------------------------------------------------------------
 function newLkRoom(onData) {
   const r = new LivekitClient.Room({ adaptiveStream: true });
-  r.on(LivekitClient.RoomEvent.TrackSubscribed, track => { if (track.kind === 'audio') document.body.append(track.attach()); });
-  r.on(LivekitClient.RoomEvent.TrackUnsubscribed, track => track.detach().forEach(e => e.remove()));
+  r.on(LivekitClient.RoomEvent.TrackSubscribed, t => { if (t.kind === 'audio') document.body.append(t.attach()); });
+  r.on(LivekitClient.RoomEvent.TrackUnsubscribed, t => t.detach().forEach(e => e.remove()));
   r.on(LivekitClient.RoomEvent.DataReceived, (payload, p, kind, topic) => onData(new TextDecoder().decode(payload), topic));
   return r;
 }
 async function connectAudio() {
-  if (!session?.liveKitToken) return;
+  const s = sessions[me()]; if (!s?.liveKitToken) return;
   lkRoom = newLkRoom(onData);
   lkRoom.on(LivekitClient.RoomEvent.Disconnected, () => { lkRoom = null; $('audioState').textContent = 'not connected'; renderAll(); });
-  await lkRoom.connect($('lkUrl').value.trim(), session.liveKitToken);
-  $('audioState').textContent = 'connected as ' + (session.canPublishAudio ? 'speaker' : 'listener');
-  if (session.canPublishAudio) await lkRoom.localParticipant.setMicrophoneEnabled(true).catch(e => logLine('events', 'mic: ' + e.message, 'err'));
+  await lkRoom.connect($('lkUrl').value.trim(), s.liveKitToken);
+  $('audioState').textContent = 'connected as ' + nameOf(me()) + (s.canPublishAudio ? ' (speaker)' : ' (listener)');
+  if (s.canPublishAudio) await lkRoom.localParticipant.setMicrophoneEnabled(true).catch(e => toast('Microphone: ' + e.message, true));
   renderAll();
 }
 async function disconnectAudio() { await lkRoom?.disconnect(); lkRoom = null; $('audioState').textContent = 'not connected'; renderAll(); }
-$('connect').onclick = () => connectAudio().catch(e => logLine('events', 'connect failed: ' + e.message, 'err'));
+$('connect').onclick = () => connectAudio().catch(e => toast('LiveKit: ' + e.message, true));
 $('disconnect').onclick = disconnectAudio;
 
 function onData(text, topic) {
@@ -286,8 +380,8 @@ function onData(text, topic) {
   if (topic === 'whisper') {
     const box = $('whisperBox'); box.replaceChildren();
     if (msg.action === 'start') {
-      box.append(el('div', {}, 'Whisper with ', idSpan(msg.speakerId === me() ? msg.targetId : msg.speakerId), ' ',
-        el('button', { textContent: 'Join whisper room', onclick: async () => {
+      box.append(el('div', {}, 'Whisper with ', who(msg.speakerId === me() ? msg.targetId : msg.speakerId), ' ',
+        el('button', { textContent: 'Join whisper room', className: 'small', onclick: async () => {
           whisperRoom = newLkRoom(() => {});
           await whisperRoom.connect($('lkUrl').value.trim(), msg.token);
           await whisperRoom.localParticipant.setMicrophoneEnabled(true).catch(() => {});
@@ -297,8 +391,45 @@ function onData(text, topic) {
   }
 }
 
+// ---- smoke test: the whole lifecycle with three fresh users --------------------------------------
+async function smokeTest() {
+  const out = $('smokeOut'); out.className = ''; out.replaceChildren();
+  const [A, B, C] = [uuid(), uuid(), uuid()], lang = 'sm' + Math.random().toString(36).slice(2, 6);
+  let failed = 0, id = null;
+  const step = async (label, fn) => {
+    const line = el('div', { className: 'step' }, el('b', { textContent: '...' }), label); out.append(line);
+    try { const msg = await fn(); line.firstChild.textContent = 'OK'; line.firstChild.className = 'ok'; if (msg) line.append(el('span', { className: 'mute', textContent: ' - ' + msg })); }
+    catch (e) { failed++; line.firstChild.textContent = 'X'; line.firstChild.className = 'err'; line.append(el('span', { className: 'err', textContent: ' - ' + e.message })); }
+  };
+  const must = (r, status) => { if (r.status !== status) throw new Error(`expected ${status}, got ${r.status} ${r.problem || ''}`); return r.data; };
+  const expect = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const q = '?targetLanguage=' + lang;
+  await step('Host creates a room', async () => { const d = must(await call('POST', '', { title: 'Smoke room', targetLanguage: lang, nativeLanguage: 'en' }, A, true), 201); id = d.room.id; expect(d.role === 'HOST' && d.liveKitToken, 'no host token'); return 'role HOST, token issued'; });
+  await step('Room is discoverable', async () => { const d = must(await call('GET', q, null, B, true), 200); expect(d.content.some(r => r.id === id), 'not in discovery'); });
+  await step('Listener joins', async () => { const d = must(await call('POST', `/${id}/participants/join`, null, B, true), 200); expect(d.role === 'LISTENER', 'role ' + d.role); return 'role LISTENER'; });
+  await step('Heartbeats make both present', async () => { await Promise.all([A, B].map(u => call('POST', `/${id}/participants/heartbeat`, null, u, true))); const d = must(await call('GET', `/${id}/participants`, null, A, true), 200); expect([A, B].every(u => d.some(p => p.userId === u)), 'participants: ' + d.length); });
+  await step('Listener raises a hand', async () => { must(await call('POST', `/${id}/stage/raise-hand`, null, B, true), 202); const d = must(await call('GET', `/${id}/stage`, null, A, true), 200); expect(d.handRaiseQueue.includes(B), 'not queued'); });
+  await step('Only the host can promote', async () => { expect(!(await call('POST', `/${id}/stage/promote/${B}`, null, C, true)).ok, 'a stranger could promote'); });
+  await step('Host promotes the listener', async () => { must(await call('POST', `/${id}/stage/promote/${B}`, null, A, true), 204); const d = must(await call('GET', `/${id}/stage`, null, A, true), 200); expect(d.speakers.includes(B) && !d.handRaiseQueue.includes(B), 'stage not updated'); });
+  await step('Speaker whispers to a speaker, then stops', async () => { must(await call('POST', `/${id}/stage/whisper`, { targetUserId: B }, A, true), 204); must(await call('DELETE', `/${id}/stage/whisper`, null, A, true), 204); });
+  await step('Network mode can be switched', async () => { must(await call('POST', `/${id}/stage/network-mode`, { mode: 'LOW_BANDWIDTH' }, B, true), 204); });
+  await step('Host kicks a participant, who is then barred', async () => {
+    must(await call('POST', `/${id}/participants/join`, null, C, true), 200);
+    must(await call('DELETE', `/${id}/participants/${C}`, null, A, true), 204);
+    const again = await call('POST', `/${id}/participants/join`, null, C, true); expect(!again.ok, 'a kicked user rejoined'); return 'rejoin refused: ' + again.status;
+  });
+  await step('Host re-creating returns the same room', async () => { const d = must(await call('POST', '', { title: 'Another', targetLanguage: lang, nativeLanguage: 'en' }, A, true), 201); expect(d.room.id === id, 'a second room was opened'); });
+  await step('The UI renders the room', async () => { openRoomAs(A, id); await refreshRoom(); expect($('speakers').textContent.includes(nameOf(B)) || $('speakers').childNodes.length >= 2, 'stage not rendered'); expect($('roomInfo').textContent.includes('Smoke room'), 'room info not rendered'); });
+  await step('Host closes the room', async () => { must(await call('DELETE', `/${id}`, null, A, true), 204); expect((await call('GET', `/${id}`, null, B, true)).status === 404, 'room still visible'); });
+  room = null; renderAll(); loadRooms();
+  out.prepend(el('div', { className: failed ? 'err' : 'ok', id: 'smokeResult', textContent: failed ? failed + ' step(s) failed' : 'All steps passed' }));
+}
+function openRoomAs(userId, roomId) { actorId = userId; room = { id: roomId, hostId: userId, title: 'Smoke room', topic: '', maxStageSeats: 6, participantCount: 0, handRaiseCount: 0, targetLanguage: '', nativeLanguage: '', status: 'ACTIVE' }; sessions = {}; present = new Set(); }
+$('smoke').onclick = () => { const keep = actorId; smokeTest().finally(() => { actorId = keep; renderActor(); renderAll(); }); };
+
 // ---- go ------------------------------------------------------------------------------------------
-loadRooms().catch(() => {});
+renderActor(); renderAll(); loadRooms().catch(() => {});
+if (new URLSearchParams(location.search).has('smoke')) smokeTest();
 </script>
 </body>
 </html>

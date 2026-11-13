@@ -84,7 +84,8 @@ class LiveKitGatewayImpl implements LiveKitGateway {
 
     @Override
     public void removeParticipant(UUID roomId, UUID userId) {
-        execute(roomService.removeParticipant(roomId.toString(), userId.toString(), clock.millis()), "remove participant");
+        // revokeTokenTs is Unix SECONDS: LiveKit rejects anything not within 60 s of its own clock, so milliseconds fail.
+        execute(roomService.removeParticipant(roomId.toString(), userId.toString(), clock.instant().getEpochSecond()), "remove participant");
     }
 
     @Override

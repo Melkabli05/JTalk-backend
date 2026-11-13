@@ -144,7 +144,7 @@ class LiveKitGatewayImplTest {
         var body = LivekitRoom.RoomParticipantIdentity.parseFrom(request.body());
         assertEquals(room.toString(), body.getRoom());
         assertEquals(bob.toString(), body.getIdentity());
-        assertEquals(NOW.toEpochMilli(), body.getRevokeTokenTs(), "tokens issued before the kick must stop working");
+        assertEquals(NOW.getEpochSecond(), body.getRevokeTokenTs(), "tokens issued before the kick must stop working; LiveKit wants Unix seconds");
     }
 
     @Test
