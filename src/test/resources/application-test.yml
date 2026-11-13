@@ -1,5 +1,6 @@
 micronaut:
   security:
+    enabled: true   # the suite exercises the secured configuration; application.yml ships with security off
     token:
       jwt:
         signatures:

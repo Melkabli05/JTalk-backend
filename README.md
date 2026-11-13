@@ -69,7 +69,9 @@ Conventions the code follows (and `LiveKitGatewayImplTest` pins down):
 
 ## API
 
-Every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <JWT>`; the token's `sub` must be the user's UUID (anything else is a 401).
+**Security is currently switched off** (`micronaut.security.enabled: false` in `application.yml`): no token is needed, and the caller is the UUID in the `X-User-Id` header (missing or malformed is a 400). Anyone can claim any user id, so run it only locally or on a trusted network. The LiveKit webhook keeps verifying LiveKit's signature.
+
+To turn authentication back on, set `MICRONAUT_SECURITY_ENABLED=true` and `JWT_SECRET`. Then every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <JWT>`; the token's `sub` must be the user's UUID (anything else is a 401).
 Tokens are issued upstream (gateway / identity provider) and verified here with the shared HS256 secret in
 `JWT_SECRET` (32+ characters), or with a JWKS endpoint via `micronaut.security.token.jwt.signatures.jwks`. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
 
@@ -98,7 +100,7 @@ comes from the environment:
 
 ```bash
 export LIVEKIT_API_SECRET=<secret of the LiveKit Cloud key>
-export JWT_SECRET=<HS256 secret shared with whatever issues your user tokens, 32+ chars>
+export JWT_SECRET=<HS256 secret shared with whatever issues your user tokens, 32+ chars>   # only when security is enabled
 ./gradlew run                                   # control plane
 MICRONAUT_ENVIRONMENTS=quic ./gradlew run       # + HTTPS and HTTP/3 on :8443 (self-signed, local only)
 ```

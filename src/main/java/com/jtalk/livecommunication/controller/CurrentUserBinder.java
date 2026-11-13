@@ -1,6 +1,6 @@
 package com.jtalk.livecommunication.controller;
 
-import io.micronaut.core.bind.ArgumentBinder.BindingResult;
+import io.micronaut.context.annotation.Value;
 import io.micronaut.core.convert.ArgumentConversionContext;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.bind.binders.AnnotatedRequestArgumentBinder;
@@ -10,11 +10,20 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Resolves {@link CurrentUser}. The token's subject is guaranteed to be a UUID by
- * {@code UuidSubjectClaimsValidator}, so a request that reaches a controller always has one.
+ * Resolves {@link CurrentUser}. With security on, the caller is the token's subject, which
+ * {@code UuidSubjectClaimsValidator} guarantees is a UUID. With security off there is no token, so the caller is
+ * named by the {@value #USER_HEADER} header instead; a missing or malformed one is a 400.
  */
 @Singleton
 class CurrentUserBinder implements AnnotatedRequestArgumentBinder<CurrentUser, UUID> {
+
+    static final String USER_HEADER = "X-User-Id";
+
+    private final boolean securityEnabled;
+
+    CurrentUserBinder(@Value("${micronaut.security.enabled:true}") boolean securityEnabled) {
+        this.securityEnabled = securityEnabled;
+    }
 
     @Override
     public Class<CurrentUser> getAnnotationType() {
@@ -23,7 +32,9 @@ class CurrentUserBinder implements AnnotatedRequestArgumentBinder<CurrentUser, U
 
     @Override
     public BindingResult<UUID> bind(ArgumentConversionContext<UUID> context, HttpRequest<?> source) {
-        Optional<UUID> userId = source.getUserPrincipal().map(principal -> UUID.fromString(principal.getName()));
+        Optional<UUID> userId = securityEnabled
+                ? source.getUserPrincipal().map(principal -> UUID.fromString(principal.getName()))
+                : source.getHeaders().get(USER_HEADER, UUID.class);
         return () -> userId;
     }
 }

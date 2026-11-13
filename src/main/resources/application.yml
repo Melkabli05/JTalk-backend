@@ -2,16 +2,18 @@ micronaut:
   application:
     name: live-communication-service
   security:
-    # Callers authenticate with a JWT bearer token issued upstream (API gateway / identity provider); the token's
-    # subject is the user id. Tokens are verified with this shared HS256 secret (32+ characters), or switch to a
-    # JWKS endpoint with micronaut.security.token.jwt.signatures.jwks.
+    # Security is switched OFF: no token is required and @Secured is not enforced. The caller is then identified by the
+    # X-User-Id header (a UUID), which anyone can set - run this only on a trusted network or locally.
+    # To turn authentication back on, set MICRONAUT_SECURITY_ENABLED=true and JWT_SECRET: callers then send a JWT bearer
+    # token (HS256, 32+ character shared secret) whose subject is the user id.
+    enabled: false
     authentication: bearer
     token:
       jwt:
         signatures:
           secret:
             generator:
-              secret: ${JWT_SECRET}
+              secret: ${JWT_SECRET:}
 
 # PostgreSQL and Redis connections are intentionally NOT configured here:
 #  - locally (./gradlew run, tests) Micronaut Test Resources starts containers for them;
