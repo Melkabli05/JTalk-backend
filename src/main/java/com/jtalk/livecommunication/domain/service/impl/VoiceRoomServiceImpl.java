@@ -46,6 +46,13 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     @Override
     public RoomSessionResponse createRoom(UUID hostId, CreateVoiceRoomRequest request) {
+        Optional<VoiceRoom> existing = rooms.findFirstByHostIdAndStatus(hostId, VoiceRoomStatus.ACTIVE);
+        if (existing.isPresent()) {   // a host runs one room at a time: coming back re-joins it instead of opening a second
+            VoiceRoom room = existing.get();
+            log.info("Host {} already has active room {}, re-joining it", hostId, room.id());
+            return new RoomSessionResponse(toResponse(room), gateway.generateToken(room.id(), hostId, true), ParticipantRole.HOST, true);
+        }
+
         VoiceRoom saved = rooms.save(VoiceRoom.open(
                 request.title(), request.topic(), hostId, request.targetLanguage(), request.nativeLanguage(),
                 request.maxStageSeats() == null ? CommunicationConstants.DEFAULT_STAGE_SEATS : request.maxStageSeats(),

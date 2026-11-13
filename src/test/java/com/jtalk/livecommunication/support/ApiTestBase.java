@@ -2,6 +2,7 @@ package com.jtalk.livecommunication.support;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.jtalk.livecommunication.domain.repository.VoiceRoomRepository;
 import io.micronaut.core.type.Argument;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
@@ -43,12 +44,16 @@ public abstract class ApiTestBase {
     @Inject
     protected FakeLiveKitGateway gateway;
 
+    @Inject
+    VoiceRoomRepository rooms;
+
     protected BlockingHttpClient http;
 
     @BeforeEach
     void setUpClient() {
         http = httpClient.toBlocking();
         gateway.reset();
+        rooms.deleteAll();   // a host re-joins an active room instead of opening a second, so every test starts with none
     }
 
     // ---- identities -------------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import java.util.UUID;
 @JdbcRepository(dialect = Dialect.POSTGRES)
 public interface VoiceRoomRepository extends CrudRepository<VoiceRoom, UUID> {
 
+    Optional<VoiceRoom> findFirstByHostIdAndStatus(UUID hostId, VoiceRoomStatus status);
     Optional<VoiceRoom> findByIdAndStatus(UUID id, VoiceRoomStatus status);
 
     /**

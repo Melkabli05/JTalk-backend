@@ -88,6 +88,16 @@ class VoiceRoomApiTest extends ApiTestBase {
     }
 
     @Test
+    void aHostWhoAlreadyHasAnActiveRoomRejoinsItInsteadOfOpeningASecondOne() {
+        Map<String, Object> first = createRoom("host", Map.of("title", "Only one", "targetLanguage", "rj", "nativeLanguage", "en"));
+        Map<String, Object> again = createRoom("host", Map.of("title", "Ignored", "targetLanguage", "rj", "nativeLanguage", "en"));
+
+        assertEquals(first.get("id"), again.get("id"), "same room comes back");
+        assertEquals(1, listRooms("?targetLanguage=rj&size=50").size(), "no second room was opened");
+        assertEquals("Only one", again.get("title"));
+    }
+
+    @Test
     void roomDefaultsAndTheHostsFixedSeat() {
         Map<String, Object> room = createRoom("host", Map.of("title", "Defaults", "targetLanguage", "en", "nativeLanguage", "ar"));
         String roomId = (String) room.get("id");
@@ -151,9 +161,9 @@ class VoiceRoomApiTest extends ApiTestBase {
     @Test
     void discoveryUsesKeysetPaginationAndFiltersByLanguage() {
         for (String title : List.of("page-1", "page-2", "page-3")) {
-            createRoom("host", Map.of("title", title, "targetLanguage", "kp", "nativeLanguage", "en"));
+            createRoom("host-" + title, Map.of("title", title, "targetLanguage", "kp", "nativeLanguage", "en"));
         }
-        createRoom("host", Map.of("title", "other-language", "targetLanguage", "xx", "nativeLanguage", "en"));
+        createRoom("host-other", Map.of("title", "other-language", "targetLanguage", "xx", "nativeLanguage", "en"));
 
         List<Map<String, Object>> first = listRooms("?targetLanguage=kp&size=2");
         Map<String, Object> last = first.getLast();

@@ -75,7 +75,7 @@ Tokens are issued upstream (gateway / identity provider) and verified here with 
 
 | Method & path (under `/api/v1/voice-rooms`) | Who | Purpose |
 |---|---|---|
-| `POST /` | any | Create a room (`title`, `topic`, `targetLanguage`, `nativeLanguage`, `maxStageSeats`, `allowWhisper`); the caller becomes host, is seated, and gets a session with a LiveKit token |
+| `POST /` | any | Create a room (`title`, `topic`, `targetLanguage`, `nativeLanguage`, `maxStageSeats`, `allowWhisper`); the caller becomes host, is seated, and gets a session with a LiveKit token. A host who already has an active room gets that room back (re-join) instead of a second one |
 | `GET /?targetLanguage=&size=&afterCreatedAt=&afterId=` | any | Active rooms, newest first, keyset-paginated: for the next page pass the last room's `createdAt` and `id`. Each room carries live `speakers`, `participantCount`, `handRaiseCount` (one batched Redis round trip) |
 | `GET /{roomId}` / `PATCH /{roomId}` / `DELETE /{roomId}` | any / host / host | Read (with live numbers) / update `title`, `topic`, `maxStageSeats` / close |
 | `POST /{roomId}/participants/join` | any | Join: returns the room, a LiveKit token, the role and whether the user may publish |

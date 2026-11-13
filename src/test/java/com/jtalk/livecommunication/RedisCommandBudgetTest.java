@@ -50,7 +50,7 @@ class RedisCommandBudgetTest extends ApiTestBase {
     @Test
     void discoveryReadsLiveNumbersWithThreeCommandsPerRoomAndNothingElse() {
         for (String title : List.of("budget-a", "budget-b", "budget-c")) {
-            createRoom("host", java.util.Map.of("title", title, "targetLanguage", "bu", "nativeLanguage", "en"));
+            createRoom("host-" + title, java.util.Map.of("title", title, "targetLanguage", "bu", "nativeLanguage", "en"));
         }
 
         List<String> commands = redis.during(() -> listRooms("?targetLanguage=bu&size=50"));
