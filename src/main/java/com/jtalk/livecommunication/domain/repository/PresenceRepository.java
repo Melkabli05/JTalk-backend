@@ -3,6 +3,7 @@ package com.jtalk.livecommunication.domain.repository;
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
 import io.lettuce.core.LettuceFutures;
 import io.lettuce.core.Range;
+import io.lettuce.core.RedisFuture;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
@@ -34,12 +35,23 @@ public class PresenceRepository extends RedisRepository {
         this.ttlSeconds = properties.stateTtl().toSeconds();
     }
 
-    /** The heartbeat, sent by every participant every few seconds: both commands go out together, one round trip. */
-    public void touch(UUID roomId, UUID userId) {
+    /**
+     * The heartbeat, sent by every participant every few seconds. The ban check rides in the same pipeline as the two
+     * writes, so the hot path stays one round trip. Returns false if the host has barred this user: their entry is
+     * taken straight back out, so a kicked client that keeps heartbeating never shows up as present.
+     */
+    public boolean touch(UUID roomId, UUID userId) {
         RedisAsyncCommands<String, String> redis = connection.async();
+        RedisFuture<Boolean> banned = redis.sismember(bannedKey(roomId), userId.toString());
         LettuceFutures.awaitAll(TIMEOUT,
+                banned,
                 redis.zadd(key(roomId), clock.millis(), userId.toString()),
                 redis.expire(key(roomId), ttlSeconds));
+        if (banned.toCompletableFuture().join()) {
+            remove(roomId, userId);
+            return false;
+        }
+        return true;
     }
 
     public void remove(UUID roomId, UUID userId) {

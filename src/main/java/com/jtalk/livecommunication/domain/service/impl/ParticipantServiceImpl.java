@@ -126,7 +126,9 @@ class ParticipantServiceImpl implements ParticipantService {
     @Override
     public void heartbeat(UUID roomId, UUID userId) {
         rooms.getRequiredActiveRoom(roomId);
-        presence.touch(roomId, userId);
+        if (!presence.touch(roomId, userId)) {
+            throw ProblemType.KICKED_FROM_ROOM.because(userId + " was removed from this room by the host");
+        }
     }
 
     @Override

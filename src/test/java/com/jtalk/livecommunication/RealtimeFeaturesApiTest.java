@@ -261,6 +261,9 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
         assertEquals(List.of(new Removal(uuid(roomId), id("mallory"))), gateway.removals);
         assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", () -> join(roomId, "mallory"));
+        assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", () -> postEmpty(roomId, "/participants/heartbeat", "mallory"));
+        assertEquals(ids("host"), getParticipants(roomId).stream().map(p -> p.get("userId")).toList(),
+                "a kicked client that keeps sending heartbeats must not reappear in the room");
     }
 
     @Test
