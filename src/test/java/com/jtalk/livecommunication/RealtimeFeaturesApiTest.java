@@ -102,6 +102,21 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     }
 
     @Test
+    void participantsWhoStopSendingHeartbeatsDropOutOfTheRoom() throws InterruptedException {
+        String roomId = createRoom("host", "Presence", 3);
+        join(roomId, "alice");
+        join(roomId, "bob");
+        assertEquals(2, getRoom(roomId).get("participantCount"));
+
+        Thread.sleep(2_000);
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/participants/heartbeat", "bob").status());   // only bob keeps beating
+        Thread.sleep(1_500);                                                                              // alice is now 3.5 s silent, bob 1.5 s
+
+        assertEquals(ids("bob"), getParticipants(roomId).stream().map(p -> p.get("userId")).toList());
+        assertEquals(1, getRoom(roomId).get("participantCount"), "the room's count ignores the silent participant too");
+    }
+
+    @Test
     void webhookWithBadSignatureIsRejected() {
         var request = HttpRequest.POST("/webhooks/livekit", "{\"event\":\"participant_left\"}")
                 .contentType("application/webhook+json")
