@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Singleton
@@ -109,8 +110,13 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     }
 
     @Override
+    public Optional<VoiceRoom> findActiveRoom(UUID roomId) {
+        return rooms.findByIdAndStatus(roomId, VoiceRoomStatus.ACTIVE);
+    }
+
+    @Override
     public VoiceRoom getRequiredActiveRoom(UUID roomId) {
-        return rooms.findByIdAndStatus(roomId, VoiceRoomStatus.ACTIVE)
+        return findActiveRoom(roomId)
                 .orElseThrow(() -> ProblemType.VOICE_ROOM_NOT_FOUND.because("Voice room " + roomId + " does not exist or is closed"));
     }
 

@@ -1,6 +1,5 @@
 package com.jtalk.livecommunication.domain.repository;
 
-import com.jtalk.livecommunication.config.VoiceRoomProperties;
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import io.lettuce.core.LettuceFutures;
 import io.lettuce.core.Range;
@@ -10,7 +9,6 @@ import io.lettuce.core.api.async.RedisAsyncCommands;
 import jakarta.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -34,13 +32,11 @@ public class LiveStatsRepository {
     }
 
     private final StatefulRedisConnection<String, String> connection;
-    private final Clock clock;
-    private final Duration presenceTimeout;
+    private final PresenceRepository presence;
 
-    public LiveStatsRepository(StatefulRedisConnection<String, String> connection, Clock clock, VoiceRoomProperties properties) {
+    public LiveStatsRepository(StatefulRedisConnection<String, String> connection, PresenceRepository presence) {
         this.connection = connection;
-        this.clock = clock;
-        this.presenceTimeout = properties.presenceTimeout();
+        this.presence = presence;
     }
 
     /** Returns an entry for every requested room; a room whose numbers could not be read gets {@link RoomLiveStats#EMPTY}. */
@@ -49,7 +45,7 @@ public class LiveStatsRepository {
             return Map.of();
         }
         RedisAsyncCommands<String, String> redis = connection.async();
-        Range<Double> recent = Range.create((double) clock.instant().minus(presenceTimeout).toEpochMilli(), Double.POSITIVE_INFINITY);
+        Range<Double> recent = Range.create((double) presence.freshnessCutoff().toEpochMilli(), Double.POSITIVE_INFINITY);
 
         Map<UUID, Pending> pending = new LinkedHashMap<>();
         for (UUID roomId : roomIds) {

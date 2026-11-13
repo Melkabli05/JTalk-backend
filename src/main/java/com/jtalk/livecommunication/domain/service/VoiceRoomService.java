@@ -13,6 +13,7 @@ import io.micronaut.validation.Validated;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /** Room lifecycle (create, update, close), active-room validation and keyset-paginated discovery. */
@@ -31,6 +32,9 @@ public interface VoiceRoomService {
 
     /** Host-only. Marks the room closed; Redis state and the LiveKit room are cleaned up after the commit. */
     void closeRoom(@NonNull UUID roomId, @NonNull UUID requesterId);
+
+    /** The room if it exists and is open; for callers (webhooks) that must not fail on a room that was just closed. */
+    Optional<VoiceRoom> findActiveRoom(@NonNull UUID roomId);
 
     /** Shared by the other services so a missing or closed room is always the same 404. */
     VoiceRoom getRequiredActiveRoom(@NonNull UUID roomId);

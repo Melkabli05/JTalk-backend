@@ -3,9 +3,11 @@ package com.jtalk.livecommunication.support;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.micronaut.context.annotation.Replaces;
+import io.micronaut.serde.ObjectMapper;
 import jakarta.inject.Singleton;
 
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -99,7 +101,11 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     }
 
     @Override
-    public void sendData(UUID roomId, String topic, byte[] payload, List<UUID> destinationUserIds) {
-        signals.add(new Signal(roomId, topic, new String(payload, StandardCharsets.UTF_8), List.copyOf(destinationUserIds)));
+    public void sendData(UUID roomId, String topic, Object message, List<UUID> destinationUserIds) {
+        try {
+            signals.add(new Signal(roomId, topic, ObjectMapper.getDefault().writeValueAsString(message), List.copyOf(destinationUserIds)));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

@@ -23,6 +23,7 @@ import retrofit2.Call;
 import retrofit2.Response;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.util.Date;
 import java.util.List;
@@ -98,18 +99,26 @@ class LiveKitGatewayImpl implements LiveKitGateway {
     }
 
     @Override
-    public void sendData(UUID roomId, String topic, byte[] payload, List<UUID> destinationUserIds) {
+    public void sendData(UUID roomId, String topic, Object message, List<UUID> destinationUserIds) {
         // Parameter order in the SDK: destination SIDs first, then destination identities.
-        execute(roomService.sendData(roomId.toString(), payload, DataPacket.Kind.RELIABLE, List.of(),
+        execute(roomService.sendData(roomId.toString(), toJson(message), DataPacket.Kind.RELIABLE, List.of(),
                 destinationUserIds.stream().map(UUID::toString).toList(), topic), "send data message");
     }
 
     @Override
     public void broadcastRoomEvent(UUID roomId, RoomRealtimeEvent event) {
         try {
-            sendData(roomId, ROOM_EVENTS_TOPIC, json.writeValueAsBytes(event), List.of());
-        } catch (IOException | RuntimeException e) {
+            sendData(roomId, ROOM_EVENTS_TOPIC, event, List.of());
+        } catch (RuntimeException e) {
             log.warn("Could not broadcast {} to room {}", event.type(), roomId, e);
+        }
+    }
+
+    private byte[] toJson(Object message) {
+        try {
+            return json.writeValueAsBytes(message);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

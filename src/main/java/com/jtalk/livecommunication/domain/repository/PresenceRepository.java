@@ -8,6 +8,7 @@ import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
 import jakarta.inject.Singleton;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -23,18 +24,22 @@ public class PresenceRepository {
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     private final StatefulRedisConnection<String, String> connection;
+    private final Clock clock;
+    private final Duration presenceTimeout;
     private final long ttlSeconds;
 
-    public PresenceRepository(StatefulRedisConnection<String, String> connection, VoiceRoomProperties properties) {
+    public PresenceRepository(StatefulRedisConnection<String, String> connection, Clock clock, VoiceRoomProperties properties) {
         this.connection = connection;
+        this.clock = clock;
+        this.presenceTimeout = properties.presenceTimeout();
         this.ttlSeconds = properties.stateTtl().toSeconds();
     }
 
     /** The heartbeat, sent by every participant every few seconds: both commands go out together, one round trip. */
-    public void touch(UUID roomId, UUID userId, Instant now) {
+    public void touch(UUID roomId, UUID userId) {
         RedisAsyncCommands<String, String> redis = connection.async();
         LettuceFutures.awaitAll(TIMEOUT,
-                redis.zadd(key(roomId), now.toEpochMilli(), userId.toString()),
+                redis.zadd(key(roomId), clock.millis(), userId.toString()),
                 redis.expire(key(roomId), ttlSeconds));
     }
 
@@ -42,15 +47,15 @@ public class PresenceRepository {
         connection.sync().zrem(key(roomId), userId.toString());
     }
 
-    public boolean isPresent(UUID roomId, UUID userId, Instant notBefore) {
+    public boolean isPresent(UUID roomId, UUID userId) {
         Double lastSeen = connection.sync().zscore(key(roomId), userId.toString());
-        return lastSeen != null && lastSeen >= notBefore.toEpochMilli();
+        return lastSeen != null && lastSeen >= freshnessCutoff().toEpochMilli();
     }
 
-    /** Users whose last heartbeat is at or after {@code notBefore}; stale entries are trimmed first. */
-    public List<UUID> findPresent(UUID roomId, Instant notBefore) {
+    /** Users with a recent heartbeat; stale entries are trimmed first. */
+    public List<UUID> findPresent(UUID roomId) {
         RedisCommands<String, String> redis = connection.sync();
-        redis.zremrangebyscore(key(roomId), Range.create(Double.NEGATIVE_INFINITY, (double) notBefore.toEpochMilli() - 1));
+        redis.zremrangebyscore(key(roomId), Range.create(Double.NEGATIVE_INFINITY, (double) freshnessCutoff().toEpochMilli() - 1));
         return redis.zrange(key(roomId), 0, -1).stream().map(UUID::fromString).toList();
     }
 
@@ -67,6 +72,11 @@ public class PresenceRepository {
 
     public void clear(UUID roomId) {
         connection.sync().del(key(roomId), bannedKey(roomId));
+    }
+
+    /** A heartbeat older than this no longer counts as present. */
+    Instant freshnessCutoff() {
+        return clock.instant().minus(presenceTimeout);
     }
 
     private static String bannedKey(UUID roomId) {

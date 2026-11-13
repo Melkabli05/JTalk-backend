@@ -43,6 +43,9 @@ public interface LiveKitGateway {
      */
     void broadcastRoomEvent(@NonNull UUID roomId, @NonNull RoomRealtimeEvent event);
 
-    /** Sends a reliable data message to specific participants of the room; an empty list means everyone. */
-    void sendData(@NonNull UUID roomId, @NonNull String topic, @NonNull byte[] payload, @NonNull List<UUID> destinationUserIds);
+    /**
+     * Sends a reliable data message (serialized to JSON) to specific participants of the room; an empty list means
+     * everyone.
+     */
+    void sendData(@NonNull UUID roomId, @NonNull String topic, @NonNull Object message, @NonNull List<UUID> destinationUserIds);
 }

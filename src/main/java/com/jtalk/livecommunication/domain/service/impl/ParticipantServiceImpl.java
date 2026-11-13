@@ -1,13 +1,11 @@
 package com.jtalk.livecommunication.domain.service.impl;
 
-import com.jtalk.livecommunication.config.VoiceRoomProperties;
 import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.ParticipantRole;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.enums.PresenceStatus;
-import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.domain.mapper.ApiMapper;
 import com.jtalk.livecommunication.domain.model.Participant;
@@ -15,7 +13,6 @@ import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.domain.repository.LeaseRepository;
 import com.jtalk.livecommunication.domain.repository.PresenceRepository;
 import com.jtalk.livecommunication.domain.repository.StageRepository;
-import com.jtalk.livecommunication.domain.repository.VoiceRoomRepository;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.exception.ProblemType;
@@ -26,7 +23,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -39,14 +35,12 @@ import java.util.UUID;
 class ParticipantServiceImpl implements ParticipantService {
 
     private final VoiceRoomService rooms;
-    private final VoiceRoomRepository roomRepository;
     private final StageRepository stage;
     private final PresenceRepository presence;
     private final LeaseRepository leases;
     private final LiveKitGateway gateway;
     private final ApiMapper mapper;
     private final Clock clock;
-    private final VoiceRoomProperties properties;
 
     @Override
     public RoomSessionResponse joinRoom(UUID roomId, UUID userId) {
@@ -61,7 +55,7 @@ class ParticipantServiceImpl implements ParticipantService {
         if (onStage && leases.delete(roomId, userId)) {   // reconnecting within the grace lease restores the seat
             announce(RoomEventType.SPEAKER_RECONNECTED, roomId, userId);
         }
-        presence.touch(roomId, userId, clock.instant());
+        presence.touch(roomId, userId);
         return new RoomSessionResponse(rooms.toResponse(room), gateway.generateToken(roomId, userId, onStage),
                 roleOf(room, userId, onStage), onStage);
     }
@@ -94,7 +88,7 @@ class ParticipantServiceImpl implements ParticipantService {
 
     @Override
     public void handleMediaDisconnected(UUID roomId, UUID userId) {
-        Optional<VoiceRoom> room = activeRoom(roomId);
+        Optional<VoiceRoom> room = rooms.findActiveRoom(roomId);
         if (room.isEmpty() || room.get().isHost(userId)) {
             return;   // a closed room, or the host, whose seat is permanent
         }
@@ -118,7 +112,7 @@ class ParticipantServiceImpl implements ParticipantService {
 
     @Override
     public void handleDisconnectLeaseExpired(UUID roomId, UUID expiredUserId) {
-        if (activeRoom(roomId).filter(room -> !room.isHost(expiredUserId)).isEmpty()) {
+        if (rooms.findActiveRoom(roomId).filter(room -> !room.isHost(expiredUserId)).isEmpty()) {
             return;
         }
         log.info("Grace lease expired for speaker {} in room {}. Evicting from stage.", expiredUserId, roomId);
@@ -132,14 +126,14 @@ class ParticipantServiceImpl implements ParticipantService {
     @Override
     public void heartbeat(UUID roomId, UUID userId) {
         rooms.getRequiredActiveRoom(roomId);
-        presence.touch(roomId, userId, clock.instant());
+        presence.touch(roomId, userId);
     }
 
     @Override
     public List<ParticipantResponse> listParticipants(UUID roomId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         Set<UUID> speakers = new HashSet<>(stage.snapshot(roomId).speakers());
-        List<UUID> present = presence.findPresent(roomId, presenceCutoff());
+        List<UUID> present = presence.findPresent(roomId);
         Set<UUID> reconnecting = leases.usersWithLease(roomId, present);
         return mapper.toParticipantResponses(present.stream()
                 .map(userId -> new Participant(userId, roleOf(room, userId, speakers.contains(userId)),
@@ -152,21 +146,12 @@ class ParticipantServiceImpl implements ParticipantService {
         presence.clear(event.roomId());
     }
 
-    /** Webhook paths must not fail for a room that has just been closed, so they look the room up without a 404. */
-    private Optional<VoiceRoom> activeRoom(UUID roomId) {
-        return roomRepository.findByIdAndStatus(roomId, VoiceRoomStatus.ACTIVE);
-    }
-
     private boolean isHost(UUID roomId, UUID userId) {
-        return activeRoom(roomId).filter(room -> room.isHost(userId)).isPresent();
+        return rooms.findActiveRoom(roomId).filter(room -> room.isHost(userId)).isPresent();
     }
 
     private void announce(RoomEventType type, UUID roomId, UUID targetUserId) {
         gateway.broadcastRoomEvent(roomId, new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant()));
-    }
-
-    private Instant presenceCutoff() {
-        return clock.instant().minus(properties.presenceTimeout());
     }
 
     private static ParticipantRole roleOf(VoiceRoom room, UUID userId, boolean onStage) {

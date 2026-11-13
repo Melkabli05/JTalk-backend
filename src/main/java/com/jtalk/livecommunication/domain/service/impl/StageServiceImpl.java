@@ -1,6 +1,5 @@
 package com.jtalk.livecommunication.domain.service.impl;
 
-import com.jtalk.livecommunication.config.VoiceRoomProperties;
 import com.jtalk.livecommunication.domain.dto.request.NetworkModeRequest;
 import com.jtalk.livecommunication.domain.dto.request.WhisperRequest;
 import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
@@ -21,14 +20,11 @@ import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.exception.ProblemType;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
-import io.micronaut.serde.ObjectMapper;
 import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -49,9 +45,7 @@ class StageServiceImpl implements StageService {
     private final PrunedTrackRepository prunedTracks;
     private final LiveKitGateway gateway;
     private final ApiMapper mapper;
-    private final ObjectMapper json;
     private final Clock clock;
-    private final VoiceRoomProperties properties;
 
     @Override
     public RoomSessionResponse claimStageSeat(UUID roomId, UUID userId) {
@@ -129,13 +123,14 @@ class StageServiceImpl implements StageService {
         if (speakerId.equals(targetId)) {
             throw ProblemType.WHISPER_TO_SELF.because("You cannot whisper to yourself");
         }
-        if (!presence.isPresent(roomId, targetId, clock.instant().minus(properties.presenceTimeout()))) {
+        if (!presence.isPresent(roomId, targetId)) {
             throw ProblemType.WHISPER_TARGET_NOT_PRESENT.because(targetId + " is not in the room");
         }
         stopWhisper(roomId, speakerId);   // one whisper at a time
         whispers.start(roomId, speakerId, targetId);
         for (UUID side : List.of(speakerId, targetId)) {
-            send(roomId, side, new WhisperSignal("start", speakerId, targetId, gateway.generateWhisperToken(roomId, speakerId, targetId, side)));
+            String token = gateway.generateWhisperToken(roomId, speakerId, targetId, side);   // each side gets only its own
+            gateway.sendData(roomId, WHISPER_TOPIC, new WhisperSignal("start", speakerId, targetId, token), List.of(side));
         }
     }
 
@@ -145,7 +140,7 @@ class StageServiceImpl implements StageService {
             whispers.stop(roomId, speakerId);
             gateway.deleteWhisperRoom(roomId, speakerId, targetId);
             for (UUID side : List.of(speakerId, targetId)) {
-                send(roomId, side, new WhisperSignal("stop", speakerId, targetId, null));
+                gateway.sendData(roomId, WHISPER_TOPIC, new WhisperSignal("stop", speakerId, targetId, null), List.of(side));
             }
         });
     }
@@ -178,13 +173,5 @@ class StageServiceImpl implements StageService {
 
     private void announce(RoomEventType type, UUID roomId, UUID targetUserId) {
         gateway.broadcastRoomEvent(roomId, new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant()));
-    }
-
-    private void send(UUID roomId, UUID recipient, WhisperSignal signal) {
-        try {
-            gateway.sendData(roomId, WHISPER_TOPIC, json.writeValueAsBytes(signal), List.of(recipient));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 }

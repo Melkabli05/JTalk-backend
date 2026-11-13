@@ -168,9 +168,7 @@ class LiveKitGatewayImplTest {
     @SuppressWarnings("deprecation")
     @Test
     void sendDataTargetsIdentitiesNotSids() throws Exception {
-        byte[] payload = "{\"action\":\"start\"}".getBytes();
-
-        gateway().sendData(room, "whisper", payload, List.of(alice, bob));
+        gateway().sendData(room, "whisper", Map.of("action", "start"), List.of(alice, bob));
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/SendData"), request.path());
@@ -179,7 +177,7 @@ class LiveKitGatewayImplTest {
         assertEquals(List.of(), body.getDestinationSidsList(), "the SDK takes SIDs before identities; they must not be swapped");
         assertEquals("whisper", body.getTopic());
         assertEquals(LivekitModels.DataPacket.Kind.RELIABLE, body.getKind());
-        assertEquals(new String(payload), body.getData().toStringUtf8());
+        assertEquals("{\"action\":\"start\"}", body.getData().toStringUtf8());
     }
 
     @Test
