@@ -20,4 +20,12 @@ public record CreateVoiceRoomRequest(
         @NotBlank @Size(max = 10) String nativeLanguage,
         @Nullable @Min(CommunicationConstants.MIN_STAGE_SEATS) @Max(CommunicationConstants.MAX_STAGE_SEATS) Integer maxStageSeats,
         @Nullable Boolean allowWhisper) {
+
+    public int seatsOrDefault() {
+        return maxStageSeats == null ? CommunicationConstants.DEFAULT_STAGE_SEATS : maxStageSeats;
+    }
+
+    public boolean whisperAllowed() {
+        return allowWhisper == null || allowWhisper;
+    }
 }

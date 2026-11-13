@@ -21,16 +21,14 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
     @Override
     public void handle(String body, String authorizationHeader) {
         WebhookEvent event = verify(body, authorizationHeader);
-        Optional<UUID> roomId = parseId(event.getRoom().getName());
-        Optional<UUID> userId = parseId(event.getParticipant().getIdentity());
-        if (roomId.isEmpty() || userId.isEmpty()) {
-            return;   // not one of our voice rooms (e.g. a whisper's private room) or not one of our users
-        }
-        switch (event.getEvent()) {
-            case "participant_left" -> participants.handleMediaDisconnected(roomId.get(), userId.get());
-            case "participant_joined" -> participants.handleMediaReconnected(roomId.get(), userId.get());
-            default -> { /* other events are not needed */ }
-        }
+        // Not one of our voice rooms (e.g. a whisper's private room) or not one of our users: nothing to do.
+        MediaParticipant.of(event).ifPresent(who -> {
+            switch (event.getEvent()) {
+                case "participant_left" -> participants.handleMediaDisconnected(who.roomId(), who.userId());
+                case "participant_joined" -> participants.handleMediaReconnected(who.roomId(), who.userId());
+                default -> { /* other events are not needed */ }
+            }
+        });
     }
 
     private WebhookEvent verify(String body, String authorizationHeader) {
@@ -41,11 +39,20 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
         }
     }
 
-    private static Optional<UUID> parseId(String value) {
-        try {
-            return Optional.of(UUID.fromString(value));
-        } catch (IllegalArgumentException e) {
-            return Optional.empty();
+    /** The room and user a LiveKit event is about, if both are ours: LiveKit names rooms and identities with our UUIDs. */
+    private record MediaParticipant(UUID roomId, UUID userId) {
+
+        static Optional<MediaParticipant> of(WebhookEvent event) {
+            return parseId(event.getRoom().getName())
+                    .flatMap(roomId -> parseId(event.getParticipant().getIdentity()).map(userId -> new MediaParticipant(roomId, userId)));
+        }
+
+        private static Optional<UUID> parseId(String value) {
+            try {
+                return Optional.of(UUID.fromString(value));
+            } catch (IllegalArgumentException _) {
+                return Optional.empty();
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.jtalk.livecommunication.domain.entity;
 
+import com.jtalk.livecommunication.domain.enums.ParticipantRole;
 import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import org.junit.jupiter.api.Test;
 
@@ -43,5 +44,19 @@ class VoiceRoomTest {
     @Test
     void closingMarksTheRoomClosed() {
         assertEquals(VoiceRoomStatus.CLOSED, room().close().status());
+    }
+
+    @Test
+    void theHostIsAlwaysTheHostWhetherOrNotTheyAreOnStage() {
+        assertEquals(ParticipantRole.HOST, room().roleOf(host, true));
+        assertEquals(ParticipantRole.HOST, room().roleOf(host, false));
+    }
+
+    @Test
+    void everyoneElseIsASpeakerOnStageAndAListenerOtherwise() {
+        UUID guest = UUID.randomUUID();
+
+        assertEquals(ParticipantRole.SPEAKER, room().roleOf(guest, true));
+        assertEquals(ParticipantRole.LISTENER, room().roleOf(guest, false));
     }
 }

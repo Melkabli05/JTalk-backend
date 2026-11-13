@@ -1,5 +1,6 @@
 package com.jtalk.livecommunication.support;
 
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.micronaut.context.annotation.Replaces;
@@ -102,7 +103,8 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     }
 
     @Override
-    public void broadcastRoomEvent(UUID roomId, RoomRealtimeEvent event) {
+    public void broadcastRoomEvent(UUID roomId, RoomEventType type, UUID targetUserId) {
+        RoomRealtimeEvent event = new RoomRealtimeEvent(type, roomId, targetUserId, java.time.Instant.now());
         events.add(event);
     }
 

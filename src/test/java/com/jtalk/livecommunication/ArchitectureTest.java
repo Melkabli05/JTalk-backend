@@ -21,6 +21,8 @@ class ArchitectureTest {
     private static final String DTO = ROOT + "domain.dto..";
     private static final String MAPPER = ROOT + "domain.mapper..";
     private static final String SERVICE = ROOT + "domain.service..";
+    private static final String VALIDATOR = ROOT + "domain.validator..";
+    private static final String VALIDATOR_IMPL = ROOT + "domain.validator.impl..";
     private static final String SERVICE_IMPL = ROOT + "domain.service.impl..";
     private static final String REPOSITORY = ROOT + "domain.repository..";
     private static final String INTEGRATION_IMPL = ROOT + "integration.impl..";
@@ -28,7 +30,12 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule controllers_use_services_not_repositories_or_integrations = noClasses()
             .that().resideInAPackage(CONTROLLER)
-            .should().dependOnClassesThat().resideInAnyPackage(REPOSITORY, INTEGRATION);
+            .should().dependOnClassesThat().resideInAnyPackage(REPOSITORY, INTEGRATION, VALIDATOR);
+
+    @ArchTest
+    static final ArchRule validators_only_look_at_the_domain_and_never_back_into_services = noClasses()
+            .that().resideInAPackage(VALIDATOR)
+            .should().dependOnClassesThat().resideInAnyPackage(SERVICE, CONTROLLER, LISTENER, INTEGRATION, DTO, MAPPER);
 
     @ArchTest
     static final ArchRule services_do_not_use_controllers_or_listeners = noClasses()
@@ -57,6 +64,6 @@ class ArchitectureTest {
 
     @ArchTest
     static final ArchRule only_interfaces_are_used_outside_the_implementation_packages = noClasses()
-            .that().resideOutsideOfPackages(SERVICE_IMPL, INTEGRATION_IMPL)
-            .should().dependOnClassesThat().resideInAnyPackage(SERVICE_IMPL, INTEGRATION_IMPL);
+            .that().resideOutsideOfPackages(SERVICE_IMPL, INTEGRATION_IMPL, VALIDATOR_IMPL)
+            .should().dependOnClassesThat().resideInAnyPackage(SERVICE_IMPL, INTEGRATION_IMPL, VALIDATOR_IMPL);
 }

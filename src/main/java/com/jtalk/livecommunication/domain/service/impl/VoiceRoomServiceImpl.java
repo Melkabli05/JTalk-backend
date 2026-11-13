@@ -1,6 +1,5 @@
 package com.jtalk.livecommunication.domain.service.impl;
 
-import com.jtalk.livecommunication.config.CommunicationConstants;
 import com.jtalk.livecommunication.domain.dto.request.CreateVoiceRoomRequest;
 import com.jtalk.livecommunication.domain.dto.request.UpdateVoiceRoomRequest;
 import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
@@ -15,6 +14,7 @@ import com.jtalk.livecommunication.domain.repository.LiveStatsRepository;
 import com.jtalk.livecommunication.domain.repository.StageRepository;
 import com.jtalk.livecommunication.domain.repository.VoiceRoomRepository;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
+import com.jtalk.livecommunication.domain.validator.RoomAccessValidator;
 import com.jtalk.livecommunication.exception.ProblemType;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.micronaut.context.event.ApplicationEventPublisher;
@@ -43,21 +43,23 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     private final LiveKitGateway gateway;
     private final ApplicationEventPublisher<VoiceRoomClosed> closedEvents;
     private final ApiMapper mapper;
+    private final RoomAccessValidator access;
 
     @Override
     public RoomSessionResponse createRoom(UUID hostId, CreateVoiceRoomRequest request) {
-        Optional<VoiceRoom> existing = rooms.findFirstByHostIdAndStatus(hostId, VoiceRoomStatus.ACTIVE);
-        if (existing.isPresent()) {   // a host runs one room at a time: coming back re-joins it instead of opening a second
-            VoiceRoom room = existing.get();
-            log.info("Host {} already has active room {}, re-joining it", hostId, room.id());
-            return new RoomSessionResponse(toResponse(room), gateway.generateToken(room.id(), hostId, true), ParticipantRole.HOST, true);
-        }
+        return rooms.findFirstByHostIdAndStatus(hostId, VoiceRoomStatus.ACTIVE)
+                .map(existing -> rejoin(existing, hostId))   // a host runs one room at a time
+                .orElseGet(() -> open(hostId, request));
+    }
 
-        VoiceRoom saved = rooms.save(VoiceRoom.open(
-                request.title(), request.topic(), hostId, request.targetLanguage(), request.nativeLanguage(),
-                request.maxStageSeats() == null ? CommunicationConstants.DEFAULT_STAGE_SEATS : request.maxStageSeats(),
-                request.allowWhisper() == null || request.allowWhisper()));
+    private RoomSessionResponse rejoin(VoiceRoom room, UUID hostId) {
+        log.info("Host {} already has active room {}, re-joining it", hostId, room.id());
+        return new RoomSessionResponse(toResponse(room), gateway.generateToken(room.id(), hostId, true), ParticipantRole.HOST, true);
+    }
 
+    private RoomSessionResponse open(UUID hostId, CreateVoiceRoomRequest request) {
+        VoiceRoom saved = rooms.save(VoiceRoom.open(request.title(), request.topic(), hostId, request.targetLanguage(),
+                request.nativeLanguage(), request.seatsOrDefault(), request.whisperAllowed()));
         try {
             gateway.createRoom(saved.id());
             stage.initializeStage(saved.id(), hostId);
@@ -88,9 +90,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @Override
     public VoiceRoomResponse updateRoom(UUID roomId, UUID requesterId, UpdateVoiceRoomRequest request) {
         VoiceRoom room = getRequiredActiveRoom(roomId);
-        if (!room.isHost(requesterId)) {
-            throw ProblemType.NOT_ROOM_HOST.because("Only the room host can update room settings");
-        }
+        access.requireHost(room, requesterId, "update room settings");
         return toResponse(rooms.update(room.withSettings(request.title(), request.topic(), request.maxStageSeats())));
     }
 
@@ -103,9 +103,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @Transactional
     public void closeRoom(UUID roomId, UUID requesterId) {
         VoiceRoom room = getRequiredActiveRoom(roomId);
-        if (!room.isHost(requesterId)) {
-            throw ProblemType.NOT_ROOM_HOST.because("Only the room host can close this room");
-        }
+        access.requireHost(room, requesterId, "close this room");
         rooms.update(room.close());
         closedEvents.publishEvent(new VoiceRoomClosed(roomId));
         log.info("Closed voice room {} by host {}", roomId, requesterId);

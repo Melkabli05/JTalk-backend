@@ -1,6 +1,7 @@
 package com.jtalk.livecommunication.integration.impl;
 
 import com.jtalk.livecommunication.config.LiveKitProperties;
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.exception.ProblemType;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
@@ -107,11 +108,11 @@ class LiveKitGatewayImpl implements LiveKitGateway {
     }
 
     @Override
-    public void broadcastRoomEvent(UUID roomId, RoomRealtimeEvent event) {
+    public void broadcastRoomEvent(UUID roomId, RoomEventType type, UUID targetUserId) {
         try {
-            sendData(roomId, ROOM_EVENTS_TOPIC, event, List.of());
+            sendData(roomId, ROOM_EVENTS_TOPIC, new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant()), List.of());
         } catch (RuntimeException e) {
-            log.warn("Could not broadcast {} to room {}", event.type(), roomId, e);
+            log.warn("Could not broadcast {} to room {}", type, roomId, e);
         }
     }
 

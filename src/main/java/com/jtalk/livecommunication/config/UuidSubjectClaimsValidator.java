@@ -18,7 +18,7 @@ class UuidSubjectClaimsValidator<T> implements GenericJwtClaimsValidator<T> {
         try {
             UUID.fromString(String.valueOf(claims.get(Claims.SUBJECT)));
             return true;
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
     }

@@ -1,5 +1,6 @@
 package com.jtalk.livecommunication.domain.entity;
 
+import com.jtalk.livecommunication.domain.enums.ParticipantRole;
 import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.annotation.AutoPopulated;
@@ -51,5 +52,13 @@ public record VoiceRoom(
 
     public boolean isHost(UUID userId) {
         return hostId.equals(userId);
+    }
+
+    /** What a user is in this room: the host, a speaker on the stage, or a listener. */
+    public ParticipantRole roleOf(UUID userId, boolean onStage) {
+        if (isHost(userId)) {
+            return ParticipantRole.HOST;
+        }
+        return onStage ? ParticipantRole.SPEAKER : ParticipantRole.LISTENER;
     }
 }

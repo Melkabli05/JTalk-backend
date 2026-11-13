@@ -1,7 +1,8 @@
 package com.jtalk.livecommunication.integration;
 
-import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import io.micronaut.core.annotation.NonNull;
+import io.micronaut.core.annotation.Nullable;
 
 import java.util.List;
 import java.util.UUID;
@@ -41,7 +42,7 @@ public interface LiveKitGateway {
      * Pushes a room event to everyone in the room over LiveKit's reliable data channel, so clients update their UI without
      * polling. Best effort: a failure is logged and never fails the request that caused the event.
      */
-    void broadcastRoomEvent(@NonNull UUID roomId, @NonNull RoomRealtimeEvent event);
+    void broadcastRoomEvent(@NonNull UUID roomId, @NonNull RoomEventType type, @Nullable UUID targetUserId);
 
     /**
      * Sends a reliable data message (serialized to JSON) to specific participants of the room; an empty list means

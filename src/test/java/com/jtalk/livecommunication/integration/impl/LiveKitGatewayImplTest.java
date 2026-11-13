@@ -4,7 +4,6 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.jtalk.livecommunication.config.LiveKitProperties;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
-import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.sun.net.httpserver.HttpServer;
 import io.livekit.server.RoomServiceClient;
 import livekit.LivekitModels;
@@ -182,7 +181,7 @@ class LiveKitGatewayImplTest {
 
     @Test
     void broadcastRoomEventSendsOneDataMessageToTheWholeRoom() throws Exception {
-        gateway().broadcastRoomEvent(room, new RoomRealtimeEvent(RoomEventType.HAND_RAISED, room, bob, NOW));
+        gateway().broadcastRoomEvent(room, RoomEventType.HAND_RAISED, bob);
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/SendData"), request.path());
@@ -200,9 +199,9 @@ class LiveKitGatewayImplTest {
         contentType = "application/json";
         responseBody = "{\"code\":\"invalid_argument\",\"msg\":\"nope\"}".getBytes();
 
-        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(room, new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, NOW)));
+        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(room, RoomEventType.STAGE_UPDATED, null));
         server.stop(0);
-        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(room, new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, NOW)));
+        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(room, RoomEventType.STAGE_UPDATED, null));
     }
 
     // ---- error handling ---------------------------------------------------------------------------
