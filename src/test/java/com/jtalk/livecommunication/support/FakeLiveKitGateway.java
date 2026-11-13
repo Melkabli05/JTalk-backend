@@ -32,6 +32,8 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     public record WhisperClose(UUID roomId, UUID speakerId, UUID targetId) {
     }
 
+    /** When set, {@link #createRoom} fails with it, to test what happens if the media server is down. */
+    public volatile RuntimeException createRoomFailure;
     public final List<RoomRealtimeEvent> events = new CopyOnWriteArrayList<>();
     public final List<UUID> createdRooms = new CopyOnWriteArrayList<>();
     public final List<UUID> closedRooms = new CopyOnWriteArrayList<>();
@@ -42,6 +44,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     public final List<WhisperClose> closedWhispers = new CopyOnWriteArrayList<>();
 
     public void reset() {
+        createRoomFailure = null;
         events.clear();
         createdRooms.clear();
         closedRooms.clear();
@@ -54,6 +57,9 @@ public class FakeLiveKitGateway implements LiveKitGateway {
 
     @Override
     public void createRoom(UUID roomId) {
+        if (createRoomFailure != null) {
+            throw createRoomFailure;
+        }
         createdRooms.add(roomId);
     }
 

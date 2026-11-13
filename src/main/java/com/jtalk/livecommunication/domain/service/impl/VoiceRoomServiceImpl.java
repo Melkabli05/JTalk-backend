@@ -51,8 +51,13 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
                 request.maxStageSeats() == null ? CommunicationConstants.DEFAULT_STAGE_SEATS : request.maxStageSeats(),
                 request.allowWhisper() == null || request.allowWhisper()));
 
-        gateway.createRoom(saved.id());
-        stage.initializeStage(saved.id(), hostId);
+        try {
+            gateway.createRoom(saved.id());
+            stage.initializeStage(saved.id(), hostId);
+        } catch (RuntimeException e) {
+            rooms.deleteById(saved.id());   // never leave an open room whose media room or stage does not exist
+            throw e;
+        }
         String token = gateway.generateToken(saved.id(), hostId, true);
         log.info("Created voice room {} hosted by {}", saved.id(), hostId);
 

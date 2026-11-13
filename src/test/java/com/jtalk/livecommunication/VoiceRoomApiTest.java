@@ -1,5 +1,6 @@
 package com.jtalk.livecommunication;
 
+import com.jtalk.livecommunication.exception.ProblemType;
 import com.jtalk.livecommunication.support.ApiTestBase;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.PermissionChange;
 import io.micronaut.http.HttpRequest;
@@ -71,6 +72,19 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertEquals(List.of(uuid(roomId)), gateway.closedRooms);
         assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found", () -> join(roomId, "alice"));
         assertFalse(listRooms("?size=100&targetLanguage=es").stream().anyMatch(r -> roomId.equals(r.get("id"))));
+    }
+
+    @Test
+    void aFailedMediaServerLeavesNoHalfCreatedRoomBehind() {
+        var body = Map.of("title", "Doomed", "targetLanguage", "or", "nativeLanguage", "en");
+        gateway.createRoomFailure = ProblemType.MEDIA_SERVER_UNREACHABLE.because("LiveKit is down");
+
+        assertProblem(HttpStatus.BAD_GATEWAY, "media-server-unreachable", () -> http.exchange(
+                HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(token("host")), MAP));
+
+        assertEquals(List.of(), listRooms("?targetLanguage=or&size=50"), "the row is rolled back, so discovery never shows a room with no stage");
+        gateway.createRoomFailure = null;
+        assertEquals("Doomed", createRoom("host", Map.of("title", "Doomed", "targetLanguage", "or", "nativeLanguage", "en")).get("title"));
     }
 
     @Test
