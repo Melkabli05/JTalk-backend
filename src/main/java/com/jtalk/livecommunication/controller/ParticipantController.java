@@ -15,7 +15,6 @@ import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
 import lombok.RequiredArgsConstructor;
 
-import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,20 +27,20 @@ class ParticipantController {
     private final ParticipantService participants;
 
     @Post("/join")
-    RoomSessionResponse joinRoom(UUID roomId, Principal principal) {
-        return participants.joinRoom(roomId, UUID.fromString(principal.getName()));
+    RoomSessionResponse joinRoom(UUID roomId, @CurrentUser UUID userId) {
+        return participants.joinRoom(roomId, userId);
     }
 
     @Post("/leave")
     @Status(HttpStatus.NO_CONTENT)
-    void leaveRoom(UUID roomId, Principal principal) {
-        participants.leaveRoom(roomId, UUID.fromString(principal.getName()));
+    void leaveRoom(UUID roomId, @CurrentUser UUID userId) {
+        participants.leaveRoom(roomId, userId);
     }
 
     @Post("/heartbeat")
     @Status(HttpStatus.NO_CONTENT)
-    void heartbeat(UUID roomId, Principal principal) {
-        participants.heartbeat(roomId, UUID.fromString(principal.getName()));
+    void heartbeat(UUID roomId, @CurrentUser UUID userId) {
+        participants.heartbeat(roomId, userId);
     }
 
     @Get
@@ -52,7 +51,7 @@ class ParticipantController {
     /** Host moderation: removes the participant from the room and bars them from rejoining. */
     @Delete("/{targetUserId}")
     @Status(HttpStatus.NO_CONTENT)
-    void kickParticipant(UUID roomId, UUID targetUserId, Principal principal) {
-        participants.kickParticipant(roomId, UUID.fromString(principal.getName()), targetUserId);
+    void kickParticipant(UUID roomId, UUID targetUserId, @CurrentUser UUID userId) {
+        participants.kickParticipant(roomId, userId, targetUserId);
     }
 }

@@ -14,13 +14,12 @@ import java.util.UUID;
  * {@code voiceroom:{id}:pruned:{userId}} (a set of track SIDs) plus {@code voiceroom:{id}:pruned-users} to find them all.
  */
 @Singleton
-public class PrunedTrackRepository {
+public class PrunedTrackRepository extends RedisRepository {
 
-    private final StatefulRedisConnection<String, String> connection;
     private final long ttlSeconds;
 
     public PrunedTrackRepository(StatefulRedisConnection<String, String> connection, VoiceRoomProperties properties) {
-        this.connection = connection;
+        super(connection);
         this.ttlSeconds = properties.stateTtl().toSeconds();
     }
 
@@ -51,10 +50,10 @@ public class PrunedTrackRepository {
     }
 
     private static String key(UUID roomId, UUID userId) {
-        return "voiceroom:{" + roomId + "}:pruned:" + userId;
+        return roomKey(roomId, "pruned:" + userId);
     }
 
     private static String usersKey(UUID roomId) {
-        return "voiceroom:{" + roomId + "}:pruned-users";
+        return roomKey(roomId, "pruned-users");
     }
 }

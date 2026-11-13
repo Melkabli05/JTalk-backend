@@ -31,7 +31,6 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 
 import java.net.URI;
-import java.security.Principal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -47,8 +46,8 @@ class VoiceRoomController {
     private final VoiceRoomService rooms;
 
     @Post
-    HttpResponse<RoomSessionResponse> createRoom(Principal principal, @Body @Valid CreateVoiceRoomRequest request) {
-        RoomSessionResponse session = rooms.createRoom(UUID.fromString(principal.getName()), request);
+    HttpResponse<RoomSessionResponse> createRoom(@CurrentUser UUID userId, @Body @Valid CreateVoiceRoomRequest request) {
+        RoomSessionResponse session = rooms.createRoom(userId, request);
         return HttpResponse.created(session, URI.create("/api/v1/voice-rooms/" + session.room().id()));
     }
 
@@ -73,13 +72,13 @@ class VoiceRoomController {
     }
 
     @Patch("/{roomId}")
-    VoiceRoomResponse updateRoom(UUID roomId, Principal principal, @Body @Valid UpdateVoiceRoomRequest request) {
-        return rooms.updateRoom(roomId, UUID.fromString(principal.getName()), request);
+    VoiceRoomResponse updateRoom(UUID roomId, @CurrentUser UUID userId, @Body @Valid UpdateVoiceRoomRequest request) {
+        return rooms.updateRoom(roomId, userId, request);
     }
 
     @Delete("/{roomId}")
     @Status(HttpStatus.NO_CONTENT)
-    void closeRoom(UUID roomId, Principal principal) {
-        rooms.closeRoom(roomId, UUID.fromString(principal.getName()));
+    void closeRoom(UUID roomId, @CurrentUser UUID userId) {
+        rooms.closeRoom(roomId, userId);
     }
 }

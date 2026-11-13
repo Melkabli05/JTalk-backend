@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
  * emits a keyspace event, which is what triggers the seat reclaim.
  */
 @Singleton
-public class LeaseRepository {
+public class LeaseRepository extends RedisRepository {
 
     /** Identifies whose lease an expired key belonged to. */
     public record LeaseKey(UUID roomId, UUID userId) {
@@ -27,11 +27,10 @@ public class LeaseRepository {
 
     private static final Pattern KEY_PATTERN = Pattern.compile("voiceroom:\\{([0-9a-fA-F-]{36})}:lease:([0-9a-fA-F-]{36})");
 
-    private final StatefulRedisConnection<String, String> connection;
     private final long ttlSeconds;
 
     public LeaseRepository(StatefulRedisConnection<String, String> connection, VoiceRoomProperties properties) {
-        this.connection = connection;
+        super(connection);
         this.ttlSeconds = properties.leaseTtl().toSeconds();
     }
 
@@ -68,6 +67,6 @@ public class LeaseRepository {
     }
 
     private static String key(UUID roomId, UUID userId) {
-        return "voiceroom:{" + roomId + "}:lease:" + userId;
+        return roomKey(roomId, "lease:" + userId);
     }
 }

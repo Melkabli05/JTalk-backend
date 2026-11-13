@@ -20,9 +20,8 @@ import java.util.UUID;
  * </ul>
  */
 @Singleton
-public class StageRepository {
+public class StageRepository extends RedisRepository {
 
-    private final StatefulRedisConnection<String, String> connection;
     private final Clock clock;
     private final String ttlSeconds;
     private final LuaScript raiseHandScript;
@@ -33,7 +32,7 @@ public class StageRepository {
                            Clock clock,
                            VoiceRoomProperties properties,
                            ResourceResolver resources) {
-        this.connection = connection;
+        super(connection);
         this.clock = clock;
         this.ttlSeconds = Long.toString(properties.stateTtl().toSeconds());
         this.raiseHandScript = LuaScript.load(resources, "lua/raise_hand.lua");
@@ -99,10 +98,10 @@ public class StageRepository {
     }
 
     static String stageKey(UUID roomId) {
-        return "voiceroom:{" + roomId + "}:stage";
+        return roomKey(roomId, "stage");
     }
 
     static String queueKey(UUID roomId) {
-        return "voiceroom:{" + roomId + "}:hand-queue";
+        return roomKey(roomId, "hand-queue");
     }
 }

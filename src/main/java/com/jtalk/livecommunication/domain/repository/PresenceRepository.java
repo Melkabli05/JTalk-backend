@@ -19,17 +19,16 @@ import java.util.UUID;
  * is evaluated on read, so no sweeper is needed. Kicked users are kept in {@code voiceroom:{id}:banned}.
  */
 @Singleton
-public class PresenceRepository {
+public class PresenceRepository extends RedisRepository {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
-    private final StatefulRedisConnection<String, String> connection;
     private final Clock clock;
     private final Duration presenceTimeout;
     private final long ttlSeconds;
 
     public PresenceRepository(StatefulRedisConnection<String, String> connection, Clock clock, VoiceRoomProperties properties) {
-        this.connection = connection;
+        super(connection);
         this.clock = clock;
         this.presenceTimeout = properties.presenceTimeout();
         this.ttlSeconds = properties.stateTtl().toSeconds();
@@ -80,10 +79,10 @@ public class PresenceRepository {
     }
 
     private static String bannedKey(UUID roomId) {
-        return "voiceroom:{" + roomId + "}:banned";
+        return roomKey(roomId, "banned");
     }
 
     static String key(UUID roomId) {
-        return "voiceroom:{" + roomId + "}:presence";
+        return roomKey(roomId, "presence");
     }
 }

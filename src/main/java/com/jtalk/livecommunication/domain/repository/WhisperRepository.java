@@ -10,13 +10,12 @@ import java.util.UUID;
 
 /** Active whisper sessions: {@code voiceroom:{id}:whisper:{speakerId}} -> targetId, with a safety TTL. */
 @Singleton
-public class WhisperRepository {
+public class WhisperRepository extends RedisRepository {
 
-    private final StatefulRedisConnection<String, String> connection;
     private final long ttlSeconds;
 
     public WhisperRepository(StatefulRedisConnection<String, String> connection, VoiceRoomProperties properties) {
-        this.connection = connection;
+        super(connection);
         this.ttlSeconds = properties.whisperTtl().toSeconds();
     }
 
@@ -33,6 +32,6 @@ public class WhisperRepository {
     }
 
     private static String key(UUID roomId, UUID speakerId) {
-        return "voiceroom:{" + roomId + "}:whisper:" + speakerId;
+        return roomKey(roomId, "whisper:" + speakerId);
     }
 }

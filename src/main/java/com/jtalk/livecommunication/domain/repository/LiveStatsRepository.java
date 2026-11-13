@@ -24,18 +24,17 @@ import java.util.concurrent.TimeUnit;
  */
 @Singleton
 @Slf4j
-public class LiveStatsRepository {
+public class LiveStatsRepository extends RedisRepository {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     private record Pending(RedisFuture<List<String>> speakers, RedisFuture<Long> handRaises, RedisFuture<Long> present) {
     }
 
-    private final StatefulRedisConnection<String, String> connection;
     private final PresenceRepository presence;
 
     public LiveStatsRepository(StatefulRedisConnection<String, String> connection, PresenceRepository presence) {
-        this.connection = connection;
+        super(connection);
         this.presence = presence;
     }
 

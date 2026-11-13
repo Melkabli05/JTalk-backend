@@ -20,7 +20,6 @@ import io.micronaut.validation.Validated;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-import java.security.Principal;
 import java.util.UUID;
 
 @Controller("/api/v1/voice-rooms/{roomId}/stage")
@@ -38,57 +37,57 @@ class StageController {
     }
 
     @Post("/join")
-    RoomSessionResponse claimStageSeat(UUID roomId, Principal principal) {
-        return stage.claimStageSeat(roomId, UUID.fromString(principal.getName()));
+    RoomSessionResponse claimStageSeat(UUID roomId, @CurrentUser UUID userId) {
+        return stage.claimStageSeat(roomId, userId);
     }
 
     @Post("/leave")
     @Status(HttpStatus.NO_CONTENT)
-    void leaveStageSeat(UUID roomId, Principal principal) {
-        stage.leaveStageSeat(roomId, UUID.fromString(principal.getName()));
+    void leaveStageSeat(UUID roomId, @CurrentUser UUID userId) {
+        stage.leaveStageSeat(roomId, userId);
     }
 
     @Post("/raise-hand")
     @Status(HttpStatus.ACCEPTED)
-    void raiseHand(UUID roomId, Principal principal) {
-        stage.raiseHand(roomId, UUID.fromString(principal.getName()));
+    void raiseHand(UUID roomId, @CurrentUser UUID userId) {
+        stage.raiseHand(roomId, userId);
     }
 
     @Delete("/raise-hand")
     @Status(HttpStatus.NO_CONTENT)
-    void lowerHand(UUID roomId, Principal principal) {
-        stage.lowerHand(roomId, UUID.fromString(principal.getName()));
+    void lowerHand(UUID roomId, @CurrentUser UUID userId) {
+        stage.lowerHand(roomId, userId);
     }
 
     /** Host puts a user on the stage. */
     @Post("/promote/{targetUserId}")
     @Status(HttpStatus.NO_CONTENT)
-    void promoteToStage(UUID roomId, UUID targetUserId, Principal principal) {
-        stage.promoteToStage(roomId, UUID.fromString(principal.getName()), targetUserId);
+    void promoteToStage(UUID roomId, UUID targetUserId, @CurrentUser UUID userId) {
+        stage.promoteToStage(roomId, userId, targetUserId);
     }
 
     /** Host steps a speaker down to the audience. */
     @Post("/demote/{targetUserId}")
     @Status(HttpStatus.NO_CONTENT)
-    void demoteToListener(UUID roomId, UUID targetUserId, Principal principal) {
-        stage.demoteToListener(roomId, UUID.fromString(principal.getName()), targetUserId);
+    void demoteToListener(UUID roomId, UUID targetUserId, @CurrentUser UUID userId) {
+        stage.demoteToListener(roomId, userId, targetUserId);
     }
 
     @Post("/whisper")
     @Status(HttpStatus.NO_CONTENT)
-    void startWhisper(UUID roomId, Principal principal, @Body @Valid WhisperRequest request) {
-        stage.startWhisper(roomId, UUID.fromString(principal.getName()), request);
+    void startWhisper(UUID roomId, @CurrentUser UUID userId, @Body @Valid WhisperRequest request) {
+        stage.startWhisper(roomId, userId, request);
     }
 
     @Delete("/whisper")
     @Status(HttpStatus.NO_CONTENT)
-    void stopWhisper(UUID roomId, Principal principal) {
-        stage.stopWhisper(roomId, UUID.fromString(principal.getName()));
+    void stopWhisper(UUID roomId, @CurrentUser UUID userId) {
+        stage.stopWhisper(roomId, userId);
     }
 
     @Post("/network-mode")
     @Status(HttpStatus.NO_CONTENT)
-    void updateNetworkMode(UUID roomId, Principal principal, @Body @Valid NetworkModeRequest request) {
-        stage.updateNetworkMode(roomId, UUID.fromString(principal.getName()), request);
+    void updateNetworkMode(UUID roomId, @CurrentUser UUID userId, @Body @Valid NetworkModeRequest request) {
+        stage.updateNetworkMode(roomId, userId, request);
     }
 }
