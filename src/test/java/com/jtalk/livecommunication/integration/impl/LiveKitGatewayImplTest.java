@@ -161,6 +161,8 @@ class LiveKitGatewayImplTest {
         assertFalse(body.getSubscribe());
     }
 
+    /** Reads the SDK's deprecated SIDs field on purpose: it must stay empty, since SIDs and identities are easy to swap. */
+    @SuppressWarnings("deprecation")
     @Test
     void sendDataTargetsIdentitiesNotSids() throws Exception {
         byte[] payload = "{\"action\":\"start\"}".getBytes();
