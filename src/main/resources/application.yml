@@ -1,25 +1,17 @@
 micronaut:
   application:
     name: live-communication-service
-  router:
-    static-resources:
-      # The developer test page at /ui/index.html. Remove this block (and src/main/resources/public) for production.
-      ui:
-        paths: classpath:public
-        mapping: /ui/**
   security:
-    # Security is switched OFF: no token is required and @Secured is not enforced. The caller is then identified by the
-    # X-User-Id header (a UUID), which anyone can set - run this only on a trusted network or locally.
-    # To turn authentication back on, set MICRONAUT_SECURITY_ENABLED=true and JWT_SECRET: callers then send a JWT bearer
-    # token (HS256, 32+ character shared secret) whose subject is the user id.
-    enabled: false
+    # Secure by default: callers authenticate with a JWT bearer token issued upstream (API gateway / identity provider);
+    # the token's subject is the user id. Tokens are verified with this shared HS256 secret (32+ characters), or switch to
+    # a JWKS endpoint with micronaut.security.token.jwt.signatures.jwks. The "dev" profile switches this off.
     authentication: bearer
     token:
       jwt:
         signatures:
           secret:
             generator:
-              secret: ${JWT_SECRET:}
+              secret: ${JWT_SECRET}
 
 # PostgreSQL and Redis connections are intentionally NOT configured here:
 #  - locally (./gradlew run, tests) Micronaut Test Resources starts containers for them;
@@ -34,9 +26,8 @@ flyway:
     default:
       enabled: true
 
-# LiveKit Cloud project "jtalk" (credentials hardcoded on purpose; environment variables LIVEKIT_URL / LIVEKIT_API_KEY /
-# LIVEKIT_API_SECRET still override them).
+# LiveKit (Cloud or self-hosted). The "dev" profile hardcodes the development project.
 livekit:
-  url: wss://jtalk-eimd2bul.livekit.cloud
+  url: ${LIVEKIT_URL}
   api-key: ${LIVEKIT_API_KEY}
   api-secret: ${LIVEKIT_API_SECRET}

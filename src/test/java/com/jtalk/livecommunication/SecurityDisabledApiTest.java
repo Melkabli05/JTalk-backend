@@ -14,8 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The shipped configuration: no token is needed, and the caller is named by the X-User-Id header. */
+/** The dev configuration: no token is needed, and the caller is named by the X-User-Id header. */
 @Property(name = "micronaut.security.enabled", value = "false")
+@Property(name = "micronaut.router.static-resources.ui.paths", value = "classpath:public")
+@Property(name = "micronaut.router.static-resources.ui.mapping", value = "/ui/**")
 class SecurityDisabledApiTest extends ApiTestBase {
 
     private static final Map<String, Object> BODY = Map.of("title", "Open", "targetLanguage", "en", "nativeLanguage", "ar");

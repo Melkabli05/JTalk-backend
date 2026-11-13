@@ -69,9 +69,7 @@ Conventions the code follows (and `LiveKitGatewayImplTest` pins down):
 
 ## API
 
-**Security is currently switched off** (`micronaut.security.enabled: false` in `application.yml`): no token is needed, and the caller is the UUID in the `X-User-Id` header (missing or malformed is a 400). Anyone can claim any user id, so run it only locally or on a trusted network. The LiveKit webhook keeps verifying LiveKit's signature.
-
-To turn authentication back on, set `MICRONAUT_SECURITY_ENABLED=true` and `JWT_SECRET`. Then every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <JWT>`; the token's `sub` must be the user's UUID (anything else is a 401).
+**Secure by default.** Every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <JWT>`; the token's `sub` must be the user's UUID (anything else is a 401). Only the `dev` profile (below) switches this off: there, no token is needed and the caller is the UUID in the `X-User-Id` header, which anyone can set.
 Tokens are issued upstream (gateway / identity provider) and verified here with the shared HS256 secret in
 `JWT_SECRET` (32+ characters), or with a JWKS endpoint via `micronaut.security.token.jwt.signatures.jwks`. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
 
@@ -95,27 +93,39 @@ Tokens are issued upstream (gateway / identity provider) and verified here with 
 ## Running
 
 Needs JDK 25 and Docker. PostgreSQL and Redis are started automatically by Micronaut Test Resources for
-`./gradlew run` and `./gradlew test`. LiveKit is the Cloud project configured in `application.yml`; the secret
-comes from the environment:
+`./gradlew run` and `./gradlew test`.
+
+**Development** - `./gradlew run` activates the `dev` profile (`application-dev.yml`) by itself:
+
+| | `dev` (local `./gradlew run`) | everything else (jar, container) |
+|---|---|---|
+| Security | off; caller = `X-User-Id` header | on; JWT bearer token |
+| LiveKit | the hardcoded `jtalk` Cloud project | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
+| Test page | <http://localhost:8080/ui/index.html> | not served |
+| Mock data | Alice, Bob and Carol each host a room (`dev/DevDataSeeder`, through the real services, so PostgreSQL, Redis and LiveKit agree; safe to run on every start) | none |
 
 ```bash
-export LIVEKIT_API_SECRET=<secret of the LiveKit Cloud key>
-export JWT_SECRET=<HS256 secret shared with whatever issues your user tokens, 32+ chars>   # only when security is enabled
-./gradlew run                                   # control plane
-MICRONAUT_ENVIRONMENTS=quic ./gradlew run       # + HTTPS and HTTP/3 on :8443 (self-signed, local only)
+./gradlew run                                      # dev profile
+MICRONAUT_ENVIRONMENTS=dev,quic ./gradlew run     # choosing profiles yourself replaces the default
 ```
-
-**Test UI:** with the app running, open <http://localhost:8080/ui/index.html> - one static page (`src/main/resources/public/index.html`, no build). Pick who you are from the *Acting as* menu (Alice, Bob, Carol, or add more), so a single tab can drive host, speaker and listener; the page keeps every joined user present and refreshes itself. It covers rooms (create, list, paginate, edit, close), join/leave, stage seats, hand raising, promote/demote, kick, whisper, network mode and LiveKit audio. **Run smoke test** (or open `/ui/index.html?smoke`) walks the whole lifecycle with three fresh users against the real stack and prints a pass/fail per step. Remove the `micronaut.router.static-resources` block in `application.yml` before production.
-
-Configure LiveKit to send webhooks to `POST <your-host>/webhooks/livekit`.
 
 Behind a TLS-inspecting corporate proxy (for example Zscaler) the JVM rejects LiveKit Cloud's re-signed certificate and
 room creation fails with `media-server-unreachable` (`PKIX path building failed` in the log). Make the JVM trust the
 OS keychain instead of editing `cacerts`: `export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStoreType=KeychainStore -Djavax.net.ssl.trustStore=NONE"`.
 
-Deployed environments set `DATASOURCES_DEFAULT_URL/_USERNAME/_PASSWORD`, `REDIS_URI` and the `LIVEKIT_*` variables.
-Tunables with defaults: `voice-room.{presence-timeout,state-ttl,lease-ttl,whisper-ttl}`,
-`livekit.token-ttl`.
+**Test UI** (`dev` only, `src/main/resources/public/index.html`, no build): pick who you are from the *Acting as* menu (the seeded Alice, Bob, Carol, or add more), so a single tab can drive host, speaker and listener; the page keeps every joined user present and refreshes itself. It covers rooms (create, list, paginate, edit, close), join/leave, stage seats, hand raising, promote/demote, kick, whisper, network mode and LiveKit audio. **Run smoke test** (or open `/ui/index.html?smoke`) walks the whole lifecycle with three fresh users against the real stack and prints a pass/fail per step.
+
+**Deployed** - the default profile; nothing from `dev` is active:
+
+```bash
+export JWT_SECRET=<HS256 secret shared with whatever issues your user tokens, 32+ chars>
+export LIVEKIT_URL=wss://<your-livekit-host> LIVEKIT_API_KEY=<key> LIVEKIT_API_SECRET=<secret>
+```
+
+Configure LiveKit to send webhooks to `POST <your-host>/webhooks/livekit`.
+
+Deployed environments also set `DATASOURCES_DEFAULT_URL/_USERNAME/_PASSWORD` and `REDIS_URI`.
+Tunables with defaults: `voice-room.{presence-timeout,state-ttl,lease-ttl,whisper-ttl}`, `livekit.token-ttl`.
 
 Redis must have keyspace notifications for expired keys (`notify-keyspace-events` containing `Ex`). The service tries
 `CONFIG SET` at startup and logs a warning if that is forbidden (typical on managed Redis); set it there instead.

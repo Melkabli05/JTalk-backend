@@ -159,8 +159,19 @@ const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; 
 
 // ---- personas: named test users, shared by all tabs ----------------------------------------------
 let users = load('users', null) || ['Alice', 'Bob', 'Carol'].map(name => ({ id: uuid(), name }));
-store('users', users);
 let actorId = sessionStorage.getItem('actor') || users[0].id;
+/** In the dev profile the server seeds Alice, Bob and Carol with fixed ids; adopt them so the seeded rooms line up. */
+async function adoptServerUsers() {
+  try {
+    const res = await fetch('/dev/users'); if (!res.ok) return;
+    const server = await res.json();
+    const custom = users.filter(u => !server.some(s => s.id === u.id || s.name === u.name));
+    users = [...server, ...custom]; store('users', users);
+    if (!users.some(u => u.id === actorId)) actorId = users[0].id;
+    renderActor(); renderAll(); loadRooms().catch(() => {});
+  } catch { /* not the dev profile: keep the local users */ }
+}
+store('users', users);
 if (!users.some(u => u.id === actorId)) actorId = users[0].id;
 const me = () => actorId;
 const nameOf = id => users.find(u => u.id === id)?.name || (id ? id.slice(0, 8) : '?');
@@ -428,8 +439,8 @@ function openRoomAs(userId, roomId) { actorId = userId; room = { id: roomId, hos
 $('smoke').onclick = () => { const keep = actorId; smokeTest().finally(() => { actorId = keep; renderActor(); renderAll(); }); };
 
 // ---- go ------------------------------------------------------------------------------------------
+adoptServerUsers().then(() => { if (new URLSearchParams(location.search).has('smoke')) smokeTest(); });
 renderActor(); renderAll(); loadRooms().catch(() => {});
-if (new URLSearchParams(location.search).has('smoke')) smokeTest();
 </script>
 </body>
 </html>
