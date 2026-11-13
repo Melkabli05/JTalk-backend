@@ -5,11 +5,13 @@ import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.ParticipantRole;
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.enums.PresenceStatus;
 import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.domain.mapper.ApiMapper;
 import com.jtalk.livecommunication.domain.model.Participant;
+import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.domain.repository.LeaseRepository;
 import com.jtalk.livecommunication.domain.repository.PresenceRepository;
 import com.jtalk.livecommunication.domain.repository.StageRepository;
@@ -56,8 +58,8 @@ class ParticipantServiceImpl implements ParticipantService {
         if (!onStage && room.isHost(userId)) {
             onStage = stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats());   // the host's seat is permanent
         }
-        if (onStage) {
-            leases.delete(roomId, userId);   // reconnecting within the grace lease restores the seat
+        if (onStage && leases.delete(roomId, userId)) {   // reconnecting within the grace lease restores the seat
+            announce(RoomEventType.SPEAKER_RECONNECTED, roomId, userId);
         }
         presence.touch(roomId, userId, clock.instant());
         return new RoomSessionResponse(rooms.toResponse(room), gateway.generateToken(roomId, userId, onStage),
@@ -68,10 +70,11 @@ class ParticipantServiceImpl implements ParticipantService {
     public void leaveRoom(UUID roomId, UUID userId) {
         presence.remove(roomId, userId);
         stage.removeHandRaise(roomId, userId);
-        if (isHost(roomId, userId)) {
-            return;   // the host keeps their seat
+        if (isHost(roomId, userId) || !stage.isOnStage(roomId, userId)) {
+            return;   // the host keeps their seat; a listener leaving changes nothing on the stage
         }
         stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> gateway.setPublishPermission(roomId, promoted, true));
+        announce(RoomEventType.STAGE_UPDATED, roomId, null);
     }
 
     @Override
@@ -97,7 +100,9 @@ class ParticipantServiceImpl implements ParticipantService {
         }
         if (stage.isOnStage(roomId, userId)) {
             log.info("Speaker {} media dropped in room {}. Starting the stage grace lease.", userId, roomId);
-            leases.create(roomId, userId);
+            if (leases.create(roomId, userId)) {
+                announce(RoomEventType.SPEAKER_RECONNECTING, roomId, userId);
+            }
         } else {
             presence.remove(roomId, userId);
             stage.removeHandRaise(roomId, userId);
@@ -106,7 +111,9 @@ class ParticipantServiceImpl implements ParticipantService {
 
     @Override
     public void handleMediaReconnected(UUID roomId, UUID userId) {
-        leases.delete(roomId, userId);
+        if (leases.delete(roomId, userId)) {
+            announce(RoomEventType.SPEAKER_RECONNECTED, roomId, userId);
+        }
     }
 
     @Override
@@ -119,6 +126,7 @@ class ParticipantServiceImpl implements ParticipantService {
             log.info("Auto-promoting queued user {} to stage in room {}", promoted, roomId);
             gateway.setPublishPermission(roomId, promoted, true);
         });
+        announce(RoomEventType.STAGE_UPDATED, roomId, null);
     }
 
     @Override
@@ -151,6 +159,10 @@ class ParticipantServiceImpl implements ParticipantService {
 
     private boolean isHost(UUID roomId, UUID userId) {
         return activeRoom(roomId).filter(room -> room.isHost(userId)).isPresent();
+    }
+
+    private void announce(RoomEventType type, UUID roomId, UUID targetUserId) {
+        gateway.broadcastRoomEvent(roomId, new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant()));
     }
 
     private Instant presenceCutoff() {

@@ -1,5 +1,6 @@
 package com.jtalk.livecommunication.integration;
 
+import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import io.micronaut.core.annotation.NonNull;
 
 import java.util.List;
@@ -36,6 +37,12 @@ public interface LiveKitGateway {
     /** Deletes the whisper's private room, disconnecting both. Idempotent. */
     void deleteWhisperRoom(@NonNull UUID roomId, @NonNull UUID speakerId, @NonNull UUID targetId);
 
-    /** Sends a reliable data message to specific participants of the room. */
+    /**
+     * Pushes a room event to everyone in the room over LiveKit's reliable data channel, so clients update their UI without
+     * polling. Best effort: a failure is logged and never fails the request that caused the event.
+     */
+    void broadcastRoomEvent(@NonNull UUID roomId, @NonNull RoomRealtimeEvent event);
+
+    /** Sends a reliable data message to specific participants of the room; an empty list means everyone. */
     void sendData(@NonNull UUID roomId, @NonNull String topic, @NonNull byte[] payload, @NonNull List<UUID> destinationUserIds);
 }

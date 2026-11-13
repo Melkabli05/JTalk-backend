@@ -2,6 +2,7 @@ package com.jtalk.livecommunication;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.support.ApiTestBase;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.PermissionChange;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.Removal;
@@ -59,6 +60,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         assertEquals(new HashSet<>(ids("host", "bob")), speakers(roomId));
         assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
         assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("bob"), true)));
+        assertTrue(gateway.events.stream().anyMatch(e -> e.type() == RoomEventType.STAGE_UPDATED), "the room is told the stage changed");
     }
 
     @Test
@@ -131,6 +133,40 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
                 "{\"event\":\"participant_left\",\"room\":{\"name\":\"whisper-room\"},\"participant\":{\"identity\":\"" + id("x") + "\"}}"));
         assertEquals(HttpStatus.OK, sendWebhook(
                 "{\"event\":\"participant_left\",\"room\":{\"name\":\"" + id("some-room") + "\"},\"participant\":{\"identity\":\"not-a-uuid\"}}"));
+    }
+
+    // ---- real-time events -------------------------------------------------------------------------
+
+    @Test
+    void uiStateChangesAreBroadcastToTheRoomSoClientsDoNotPoll() {
+        String roomId = createRoom("host", "Events", 3);
+        join(roomId, "host");
+        join(roomId, "alice");
+        join(roomId, "bob");
+
+        postEmpty(roomId, "/stage/raise-hand", "bob");
+        delete(roomId, "/stage/raise-hand", "bob");
+        post(roomId, "/stage/join", "alice");
+        webhook("participant_left", roomId, "alice");
+        join(roomId, "alice");
+        postEmpty(roomId, "/stage/leave", "alice");
+
+        assertEquals(List.of(
+                "HAND_RAISED:" + id("bob"), "HAND_LOWERED:" + id("bob"), "STAGE_UPDATED:null",
+                "SPEAKER_RECONNECTING:" + id("alice"), "SPEAKER_RECONNECTED:" + id("alice"), "STAGE_UPDATED:null"),
+                gateway.events.stream().map(e -> e.type() + ":" + e.targetUserId()).toList());
+        assertTrue(gateway.events.stream().allMatch(e -> e.roomId().equals(uuid(roomId))));
+    }
+
+    @Test
+    void aListenerLeavingChangesNothingOnTheStageSoNothingIsBroadcast() {
+        String roomId = createRoom("host", "Quiet leave", 3);
+        join(roomId, "host");
+        join(roomId, "bob");
+
+        postEmpty(roomId, "/participants/leave", "bob");
+
+        assertEquals(List.of(), gateway.events);
     }
 
     // ---- stage ------------------------------------------------------------------------------------

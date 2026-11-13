@@ -8,8 +8,10 @@ import com.jtalk.livecommunication.domain.dto.response.StageResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.NetworkMode;
 import com.jtalk.livecommunication.domain.enums.ParticipantRole;
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.domain.mapper.ApiMapper;
+import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.domain.model.WhisperSignal;
 import com.jtalk.livecommunication.domain.repository.PresenceRepository;
 import com.jtalk.livecommunication.domain.repository.PrunedTrackRepository;
@@ -58,6 +60,7 @@ class StageServiceImpl implements StageService {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
         gateway.setPublishPermission(roomId, userId, true);
+        announce(RoomEventType.STAGE_UPDATED, roomId, null);
         return new RoomSessionResponse(rooms.toResponse(room), gateway.generateToken(roomId, userId, true),
                 room.isHost(userId) ? ParticipantRole.HOST : ParticipantRole.SPEAKER, true);
     }
@@ -70,6 +73,7 @@ class StageServiceImpl implements StageService {
         }
         gateway.setPublishPermission(roomId, userId, false);
         stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> gateway.setPublishPermission(roomId, promoted, true));
+        announce(RoomEventType.STAGE_UPDATED, roomId, null);
     }
 
     @Override
@@ -78,12 +82,14 @@ class StageServiceImpl implements StageService {
         if (stage.raiseHand(roomId, userId) < 0) {
             throw ProblemType.ALREADY_ON_STAGE.because(userId + " is already on stage");
         }
+        announce(RoomEventType.HAND_RAISED, roomId, userId);
     }
 
     @Override
     public void lowerHand(UUID roomId, UUID userId) {
         rooms.getRequiredActiveRoom(roomId);
         stage.removeHandRaise(roomId, userId);
+        announce(RoomEventType.HAND_LOWERED, roomId, userId);
     }
 
     @Override
@@ -96,6 +102,7 @@ class StageServiceImpl implements StageService {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
         gateway.setPublishPermission(roomId, targetUserId, true);
+        announce(RoomEventType.STAGE_UPDATED, roomId, targetUserId);
         log.info("Host {} promoted user {} to stage in room {}", hostId, targetUserId, roomId);
     }
 
@@ -167,6 +174,10 @@ class StageServiceImpl implements StageService {
     void onRoomClosed(VoiceRoomClosed event) {
         stage.clear(event.roomId());
         prunedTracks.clear(event.roomId());
+    }
+
+    private void announce(RoomEventType type, UUID roomId, UUID targetUserId) {
+        gateway.broadcastRoomEvent(roomId, new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant()));
     }
 
     private void send(UUID roomId, UUID recipient, WhisperSignal signal) {

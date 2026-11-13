@@ -1,5 +1,6 @@
 package com.jtalk.livecommunication.support;
 
+import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.micronaut.context.annotation.Replaces;
 import jakarta.inject.Singleton;
@@ -29,6 +30,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     public record WhisperClose(UUID roomId, UUID speakerId, UUID targetId) {
     }
 
+    public final List<RoomRealtimeEvent> events = new CopyOnWriteArrayList<>();
     public final List<UUID> createdRooms = new CopyOnWriteArrayList<>();
     public final List<UUID> closedRooms = new CopyOnWriteArrayList<>();
     public final List<PermissionChange> permissionChanges = new CopyOnWriteArrayList<>();
@@ -38,6 +40,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     public final List<WhisperClose> closedWhispers = new CopyOnWriteArrayList<>();
 
     public void reset() {
+        events.clear();
         createdRooms.clear();
         closedRooms.clear();
         permissionChanges.clear();
@@ -88,6 +91,11 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     @Override
     public void deleteWhisperRoom(UUID roomId, UUID speakerId, UUID targetId) {
         closedWhispers.add(new WhisperClose(roomId, speakerId, targetId));
+    }
+
+    @Override
+    public void broadcastRoomEvent(UUID roomId, RoomRealtimeEvent event) {
+        events.add(event);
     }
 
     @Override

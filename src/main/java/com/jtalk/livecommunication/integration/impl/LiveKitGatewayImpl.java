@@ -1,6 +1,7 @@
 package com.jtalk.livecommunication.integration.impl;
 
 import com.jtalk.livecommunication.config.LiveKitProperties;
+import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.exception.ProblemType;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.livekit.server.AccessToken;
@@ -12,6 +13,7 @@ import io.livekit.server.RoomName;
 import io.livekit.server.RoomServiceClient;
 import io.livekit.server.ServerError;
 import io.micronaut.http.HttpStatus;
+import io.micronaut.serde.ObjectMapper;
 import jakarta.inject.Singleton;
 import livekit.LivekitModels.DataPacket;
 import livekit.LivekitModels.ParticipantPermission;
@@ -35,9 +37,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 class LiveKitGatewayImpl implements LiveKitGateway {
 
+    private static final String ROOM_EVENTS_TOPIC = "room-events";
+
     private final LiveKitProperties properties;
     private final RoomServiceClient roomService;
     private final Clock clock;
+    private final ObjectMapper json;
 
     @Override
     public void createRoom(UUID roomId) {
@@ -97,6 +102,15 @@ class LiveKitGatewayImpl implements LiveKitGateway {
         // Parameter order in the SDK: destination SIDs first, then destination identities.
         execute(roomService.sendData(roomId.toString(), payload, DataPacket.Kind.RELIABLE, List.of(),
                 destinationUserIds.stream().map(UUID::toString).toList(), topic), "send data message");
+    }
+
+    @Override
+    public void broadcastRoomEvent(UUID roomId, RoomRealtimeEvent event) {
+        try {
+            sendData(roomId, ROOM_EVENTS_TOPIC, json.writeValueAsBytes(event), List.of());
+        } catch (IOException | RuntimeException e) {
+            log.warn("Could not broadcast {} to room {}", event.type(), roomId, e);
+        }
     }
 
     private String token(String roomName, UUID userId, boolean canPublish, boolean canSubscribe) {

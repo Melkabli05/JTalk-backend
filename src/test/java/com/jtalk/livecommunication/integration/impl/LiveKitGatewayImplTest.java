@@ -3,6 +3,8 @@ package com.jtalk.livecommunication.integration.impl;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.jtalk.livecommunication.config.LiveKitProperties;
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
+import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.sun.net.httpserver.HttpServer;
 import io.livekit.server.RoomServiceClient;
 import livekit.LivekitModels;
@@ -76,7 +78,8 @@ class LiveKitGatewayImplTest {
     private LiveKitGatewayImpl gateway() {
         String host = "http://localhost:" + server.getAddress().getPort();
         var properties = new LiveKitProperties("ws://localhost:" + server.getAddress().getPort(), API_KEY, API_SECRET, Duration.ofHours(1), 300);
-        return new LiveKitGatewayImpl(properties, RoomServiceClient.createClient(host, API_KEY, API_SECRET), Clock.fixed(NOW, ZoneOffset.UTC));
+        return new LiveKitGatewayImpl(properties, RoomServiceClient.createClient(host, API_KEY, API_SECRET), Clock.fixed(NOW, ZoneOffset.UTC),
+                io.micronaut.serde.ObjectMapper.getDefault());
     }
 
     private Received onlyRequest() {
@@ -177,6 +180,31 @@ class LiveKitGatewayImplTest {
         assertEquals("whisper", body.getTopic());
         assertEquals(LivekitModels.DataPacket.Kind.RELIABLE, body.getKind());
         assertEquals(new String(payload), body.getData().toStringUtf8());
+    }
+
+    @Test
+    void broadcastRoomEventSendsOneDataMessageToTheWholeRoom() throws Exception {
+        gateway().broadcastRoomEvent(room, new RoomRealtimeEvent(RoomEventType.HAND_RAISED, room, bob, NOW));
+
+        Received request = onlyRequest();
+        assertTrue(request.path().endsWith("/SendData"), request.path());
+        var body = LivekitRoom.SendDataRequest.parseFrom(request.body());
+        assertEquals(room.toString(), body.getRoom());
+        assertEquals(List.of(), body.getDestinationIdentitiesList(), "no destination means everyone in the room");
+        assertEquals("room-events", body.getTopic());
+        String json = body.getData().toStringUtf8();
+        assertTrue(json.contains("\"type\":\"HAND_RAISED\"") && json.contains(bob.toString()), json);
+    }
+
+    @Test
+    void aFailedBroadcastNeverBreaksTheRequestThatCausedIt() {
+        status = 400;
+        contentType = "application/json";
+        responseBody = "{\"code\":\"invalid_argument\",\"msg\":\"nope\"}".getBytes();
+
+        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(room, new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, NOW)));
+        server.stop(0);
+        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(room, new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, NOW)));
     }
 
     // ---- error handling ---------------------------------------------------------------------------
