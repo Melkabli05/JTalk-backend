@@ -68,7 +68,7 @@ Conventions the code follows (and `LiveKitGatewayImplTest` pins down):
 
 ## API
 
-Every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <JWT>`; the token's `sub` must be the user's UUID.
+Every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <JWT>`; the token's `sub` must be the user's UUID (anything else is a 401).
 Tokens are issued upstream (gateway / identity provider) and verified here with the shared HS256 secret in
 `JWT_SECRET` (32+ characters), or with a JWKS endpoint via `micronaut.security.token.jwt.signatures.jwks`. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
 
@@ -129,7 +129,7 @@ Redis must have keyspace notifications for expired keys (`notify-keyspace-events
 ## Deliberate decisions and known limits
 
 - **Tokens are verified, not issued, here.** This service does not mint user JWTs; it trusts whatever signs them with
-  `JWT_SECRET`, and expects the subject to be a UUID. A kicked user is barred from rejoining that room only.
+  `JWT_SECRET`, and a token whose subject is not a UUID is rejected with 401 (a Micronaut Security claims validator). A kicked user is barred from rejoining that room only.
 - **Anyone can take a free seat.** Seats are first come, first served; the hand-raise queue only matters once the stage is
   full, and the host can always promote or demote.
 - **Live stats are batched per room, not per request.** The discovery feed reads Postgres once and Redis as one

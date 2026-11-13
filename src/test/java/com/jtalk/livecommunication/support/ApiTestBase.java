@@ -71,8 +71,13 @@ public abstract class ApiTestBase {
     }
 
     public static String token(String userName, String secret) {
+        return tokenWithSubject(id(userName).toString(), secret);
+    }
+
+    /** A correctly signed token whose subject is whatever the test needs, e.g. one that is not a UUID. */
+    public static String tokenWithSubject(String subject, String secret) {
         return JWT.create()
-                .withSubject(id(userName).toString())
+                .withSubject(subject)
                 .withExpiresAt(new Date(System.currentTimeMillis() + 3_600_000))
                 .sign(Algorithm.HMAC256(secret));
     }

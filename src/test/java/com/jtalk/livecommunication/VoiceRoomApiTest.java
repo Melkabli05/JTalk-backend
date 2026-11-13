@@ -166,6 +166,16 @@ class VoiceRoomApiTest extends ApiTestBase {
     }
 
     @Test
+    void aSignedTokenWhoseSubjectIsNotAUuidIsRejected() {
+        var body = Map.of("title", "Odd subject", "targetLanguage", "en", "nativeLanguage", "ar");
+        for (String subject : List.of("alice", "")) {
+            var ex = assertThrows(HttpClientResponseException.class, () -> http.exchange(
+                    HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(tokenWithSubject(subject, "test-jwt-secret-test-jwt-secret-0123456789"))));
+            assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatus(), "subject '" + subject + "'");
+        }
+    }
+
+    @Test
     void validationErrorsAreProblemDetails() {
         Map<String, Object> body = new HashMap<>(Map.of("title", " ", "targetLanguage", "en", "nativeLanguage", "ar", "maxStageSeats", 99));
         var ex = assertThrows(HttpClientResponseException.class, () -> http.exchange(
