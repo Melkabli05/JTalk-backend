@@ -28,8 +28,9 @@ flyway:
     default:
       enabled: true
 
-# LiveKit Cloud project "jtalk". The secret is not in the repo: set LIVEKIT_API_SECRET in the environment.
+# LiveKit Cloud project "jtalk" (credentials hardcoded on purpose; environment variables LIVEKIT_URL / LIVEKIT_API_KEY /
+# LIVEKIT_API_SECRET still override them).
 livekit:
   url: wss://jtalk-eimd2bul.livekit.cloud
-  api-key: APIMcbg56rh8NAv
+  api-key: ${LIVEKIT_API_KEY}
   api-secret: ${LIVEKIT_API_SECRET}
