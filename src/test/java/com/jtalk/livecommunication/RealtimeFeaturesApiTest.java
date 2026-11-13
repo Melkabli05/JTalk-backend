@@ -134,6 +134,34 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     }
 
     @Test
+    void concurrentSeatClaimsNeverOverfillTheStage() throws Exception {
+        String roomId = createRoom("host", "Race", 2);   // the host plus exactly one free seat
+        List<String> racers = java.util.stream.IntStream.range(0, 12).mapToObj(i -> "racer" + i).toList();
+        racers.forEach(racer -> join(roomId, racer));
+
+        var startTogether = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(racers.size())) {
+            List<java.util.concurrent.Future<Boolean>> claims = racers.stream().map(racer -> pool.submit(() -> {
+                startTogether.await();
+                try {
+                    post(roomId, "/stage/join", racer);
+                    return true;
+                } catch (HttpClientResponseException e) {
+                    assertEquals(HttpStatus.CONFLICT, e.getStatus());
+                    return false;
+                }
+            })).toList();
+            startTogether.countDown();
+            long winners = 0;
+            for (var claim : claims) {
+                winners += claim.get() ? 1 : 0;
+            }
+            assertEquals(1, winners, "exactly one claimant gets the single free seat");
+        }
+        assertEquals(2, speakers(roomId).size(), "the stage holds the host and the winner, never more than its seats");
+    }
+
+    @Test
     void hostPromotesAndDemotes() {
         String roomId = createRoom("host", "Moderated stage", 3);
         join(roomId, "host");
