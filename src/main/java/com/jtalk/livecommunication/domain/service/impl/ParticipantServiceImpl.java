@@ -12,6 +12,7 @@ import com.jtalk.livecommunication.domain.repository.LeaseRepository;
 import com.jtalk.livecommunication.domain.repository.PresenceRepository;
 import com.jtalk.livecommunication.domain.repository.StageRepository;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
+import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.validator.RoomAccessValidator;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
@@ -31,6 +32,7 @@ import java.util.UUID;
 class ParticipantServiceImpl implements ParticipantService {
 
     private final VoiceRoomService rooms;
+    private final StageService stages;
     private final StageRepository stage;
     private final PresenceRepository presence;
     private final LeaseRepository leases;
@@ -61,8 +63,7 @@ class ParticipantServiceImpl implements ParticipantService {
         if (!stage.isOnStage(roomId, userId) || isHost(roomId, userId)) {
             return;   // a listener leaving changes nothing on the stage; the host keeps their seat
         }
-        stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> gateway.setPublishPermission(roomId, promoted, true));
-        gateway.broadcastRoomEvent(roomId, RoomEventType.STAGE_UPDATED, null);
+        stages.vacateSeat(roomId, userId);
     }
 
     @Override
@@ -104,11 +105,7 @@ class ParticipantServiceImpl implements ParticipantService {
             return;
         }
         log.info("Grace lease expired for speaker {} in room {}. Evicting from stage.", expiredUserId, roomId);
-        stage.releaseAndPromoteNext(roomId, expiredUserId).ifPresent(promoted -> {
-            log.info("Auto-promoting queued user {} to stage in room {}", promoted, roomId);
-            gateway.setPublishPermission(roomId, promoted, true);
-        });
-        gateway.broadcastRoomEvent(roomId, RoomEventType.STAGE_UPDATED, null);
+        stages.vacateSeat(roomId, expiredUserId);
     }
 
     @Override

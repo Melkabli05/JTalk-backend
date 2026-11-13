@@ -21,6 +21,13 @@ public interface StageService {
     /** Steps down to the audience and, atomically, seats the longest-waiting hand-raiser. The host keeps their seat. */
     void leaveStageSeat(@NonNull UUID roomId, @NonNull UUID userId);
 
+    /**
+     * Frees a user's seat, seats the longest-waiting hand-raiser in their place and tells the room. The one place that
+     * rule lives, for callers that have already decided the user must go: they left the room, or their grace lease
+     * ran out after a disconnect. No permission check; the user's own publish rights are not touched.
+     */
+    void vacateSeat(@NonNull UUID roomId, @NonNull UUID userId);
+
     void raiseHand(@NonNull UUID roomId, @NonNull UUID userId);
 
     void lowerHand(@NonNull UUID roomId, @NonNull UUID userId);

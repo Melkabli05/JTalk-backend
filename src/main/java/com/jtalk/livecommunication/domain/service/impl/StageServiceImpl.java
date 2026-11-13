@@ -62,7 +62,15 @@ class StageServiceImpl implements StageService {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         access.requireCanLeaveStage(room, userId);
         gateway.setPublishPermission(roomId, userId, false);
-        stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> gateway.setPublishPermission(roomId, promoted, true));
+        vacateSeat(roomId, userId);
+    }
+
+    @Override
+    public void vacateSeat(UUID roomId, UUID userId) {
+        stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> {
+            log.info("Seat freed in room {}: promoting queued user {} to the stage", roomId, promoted);
+            gateway.setPublishPermission(roomId, promoted, true);
+        });
         gateway.broadcastRoomEvent(roomId, RoomEventType.STAGE_UPDATED, null);
     }
 
