@@ -11,6 +11,7 @@ import io.micronaut.data.model.CursoredPageable;
 import io.micronaut.data.model.Pageable;
 import io.micronaut.data.model.Sort;
 import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Delete;
@@ -18,6 +19,7 @@ import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Patch;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.QueryValue;
+import io.micronaut.http.annotation.Status;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
@@ -76,8 +78,8 @@ class VoiceRoomController {
     }
 
     @Delete("/{roomId}")
-    HttpResponse<Void> closeRoom(UUID roomId, Principal principal) {
+    @Status(HttpStatus.NO_CONTENT)
+    void closeRoom(UUID roomId, Principal principal) {
         rooms.closeRoom(roomId, UUID.fromString(principal.getName()));
-        return HttpResponse.noContent();
     }
 }

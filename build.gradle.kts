@@ -12,13 +12,16 @@ repositories {
     mavenCentral()
 }
 
+val lombokVersion = "1.18.48"
+val mapstructVersion = "1.6.3"
+
 dependencies {
     // Order matters: Lombok must run first, then MapStruct (with its Lombok bridge), then Micronaut's processors.
-    compileOnly("org.projectlombok:lombok:1.18.48")
-    annotationProcessor("org.projectlombok:lombok:1.18.48")
+    compileOnly("org.projectlombok:lombok:$lombokVersion")
+    annotationProcessor("org.projectlombok:lombok:$lombokVersion")
     annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
-    annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
-    implementation("org.mapstruct:mapstruct:1.6.3")
+    annotationProcessor("org.mapstruct:mapstruct-processor:$mapstructVersion")
+    implementation("org.mapstruct:mapstruct:$mapstructVersion")
 
     annotationProcessor("io.micronaut.security:micronaut-security-annotations")
     annotationProcessor("io.micronaut:micronaut-http-validation")
@@ -87,16 +90,8 @@ micronaut {
         optimizeNetty = true
         replaceLogbackXml = true
     }
-
 }
 
 tasks.named<io.micronaut.gradle.docker.MicronautDockerfile>("dockerfile") {
-
     baseImage = "eclipse-temurin:25-jre"
 }
-
-// https://docs.gradle.org/current/userguide/upgrading_major_version_9.html#test_task_fails_when_no_tests_are_discovered
-tasks.withType<AbstractTestTask>().configureEach {
-    failOnNoDiscoveredTests = false
-}
-

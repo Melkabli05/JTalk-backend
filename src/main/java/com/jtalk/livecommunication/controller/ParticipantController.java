@@ -3,11 +3,12 @@ package com.jtalk.livecommunication.controller;
 import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
-import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
+import io.micronaut.http.annotation.Status;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
@@ -32,15 +33,15 @@ class ParticipantController {
     }
 
     @Post("/leave")
-    HttpResponse<Void> leaveRoom(UUID roomId, Principal principal) {
+    @Status(HttpStatus.NO_CONTENT)
+    void leaveRoom(UUID roomId, Principal principal) {
         participants.leaveRoom(roomId, UUID.fromString(principal.getName()));
-        return HttpResponse.noContent();
     }
 
     @Post("/heartbeat")
-    HttpResponse<Void> heartbeat(UUID roomId, Principal principal) {
+    @Status(HttpStatus.NO_CONTENT)
+    void heartbeat(UUID roomId, Principal principal) {
         participants.heartbeat(roomId, UUID.fromString(principal.getName()));
-        return HttpResponse.noContent();
     }
 
     @Get
@@ -50,8 +51,8 @@ class ParticipantController {
 
     /** Host moderation: removes the participant from the room and bars them from rejoining. */
     @Delete("/{targetUserId}")
-    HttpResponse<Void> kickParticipant(UUID roomId, UUID targetUserId, Principal principal) {
+    @Status(HttpStatus.NO_CONTENT)
+    void kickParticipant(UUID roomId, UUID targetUserId, Principal principal) {
         participants.kickParticipant(roomId, UUID.fromString(principal.getName()), targetUserId);
-        return HttpResponse.noContent();
     }
 }
