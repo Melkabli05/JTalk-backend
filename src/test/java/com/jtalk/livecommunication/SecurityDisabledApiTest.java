@@ -12,6 +12,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The shipped configuration: no token is needed, and the caller is named by the X-User-Id header. */
 @Property(name = "micronaut.security.enabled", value = "false")
@@ -26,6 +27,14 @@ class SecurityDisabledApiTest extends ApiTestBase {
 
         assertEquals(HttpStatus.CREATED, created.status());
         assertEquals(id("host").toString(), ((Map<?, ?>) created.body().get("room")).get("hostId"), "the header user became the host");
+    }
+
+    @Test
+    void theDeveloperTestPageIsServed() {
+        HttpResponse<String> page = http.exchange(HttpRequest.GET("/ui/index.html"), String.class);
+
+        assertEquals(HttpStatus.OK, page.status());
+        assertTrue(page.body().contains("Live Communication Tester"));
     }
 
     @Test

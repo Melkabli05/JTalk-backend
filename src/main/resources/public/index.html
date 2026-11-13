@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Communication Tester</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1b1f24; --mute:#667085; --line:#dfe3e8; --accent:#2563eb; --ok:#15803d; --bad:#b91c1c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --card:#181c22; --ink:#e7eaee; --mute:#98a2b3; --line:#2a3039; --accent:#60a5fa; --ok:#4ade80; --bad:#f87171; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
+  header { padding:12px 16px; background:var(--card); border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:2; }
+  header h1 { font-size:15px; margin:0 8px 0 0; }
+  main { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); gap:14px; padding:14px 16px; max-width:1300px; margin:0 auto; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
+  section h2 { font-size:13px; margin:0 0 10px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); }
+  label { display:block; font-size:12px; color:var(--mute); margin:6px 0 2px; }
+  input, select, button { font:inherit; padding:6px 9px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
+  input, select { width:100%; }
+  button { cursor:pointer; background:var(--accent); color:#fff; border-color:transparent; }
+  button.sec { background:transparent; color:var(--ink); border-color:var(--line); }
+  button.bad { background:var(--bad); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .row { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
+  .row > * { flex:1 1 90px; } .row > button { flex:0 0 auto; }
+  .btns { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  ul { list-style:none; margin:0; padding:0; } li { padding:6px 0; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  li:first-child { border-top:0; } li .grow { flex:1 1 150px; min-width:0; }
+  .id { font-family:ui-monospace,Menlo,monospace; font-size:12px; cursor:pointer; } .me { color:var(--ok); font-weight:600; }
+  .tag { font-size:11px; padding:1px 7px; border-radius:99px; border:1px solid var(--line); color:var(--mute); }
+  .mute { color:var(--mute); } .ok { color:var(--ok); } .err { color:var(--bad); }
+  pre { margin:0; max-height:240px; overflow:auto; font:11.5px/1.4 ui-monospace,Menlo,monospace; white-space:pre-wrap; word-break:break-all; }
+  h3 { font-size:12px; margin:12px 0 4px; color:var(--mute); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Live Communication Tester</h1>
+  <div style="flex:2 1 300px"><label style="margin:0">Your user id (sent as X-User-Id; this tab only)</label><input id="uid" spellcheck="false"></div>
+  <button class="sec" id="newUser">New random user</button>
+  <div style="flex:1 1 220px"><label style="margin:0">LiveKit URL</label><input id="lkUrl" value="wss://jtalk-eimd2bul.livekit.cloud"></div>
+</header>
+
+<main>
+<div>
+  <section>
+    <h2>Create a room</h2>
+    <label>Title</label><input id="cTitle" value="Test room">
+    <label>Topic</label><input id="cTopic" value="Testing">
+    <div class="row">
+      <div><label>Target language</label><input id="cTarget" value="en"></div>
+      <div><label>Native language</label><input id="cNative" value="ar"></div>
+      <div><label>Seats (2-12)</label><input id="cSeats" type="number" min="2" max="12" placeholder="default"></div>
+    </div>
+    <label><input type="checkbox" id="cWhisper" checked style="width:auto"> allow whisper</label>
+    <div class="btns"><button id="create">Create room</button></div>
+    <div class="mute">A host who already has an active room gets that room back.</div>
+  </section>
+
+  <section>
+    <h2>Rooms</h2>
+    <div class="row"><div><label>Filter by target language</label><input id="fLang" placeholder="all"></div><button class="sec" id="refreshRooms">Refresh</button></div>
+    <ul id="rooms"><li class="mute">No rooms loaded.</li></ul>
+  </section>
+
+  <section>
+    <h2>API log</h2>
+    <pre id="log"></pre>
+  </section>
+</div>
+
+<div>
+  <section id="roomBox">
+    <h2>Current room</h2>
+    <div id="roomInfo" class="mute">Create or join a room.</div>
+    <div class="btns">
+      <button id="join" disabled>Join</button>
+      <button id="leave" class="sec" disabled>Leave</button>
+      <button id="close" class="bad" disabled>Close room (host)</button>
+      <button id="refresh" class="sec" disabled>Refresh</button>
+    </div>
+    <label><input type="checkbox" id="hb" style="width:auto"> send a heartbeat every 10 s (keeps you "present")</label>
+  </section>
+
+  <section>
+    <h2>Audio (LiveKit)</h2>
+    <div class="btns">
+      <button id="connect" disabled>Connect audio</button>
+      <button id="disconnect" class="sec" disabled>Disconnect</button>
+      <span id="audioState" class="mute">not connected</span>
+    </div>
+    <div class="mute">Listeners hear the stage. Only seated speakers can publish; the browser asks for the microphone then.</div>
+    <div id="whisperBox"></div>
+  </section>
+
+  <section>
+    <h2>Stage</h2>
+    <div class="btns">
+      <button id="takeSeat" disabled>Take a free seat</button>
+      <button id="leaveSeat" class="sec" disabled>Leave seat</button>
+      <button id="raise" class="sec" disabled>Raise hand</button>
+      <button id="lower" class="sec" disabled>Lower hand</button>
+    </div>
+    <h3>Speakers</h3><ul id="speakers"><li class="mute">-</li></ul>
+    <h3>Hand-raise queue</h3><ul id="queue"><li class="mute">-</li></ul>
+    <h3>Whisper (speakers only)</h3>
+    <div class="row"><div><label>Target user id</label><input id="wTarget" spellcheck="false"></div><button id="wStart" class="sec" disabled>Start</button><button id="wStop" class="sec" disabled>Stop</button></div>
+    <h3>Network mode</h3>
+    <div class="row"><div><select id="netMode"><option>OPTIMAL</option><option>LOW_BANDWIDTH</option></select></div><button id="netSet" class="sec" disabled>Set</button></div>
+  </section>
+
+  <section>
+    <h2>Participants</h2>
+    <ul id="people"><li class="mute">-</li></ul>
+  </section>
+
+  <section>
+    <h2>Realtime events (LiveKit data channel)</h2>
+    <pre id="events"></pre>
+  </section>
+</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.0/dist/livekit-client.umd.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const API = '/api/v1/voice-rooms';
+let session = null;        // { room, liveKitToken, role, canPublishAudio } of the current room
+let lkRoom = null, whisperRoom = null, hbTimer = null;
+
+// ---- identity (per tab) --------------------------------------------------------------------------
+const uuid = () => crypto.randomUUID();
+$('uid').value = sessionStorage.getItem('uid') || uuid();
+const me = () => $('uid').value.trim();
+const saveUid = () => sessionStorage.setItem('uid', me());
+saveUid(); $('uid').addEventListener('input', saveUid);
+$('newUser').onclick = () => { $('uid').value = uuid(); saveUid(); renderAll(); };
+
+// ---- helpers -------------------------------------------------------------------------------------
+const short = id => id ? id.slice(0, 8) : '';
+function el(tag, props = {}, ...kids) {
+  const e = Object.assign(document.createElement(tag), props);
+  kids.flat().forEach(k => e.append(k));
+  return e;
+}
+function idSpan(id) {
+  const s = el('span', { className: 'id' + (id === me() ? ' me' : ''), title: id + ' (click to copy)', textContent: short(id) + (id === me() ? ' (you)' : '') });
+  s.onclick = () => { navigator.clipboard?.writeText(id); $('wTarget').value = id; };
+  return s;
+}
+function logLine(box, text, cls) {
+  const line = el('div', { textContent: text }); if (cls) line.className = cls;
+  const b = $(box); b.prepend(line);
+  while (b.childNodes.length > 80) b.lastChild.remove();
+}
+async function api(method, path, body) {
+  const t0 = performance.now();
+  const res = await fetch(API + path, {
+    method,
+    headers: { 'X-User-Id': me(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  logLine('log', `${res.status} ${method} ${path} (${Math.round(performance.now() - t0)} ms)` +
+      (res.ok ? '' : ' - ' + (data?.detail || data?.message || data?.title || text)), res.ok ? 'ok' : 'err');
+  if (!res.ok) throw Object.assign(new Error(data?.detail || data?.title || res.status), { status: res.status, data });
+  return data;
+}
+const safe = fn => async (...a) => { try { await fn(...a); } catch (e) { /* already logged */ } };
+const rid = () => session?.room.id;
+
+// ---- rooms ---------------------------------------------------------------------------------------
+$('create').onclick = safe(async () => {
+  const body = { title: $('cTitle').value, topic: $('cTopic').value, targetLanguage: $('cTarget').value,
+                 nativeLanguage: $('cNative').value, allowWhisper: $('cWhisper').checked };
+  if ($('cSeats').value) body.maxStageSeats = +$('cSeats').value;
+  setSession(await api('POST', '', body));
+  await loadRooms();
+});
+async function loadRooms() {
+  const lang = $('fLang').value.trim();
+  const page = await api('GET', '?size=50' + (lang ? '&targetLanguage=' + encodeURIComponent(lang) : ''));
+  const ul = $('rooms'); ul.replaceChildren();
+  if (!page.content.length) ul.append(el('li', { className: 'mute', textContent: 'No active rooms.' }));
+  page.content.forEach(r => ul.append(el('li', {},
+    el('div', { className: 'grow' }, el('b', { textContent: r.title }), ' ',
+      el('span', { className: 'tag', textContent: `${r.targetLanguage} / ${r.nativeLanguage}` }), ' ',
+      el('span', { className: 'mute', textContent: `${r.speakers.length}/${r.maxStageSeats} seats, ${r.participantCount} present, ${r.handRaiseCount} hands` }), el('br'),
+      el('span', { className: 'mute', textContent: 'host ' }), idSpan(r.hostId)),
+    el('button', { textContent: 'Open', className: 'sec', onclick: safe(async () => { session = { room: r }; renderAll(); await refreshRoom(); }) }))));
+}
+$('refreshRooms').onclick = safe(loadRooms);
+
+function setSession(s) { session = s; renderAll(); refreshRoom(); }
+$('join').onclick = safe(async () => setSession(await api('POST', `/${rid()}/participants/join`)));
+$('leave').onclick = safe(async () => { await api('POST', `/${rid()}/participants/leave`); await disconnectAudio(); await refreshRoom(); });
+$('close').onclick = safe(async () => { await api('DELETE', `/${rid()}`); await disconnectAudio(); session = null; renderAll(); loadRooms(); });
+$('refresh').onclick = safe(() => refreshRoom());
+
+async function refreshRoom() {
+  if (!rid()) return;
+  const [room, stage, people] = await Promise.all([
+    api('GET', `/${rid()}`), api('GET', `/${rid()}/stage`), api('GET', `/${rid()}/participants`)]);
+  session = { ...session, room };
+  renderAll(); renderStage(stage); renderPeople(people);
+}
+
+// ---- rendering -----------------------------------------------------------------------------------
+function renderAll() {
+  const has = !!session;
+  const isHost = has && session.room.hostId === me();
+  $('roomInfo').replaceChildren(...(has ? [
+    el('b', { textContent: session.room.title }), ' ', el('span', { className: 'tag', textContent: session.room.status }), el('br'),
+    el('span', { className: 'mute', textContent: 'room ' + session.room.id }), el('br'),
+    el('span', { className: 'mute', textContent: 'host ' }), idSpan(session.room.hostId),
+    el('span', { className: 'mute', textContent: `   ${session.room.speakers.length}/${session.room.maxStageSeats} seats, ${session.room.participantCount} present` }),
+    ...(session.role ? [el('br'), el('span', { textContent: `you are ${session.role}${session.canPublishAudio ? ' (can publish audio)' : ''}` })] : []),
+  ] : ['Create or join a room.']));
+  ['join', 'leave', 'refresh', 'takeSeat', 'leaveSeat', 'raise', 'lower', 'wStart', 'wStop', 'netSet'].forEach(b => $(b).disabled = !has);
+  $('close').disabled = !isHost;
+  $('connect').disabled = !session?.liveKitToken || !!lkRoom;
+  $('disconnect').disabled = !lkRoom;
+}
+function personRow(id, ...buttons) { return el('li', {}, el('span', { className: 'grow' }, idSpan(id)), ...buttons); }
+function renderStage(stage) {
+  const isHost = session?.room.hostId === me();
+  const speakers = $('speakers'), queue = $('queue');
+  speakers.replaceChildren(...(stage.speakers.length ? stage.speakers.map(id => personRow(id,
+    id === session.room.hostId ? el('span', { className: 'tag', textContent: 'host' }) : '',
+    isHost && id !== me() ? el('button', { className: 'sec', textContent: 'Demote', onclick: safe(async () => { await api('POST', `/${rid()}/stage/demote/${id}`); refreshRoom(); }) }) : '')) : [el('li', { className: 'mute', textContent: 'nobody' })]));
+  queue.replaceChildren(...(stage.handRaiseQueue.length ? stage.handRaiseQueue.map(id => personRow(id,
+    isHost ? el('button', { textContent: 'Promote', onclick: safe(async () => { await api('POST', `/${rid()}/stage/promote/${id}`); refreshRoom(); }) }) : '')) : [el('li', { className: 'mute', textContent: 'empty' })]));
+}
+function renderPeople(people) {
+  const isHost = session?.room.hostId === me();
+  $('people').replaceChildren(...(people.length ? people.map(p => personRow(p.userId,
+    el('span', { className: 'tag', textContent: p.role }), el('span', { className: 'tag', textContent: p.status }),
+    isHost && p.userId !== me() ? el('button', { className: 'bad', textContent: 'Kick', onclick: safe(async () => { await api('DELETE', `/${rid()}/participants/${p.userId}`); refreshRoom(); }) }) : '')) : [el('li', { className: 'mute', textContent: 'nobody present (join, and send a heartbeat)' })]));
+}
+
+// ---- stage actions -------------------------------------------------------------------------------
+$('takeSeat').onclick = safe(async () => { setSession(await api('POST', `/${rid()}/stage/join`)); if (lkRoom) { await disconnectAudio(); await connectAudio(); } });
+$('leaveSeat').onclick = safe(async () => { await api('POST', `/${rid()}/stage/leave`); refreshRoom(); });
+$('raise').onclick = safe(async () => { await api('POST', `/${rid()}/stage/raise-hand`); refreshRoom(); });
+$('lower').onclick = safe(async () => { await api('DELETE', `/${rid()}/stage/raise-hand`); refreshRoom(); });
+$('wStart').onclick = safe(() => api('POST', `/${rid()}/stage/whisper`, { targetUserId: $('wTarget').value.trim() }));
+$('wStop').onclick = safe(() => api('DELETE', `/${rid()}/stage/whisper`));
+$('netSet').onclick = safe(() => api('POST', `/${rid()}/stage/network-mode`, { mode: $('netMode').value }));
+
+// ---- heartbeat -----------------------------------------------------------------------------------
+$('hb').onchange = () => {
+  clearInterval(hbTimer);
+  if ($('hb').checked) {
+    const beat = () => rid() && api('POST', `/${rid()}/participants/heartbeat`).catch(() => {});
+    beat(); hbTimer = setInterval(beat, 10000);
+  }
+};
+
+// ---- audio ---------------------------------------------------------------------------------------
+function newLkRoom(onData) {
+  const r = new LivekitClient.Room({ adaptiveStream: true });
+  r.on(LivekitClient.RoomEvent.TrackSubscribed, track => { if (track.kind === 'audio') document.body.append(track.attach()); });
+  r.on(LivekitClient.RoomEvent.TrackUnsubscribed, track => track.detach().forEach(e => e.remove()));
+  r.on(LivekitClient.RoomEvent.DataReceived, (payload, p, kind, topic) => onData(new TextDecoder().decode(payload), topic));
+  return r;
+}
+async function connectAudio() {
+  if (!session?.liveKitToken) return;
+  lkRoom = newLkRoom(onData);
+  lkRoom.on(LivekitClient.RoomEvent.Disconnected, () => { lkRoom = null; $('audioState').textContent = 'not connected'; renderAll(); });
+  await lkRoom.connect($('lkUrl').value.trim(), session.liveKitToken);
+  $('audioState').textContent = 'connected as ' + (session.canPublishAudio ? 'speaker' : 'listener');
+  if (session.canPublishAudio) await lkRoom.localParticipant.setMicrophoneEnabled(true).catch(e => logLine('events', 'mic: ' + e.message, 'err'));
+  renderAll();
+}
+async function disconnectAudio() { await lkRoom?.disconnect(); lkRoom = null; $('audioState').textContent = 'not connected'; renderAll(); }
+$('connect').onclick = () => connectAudio().catch(e => logLine('events', 'connect failed: ' + e.message, 'err'));
+$('disconnect').onclick = disconnectAudio;
+
+function onData(text, topic) {
+  logLine('events', `[${topic}] ${text}`);
+  let msg; try { msg = JSON.parse(text); } catch { return; }
+  if (topic === 'room-events') { refreshRoom().catch(() => {}); return; }
+  if (topic === 'whisper') {
+    const box = $('whisperBox'); box.replaceChildren();
+    if (msg.action === 'start') {
+      box.append(el('div', {}, 'Whisper with ', idSpan(msg.speakerId === me() ? msg.targetId : msg.speakerId), ' ',
+        el('button', { textContent: 'Join whisper room', onclick: async () => {
+          whisperRoom = newLkRoom(() => {});
+          await whisperRoom.connect($('lkUrl').value.trim(), msg.token);
+          await whisperRoom.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+          box.replaceChildren('In the private whisper room.');
+        } })));
+    } else { whisperRoom?.disconnect(); whisperRoom = null; box.append('Whisper ended.'); }
+  }
+}
+
+// ---- go ------------------------------------------------------------------------------------------
+loadRooms().catch(() => {});
+</script>
+</body>
+</html>
