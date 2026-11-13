@@ -24,7 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** Shared plumbing for end-to-end tests: real PostgreSQL + Redis (Test Resources) and a fake LiveKit. */
+/**
+ * Shared plumbing for end-to-end tests: real PostgreSQL + Redis (Test Resources) and a fake LiveKit. Users are written as
+ * names ("host", "alice"); {@link #id(String)} turns each into a stable UUID, which is what the API works with.
+ */
 @MicronautTest
 public abstract class ApiTestBase {
 
@@ -38,53 +41,107 @@ public abstract class ApiTestBase {
     HttpClient httpClient;
 
     @Inject
-    protected FakeMediaService media;
+    protected FakeLiveKitGateway gateway;
 
     protected BlockingHttpClient http;
 
     @BeforeEach
     void setUpClient() {
         http = httpClient.toBlocking();
-        media.reset();
+        gateway.reset();
     }
 
-    protected String createRoom(String hostId, String name, Integer maxSpeakers) {
-        Map<String, Object> body = maxSpeakers == null
-                ? Map.of("name", name)
-                : Map.of("name", name, "maxSpeakers", maxSpeakers);
+    // ---- identities -------------------------------------------------------------------------------
+
+    public static UUID id(String name) {
+        return UUID.nameUUIDFromBytes(name.getBytes());
+    }
+
+    protected static UUID uuid(String id) {
+        return UUID.fromString(id);
+    }
+
+    protected static List<String> ids(String... names) {
+        return java.util.Arrays.stream(names).map(n -> id(n).toString()).toList();
+    }
+
+    /** A bearer token for this user, signed with the secret from application-test.yml. */
+    public static String token(String userName) {
+        return token(userName, JWT_SECRET);
+    }
+
+    public static String token(String userName, String secret) {
+        return JWT.create()
+                .withSubject(id(userName).toString())
+                .withExpiresAt(new Date(System.currentTimeMillis() + 3_600_000))
+                .sign(Algorithm.HMAC256(secret));
+    }
+
+    // ---- requests ---------------------------------------------------------------------------------
+
+    protected String createRoom(String hostName, String title, Integer maxStageSeats) {
+        Map<String, Object> body = new java.util.HashMap<>(Map.of("title", title, "targetLanguage", "en", "nativeLanguage", "ar"));
+        if (maxStageSeats != null) {
+            body.put("maxStageSeats", maxStageSeats);
+        }
+        return (String) createRoom(hostName, body).get("id");
+    }
+
+    /** Creates a room and returns its {@code room} part of the session; asserts the 201 and Location header. */
+    protected Map<String, Object> createRoom(String hostName, Map<String, Object> body) {
         HttpResponse<Map<String, Object>> response = http.exchange(
-                HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(token(hostId)), MAP);
+                HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(token(hostName)), MAP);
         assertEquals(HttpStatus.CREATED, response.status());
         assertNotNull(response.header("Location"));
-        return (String) response.body().get("id");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) response.body().get("room");
+        return room;
     }
 
     protected static String path(String roomId, String suffix) {
         return "/api/v1/voice-rooms/" + roomId + suffix;
     }
 
-    protected Map<String, Object> post(String roomId, String suffix, String userId) {
-        return http.retrieve(HttpRequest.POST(path(roomId, suffix), "").bearerAuth(token(userId)), MAP);
+    protected Map<String, Object> post(String roomId, String suffix, String userName) {
+        return http.retrieve(HttpRequest.POST(path(roomId, suffix), "").bearerAuth(token(userName)), MAP);
     }
 
-    protected HttpResponse<?> postJson(String roomId, String suffix, String userId, Object body) {
-        return http.exchange(HttpRequest.POST(path(roomId, suffix), body).bearerAuth(token(userId)));
+    protected HttpResponse<?> postJson(String roomId, String suffix, String userName, Object body) {
+        return http.exchange(HttpRequest.POST(path(roomId, suffix), body).bearerAuth(token(userName)));
     }
 
-    protected HttpResponse<?> put(String roomId, String suffix, String userId) {
-        return http.exchange(HttpRequest.PUT(path(roomId, suffix), "").bearerAuth(token(userId)));
+    protected HttpResponse<?> send(HttpRequest<?> request) {
+        return http.exchange(request);
     }
 
-    protected HttpResponse<?> delete(String roomId, String suffix, String userId) {
-        return http.exchange(HttpRequest.DELETE(path(roomId, suffix)).bearerAuth(token(userId)));
+    protected HttpResponse<?> postEmpty(String roomId, String suffix, String userName) {
+        return http.exchange(HttpRequest.POST(path(roomId, suffix), "").bearerAuth(token(userName)));
     }
 
-    protected HttpResponse<?> deleteRoom(String roomId, String userId) {
-        return http.exchange(HttpRequest.DELETE("/api/v1/voice-rooms/" + roomId).bearerAuth(token(userId)));
+    protected HttpResponse<?> delete(String roomId, String suffix, String userName) {
+        return http.exchange(HttpRequest.DELETE(path(roomId, suffix)).bearerAuth(token(userName)));
+    }
+
+    protected Map<String, Object> join(String roomId, String userName) {
+        return post(roomId, "/participants/join", userName);
+    }
+
+    /** A user takes a free stage seat themselves: join the room, then claim. */
+    protected void seatSpeaker(String roomId, String userName) {
+        join(roomId, userName);
+        post(roomId, "/stage/join", userName);
     }
 
     protected Map<String, Object> getStage(String roomId) {
         return http.retrieve(HttpRequest.GET(path(roomId, "/stage")), MAP);
+    }
+
+    protected Map<String, Object> getRoom(String roomId) {
+        return http.retrieve(HttpRequest.GET(path(roomId, "")), MAP);
+    }
+
+    protected List<Map<String, Object>> getParticipants(String roomId) {
+        return http.retrieve(HttpRequest.GET(path(roomId, "/participants")), MAP_LIST);
     }
 
     /** The rooms on one discovery page; {@code query} is e.g. {@code "?size=2"}. */
@@ -95,16 +152,7 @@ public abstract class ApiTestBase {
         return content;
     }
 
-    protected List<Map<String, Object>> getParticipants(String roomId) {
-        return http.retrieve(HttpRequest.GET(path(roomId, "/participants")), MAP_LIST);
-    }
-
-    /** Puts a user on stage the way real clients do: join, raise hand, host approves. */
-    protected void seatSpeaker(String roomId, String hostId, String userId) {
-        post(roomId, "/participants/me", userId);
-        post(roomId, "/stage/hand-raises", userId);
-        put(roomId, "/stage/speakers/" + userId, hostId);
-    }
+    // ---- assertions -------------------------------------------------------------------------------
 
     /** @param code expected problem code, or null to only check status and content type */
     protected Map<String, Object> assertProblem(HttpStatus status, String code, Runnable call) {
@@ -133,21 +181,5 @@ public abstract class ApiTestBase {
                 throw new AssertionError("Interrupted while waiting for: " + what, e);
             }
         }
-    }
-
-    /** A bearer token for this user, signed with the secret from application-test.yml. */
-    public static String token(String userId) {
-        return token(userId, JWT_SECRET);
-    }
-
-    public static String token(String userId, String secret) {
-        return JWT.create()
-                .withSubject(userId)
-                .withExpiresAt(new Date(System.currentTimeMillis() + 3_600_000))
-                .sign(Algorithm.HMAC256(secret));
-    }
-
-    protected static UUID uuid(String id) {
-        return UUID.fromString(id);
     }
 }

@@ -17,7 +17,9 @@ public record LiveKitProperties(
         @NotBlank String url,
         @NotBlank String apiKey,
         @NotBlank String apiSecret,
-        @Bindable(defaultValue = "PT2H") Duration tokenTtl) {
+        @Bindable(defaultValue = "PT2H") Duration tokenTtl,
+        /* LiveKit closes a room this many seconds after the last participant leaves. */
+        @Bindable(defaultValue = "300") int emptyRoomTimeoutSeconds) {
 
     /** The Room Service API speaks http(s) on the same host as the websocket URL. */
     public String apiUrl() {

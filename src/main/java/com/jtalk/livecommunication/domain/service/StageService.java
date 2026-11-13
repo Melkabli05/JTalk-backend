@@ -1,41 +1,51 @@
 package com.jtalk.livecommunication.domain.service;
 
-import com.jtalk.livecommunication.domain.model.StageState;
+import com.jtalk.livecommunication.domain.dto.request.NetworkModeRequest;
+import com.jtalk.livecommunication.domain.dto.request.WhisperRequest;
+import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.domain.dto.response.StageResponse;
+import io.micronaut.core.annotation.NonNull;
+import io.micronaut.validation.Validated;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 
-import java.util.Optional;
 import java.util.UUID;
 
-/** Speakers, stage seats and the hand-raise queue. */
+/** Stage seats, the hand-raise queue, host promotions and demotions, private whispers and low-bandwidth mode. */
+@Validated
 public interface StageService {
 
-    /** Adds the user to the hand-raise queue. Returns the 1-based queue position. */
-    int raiseHand(UUID roomId, String userId);
+    /** Atomically takes a free seat (leaving the hand-raise queue) and upgrades publish rights. */
+    RoomSessionResponse claimStageSeat(@NonNull UUID roomId, @NonNull UUID userId);
 
-    void lowerHand(UUID roomId, String userId);
+    /** Steps down to the audience and, atomically, seats the longest-waiting hand-raiser. The host keeps their seat. */
+    void leaveStageSeat(@NonNull UUID roomId, @NonNull UUID userId);
 
-    /**
-     * Host approves a queued user: seat them, then grant publish rights on the media server. If the media
-     * server call fails the seat is released again so stage and media permissions never diverge.
-     */
-    void approveSpeaker(UUID roomId, String hostId, String userId);
+    void raiseHand(@NonNull UUID roomId, @NonNull UUID userId);
 
-    /**
-     * A speaker steps down, or the host removes a speaker. Idempotent: the publish permission is revoked
-     * even if the user was already off stage, so a retry after a media server failure converges.
-     */
-    void removeSpeaker(UUID roomId, String requesterId, String userId);
+    void lowerHand(@NonNull UUID roomId, @NonNull UUID userId);
 
-    StageState getStage(UUID roomId);
+    /** Host-only: puts a user on the stage (taking them off the queue). */
+    void promoteToStage(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
 
-    boolean isOnStage(UUID roomId, String userId);
-
-    /** Drops every trace of a user who left the room. Local state only; they are no longer connected. */
-    void clearUser(UUID roomId, String userId);
+    /** Host-only: steps a speaker down to the audience. */
+    void demoteToListener(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
 
     /**
-     * A speaker is gone for good (their grace lease expired): frees the seat and, atomically, seats the
-     * longest-waiting hand-raiser and grants them publish rights. Returns who was seated; empty if nobody was
-     * waiting, a seat is still taken, or the room is closed.
+     * Starts a private whisper from a speaker to one present participant (ending the speaker's previous one). Each
+     * whisper gets its own two-person LiveKit room, so the audio never touches the main room; each side receives their own
+     * token for it in a data message addressed only to them.
      */
-    Optional<String> releaseSeatAndPromoteNext(UUID roomId, String userId);
+    void startWhisper(@NonNull UUID roomId, @NonNull UUID speakerId, @Valid @NotNull WhisperRequest request);
+
+    /** Ends the speaker's whisper by deleting its room. Idempotent. */
+    void stopWhisper(@NonNull UUID roomId, @NonNull UUID speakerId);
+
+    /**
+     * {@code LOW_BANDWIDTH} unsubscribes the user from their secondary tracks and remembers them; {@code OPTIMAL} restores
+     * those (plus any the request lists).
+     */
+    void updateNetworkMode(@NonNull UUID roomId, @NonNull UUID userId, @Valid @NotNull NetworkModeRequest request);
+
+    StageResponse getStage(@NonNull UUID roomId);
 }

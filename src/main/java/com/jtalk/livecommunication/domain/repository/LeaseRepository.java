@@ -15,17 +15,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Grace leases for disconnected speakers: {@code voiceroom:{id}:lease:{userId}} with a TTL. When the key
- * expires Redis emits a keyspace event, which is what triggers the seat reclaim.
+ * Grace leases for disconnected speakers: {@code voiceroom:{id}:lease:{userId}} with a TTL. When the key expires Redis
+ * emits a keyspace event, which is what triggers the seat reclaim.
  */
 @Singleton
 public class LeaseRepository {
 
     /** Identifies whose lease an expired key belonged to. */
-    public record LeaseKey(UUID roomId, String userId) {
+    public record LeaseKey(UUID roomId, UUID userId) {
     }
 
-    private static final Pattern KEY_PATTERN = Pattern.compile("voiceroom:\\{([0-9a-fA-F-]{36})}:lease:(.+)");
+    private static final Pattern KEY_PATTERN = Pattern.compile("voiceroom:\\{([0-9a-fA-F-]{36})}:lease:([0-9a-fA-F-]{36})");
 
     private final StatefulRedisConnection<String, String> connection;
     private final long ttlSeconds;
@@ -36,21 +36,21 @@ public class LeaseRepository {
     }
 
     /** Creates the lease unless one is already running (the first disconnect wins). */
-    public boolean create(UUID roomId, String userId) {
+    public boolean create(UUID roomId, UUID userId) {
         return "OK".equals(connection.sync().set(key(roomId, userId), "1", SetArgs.Builder.nx().ex(ttlSeconds)));
     }
 
-    public boolean delete(UUID roomId, String userId) {
+    public boolean delete(UUID roomId, UUID userId) {
         return connection.sync().del(key(roomId, userId)) > 0;
     }
 
     /** Which of the users currently hold a lease: one MGET for all of them (their keys share a hash slot). */
-    public Set<String> usersWithLease(UUID roomId, List<String> userIds) {
+    public Set<UUID> usersWithLease(UUID roomId, List<UUID> userIds) {
         if (userIds.isEmpty()) {
             return Set.of();
         }
         List<KeyValue<String, String>> leases = connection.sync().mget(userIds.stream().map(id -> key(roomId, id)).toArray(String[]::new));
-        Set<String> holders = new HashSet<>();
+        Set<UUID> holders = new HashSet<>();
         for (int i = 0; i < userIds.size(); i++) {
             if (leases.get(i).hasValue()) {
                 holders.add(userIds.get(i));
@@ -63,11 +63,11 @@ public class LeaseRepository {
     public static Optional<LeaseKey> parseKey(String expiredKey) {
         Matcher matcher = KEY_PATTERN.matcher(expiredKey);
         return matcher.matches()
-                ? Optional.of(new LeaseKey(UUID.fromString(matcher.group(1)), matcher.group(2)))
+                ? Optional.of(new LeaseKey(UUID.fromString(matcher.group(1)), UUID.fromString(matcher.group(2))))
                 : Optional.empty();
     }
 
-    private static String key(UUID roomId, String userId) {
+    private static String key(UUID roomId, UUID userId) {
         return "voiceroom:{" + roomId + "}:lease:" + userId;
     }
 }

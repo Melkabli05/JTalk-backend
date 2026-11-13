@@ -1,8 +1,8 @@
-package com.jtalk.livecommunication.domain.service.impl;
+package com.jtalk.livecommunication.integration.impl;
 
 import com.jtalk.livecommunication.config.LiveKitProperties;
-import com.jtalk.livecommunication.domain.service.MediaService;
 import com.jtalk.livecommunication.exception.ProblemType;
+import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.livekit.server.AccessToken;
 import io.livekit.server.CanPublish;
 import io.livekit.server.CanPublishData;
@@ -26,72 +26,82 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-/** {@link MediaService} backed by LiveKit access tokens and the Room Service API. */
+/**
+ * {@link LiveKitGateway} backed by LiveKit access tokens and the Room Service API. The SDK returns a Retrofit {@code Call}
+ * that sends nothing until it is executed, so every operation goes through {@link #execute}.
+ */
 @Singleton
 @Slf4j
 @RequiredArgsConstructor
-class LiveKitMediaService implements MediaService {
+class LiveKitGatewayImpl implements LiveKitGateway {
 
     private final LiveKitProperties properties;
     private final RoomServiceClient roomService;
     private final Clock clock;
 
     @Override
-    public MediaConnection issueConnection(UUID roomId, String userId, boolean canPublish) {
-        return connection(roomId.toString(), userId, canPublish, true);
+    public void createRoom(UUID roomId) {
+        // name, emptyTimeout, maxParticipants, nodeId, metadata, minPlayoutDelay, maxPlayoutDelay, syncStreams, departureTimeout
+        execute(roomService.createRoom(roomId.toString(), properties.emptyRoomTimeoutSeconds(), null, null, null, null, null, null, null),
+                "create room");
     }
 
     @Override
-    public MediaConnection issueWhisperConnection(UUID roomId, String speakerId, String targetId, String userId) {
-        boolean speaker = userId.equals(speakerId);
-        return connection(whisperRoom(roomId, speakerId, targetId), userId, speaker, !speaker);
+    public void deleteRoom(UUID roomId) {
+        execute(roomService.deleteRoom(roomId.toString()), "delete room");
     }
 
     @Override
-    public void closeWhisper(UUID roomId, String speakerId, String targetId) {
-        execute(roomService.deleteRoom(whisperRoom(roomId, speakerId, targetId)), "delete whisper room");
+    public String generateToken(UUID roomId, UUID userId, boolean canPublish) {
+        return token(roomId.toString(), userId, canPublish, true);
     }
 
     @Override
-    public void updatePublishPermission(UUID roomId, String userId, boolean canPublish) {
+    public void setPublishPermission(UUID roomId, UUID userId, boolean canPublish) {
         var permission = ParticipantPermission.newBuilder()
                 .setCanSubscribe(true)
                 .setCanPublish(canPublish)
                 .setCanPublishData(canPublish)
                 .build();
         // 404 = participant not connected right now; the permission then applies via the token issued on join.
-        execute(roomService.updateParticipant(roomId.toString(), userId, null, null, permission),
+        execute(roomService.updateParticipant(roomId.toString(), userId.toString(), null, null, permission),
                 "update participant permission");
     }
 
     @Override
-    public void removeParticipant(UUID roomId, String userId) {
-        execute(roomService.removeParticipant(roomId.toString(), userId, clock.millis()), "remove participant");
-    }
-
-    @Override
-    public void closeRoom(UUID roomId) {
-        execute(roomService.deleteRoom(roomId.toString()), "delete room");
-    }
-
-    @Override
-    public void setSubscriptions(UUID roomId, String userId, List<String> trackSids, boolean subscribe) {
+    public void updateSubscriptions(UUID roomId, UUID userId, List<String> trackSids, boolean subscribe) {
         if (trackSids.isEmpty()) {
             return;
         }
-        execute(roomService.updateSubscriptions(roomId.toString(), userId, trackSids, subscribe), "update subscriptions");
+        execute(roomService.updateSubscriptions(roomId.toString(), userId.toString(), trackSids, subscribe), "update subscriptions");
     }
 
     @Override
-    public void sendSignal(UUID roomId, String topic, byte[] payload, List<String> destinationIdentities) {
-        // Parameter order in the SDK: destination SIDs first, then destination identities.
-        execute(roomService.sendData(roomId.toString(), payload, DataPacket.Kind.RELIABLE,
-                List.of(), destinationIdentities, topic), "send data message");
+    public void removeParticipant(UUID roomId, UUID userId) {
+        execute(roomService.removeParticipant(roomId.toString(), userId.toString(), clock.millis()), "remove participant");
     }
 
-    private MediaConnection connection(String roomName, String userId, boolean canPublish, boolean canSubscribe) {
+    @Override
+    public String generateWhisperToken(UUID roomId, UUID speakerId, UUID targetId, UUID userId) {
+        boolean speaker = userId.equals(speakerId);
+        return token(whisperRoom(roomId, speakerId, targetId), userId, speaker, !speaker);
+    }
+
+    @Override
+    public void deleteWhisperRoom(UUID roomId, UUID speakerId, UUID targetId) {
+        execute(roomService.deleteRoom(whisperRoom(roomId, speakerId, targetId)), "delete whisper room");
+    }
+
+    @Override
+    public void sendData(UUID roomId, String topic, byte[] payload, List<UUID> destinationUserIds) {
+        // Parameter order in the SDK: destination SIDs first, then destination identities.
+        execute(roomService.sendData(roomId.toString(), payload, DataPacket.Kind.RELIABLE, List.of(),
+                destinationUserIds.stream().map(UUID::toString).toList(), topic), "send data message");
+    }
+
+    private String token(String roomName, UUID userId, boolean canPublish, boolean canSubscribe) {
         var token = new AccessToken(properties.apiKey(), properties.apiSecret());
-        token.setIdentity(userId);
+        token.setIdentity(userId.toString());
         token.setExpiration(Date.from(clock.instant().plus(properties.tokenTtl())));
         token.addGrants(
                 new RoomJoin(true),
@@ -99,11 +109,11 @@ class LiveKitMediaService implements MediaService {
                 new CanSubscribe(canSubscribe),
                 new CanPublish(canPublish),
                 new CanPublishData(canPublish));
-        return new MediaConnection(properties.url(), token.toJwt());
+        return token.toJwt();
     }
 
     /** Not a UUID on purpose: the webhook handler ignores rooms that are not voice rooms. */
-    private static String whisperRoom(UUID roomId, String speakerId, String targetId) {
+    private static String whisperRoom(UUID roomId, UUID speakerId, UUID targetId) {
         return "whisper-" + roomId + "-" + speakerId + "-" + targetId;
     }
 

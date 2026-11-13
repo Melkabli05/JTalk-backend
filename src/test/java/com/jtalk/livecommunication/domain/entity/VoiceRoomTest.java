@@ -3,34 +3,45 @@ package com.jtalk.livecommunication.domain.entity;
 import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VoiceRoomTest {
 
-    private static final Instant NOW = Instant.parse("2026-01-01T10:00:00Z");
+    private final UUID host = UUID.randomUUID();
 
-    @Test
-    void opensActiveRoomWithDefaultSeats() {
-        VoiceRoom room = VoiceRoom.open("  English practice ", "host-1", null);
-
-        assertEquals("English practice", room.name());
-        assertEquals(VoiceRoom.DEFAULT_SPEAKERS, room.maxSpeakers());
-        assertEquals(VoiceRoomStatus.ACTIVE, room.status());
-        assertTrue(room.isActive());
-        assertTrue(room.isHost("host-1"));
-        assertFalse(room.isHost("someone-else"));
+    private VoiceRoom room() {
+        return VoiceRoom.open("  English practice ", "Daily life", host, "en", "ar", 8, true);
     }
 
     @Test
-    void closingRecordsTimeAndDeactivates() {
-        VoiceRoom closed = VoiceRoom.open("room", "host", 4).close(NOW.plusSeconds(60));
+    void opensAnActiveRoomLeavingIdAndTimestampsToTheDatabase() {
+        VoiceRoom room = room();
 
-        assertEquals(VoiceRoomStatus.CLOSED, closed.status());
-        assertEquals(NOW.plusSeconds(60), closed.closedAt());
-        assertFalse(closed.isActive());
+        assertEquals("English practice", room.title());
+        assertEquals(VoiceRoomStatus.ACTIVE, room.status());
+        assertNull(room.id(), "Micronaut Data assigns the id on insert");
+        assertNull(room.createdAt());
+        assertTrue(room.isHost(host));
+        assertFalse(room.isHost(UUID.randomUUID()));
+    }
+
+    @Test
+    void partialUpdatesKeepWhatIsNotGiven() {
+        VoiceRoom updated = room().withSettings(null, "Travel", 4);
+
+        assertEquals("English practice", updated.title());
+        assertEquals("Travel", updated.topic());
+        assertEquals(4, updated.maxStageSeats());
+        assertEquals("en", updated.targetLanguage(), "language never changes after creation");
+    }
+
+    @Test
+    void closingMarksTheRoomClosed() {
+        assertEquals(VoiceRoomStatus.CLOSED, room().close().status());
     }
 }

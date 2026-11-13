@@ -1,9 +1,8 @@
-package com.jtalk.livecommunication.domain.service.impl;
+package com.jtalk.livecommunication.integration.impl;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.jtalk.livecommunication.config.LiveKitProperties;
-import com.jtalk.livecommunication.domain.service.MediaService.MediaConnection;
 import com.sun.net.httpserver.HttpServer;
 import io.livekit.server.RoomServiceClient;
 import livekit.LivekitModels;
@@ -31,11 +30,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests the real LiveKit adapter against an in-process HTTP server that speaks LiveKit's protobuf API. The
- * Retrofit client only sends a request when its {@code Call} is executed, so these tests prove every
- * operation really goes over the wire with the right payload, and that LiveKit errors are decoded.
+ * Tests the real LiveKit gateway against an in-process HTTP server that speaks LiveKit's protobuf API. The Retrofit client
+ * only sends a request when its {@code Call} is executed, so these tests prove every operation really goes over the wire
+ * with the right payload, and that LiveKit errors are decoded.
  */
-class LiveKitMediaServiceTest {
+class LiveKitGatewayImplTest {
 
     private static final String API_KEY = "test-key";
     private static final String API_SECRET = "test-secret-test-secret-test-secret-0123";
@@ -50,6 +49,8 @@ class LiveKitMediaServiceTest {
     private volatile byte[] responseBody = new byte[0];
     private HttpServer server;
     private final UUID room = UUID.randomUUID();
+    private final UUID alice = UUID.randomUUID();
+    private final UUID bob = UUID.randomUUID();
 
     @BeforeEach
     void startFakeLiveKit() throws IOException {
@@ -72,12 +73,10 @@ class LiveKitMediaServiceTest {
         server.stop(0);
     }
 
-    private LiveKitMediaService service() {
+    private LiveKitGatewayImpl gateway() {
         String host = "http://localhost:" + server.getAddress().getPort();
-        var properties = new LiveKitProperties("ws://localhost:" + server.getAddress().getPort(), API_KEY, API_SECRET, Duration.ofHours(1));
-        return new LiveKitMediaService(properties,
-                RoomServiceClient.createClient(host, API_KEY, API_SECRET),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        var properties = new LiveKitProperties("ws://localhost:" + server.getAddress().getPort(), API_KEY, API_SECRET, Duration.ofHours(1), 300);
+        return new LiveKitGatewayImpl(properties, RoomServiceClient.createClient(host, API_KEY, API_SECRET), Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private Received onlyRequest() {
@@ -88,8 +87,19 @@ class LiveKitMediaServiceTest {
     // ---- operations really reach LiveKit, with the right payload ----------------------------------
 
     @Test
-    void closeRoomSendsDeleteRoomSignedWithTheRoomCreateGrant() {
-        service().closeRoom(room);
+    void createRoomSendsTheEmptyRoomTimeout() throws Exception {
+        gateway().createRoom(room);
+
+        Received request = onlyRequest();
+        assertTrue(request.path().endsWith("/CreateRoom"), request.path());
+        var body = LivekitRoom.CreateRoomRequest.parseFrom(request.body());
+        assertEquals(room.toString(), body.getName());
+        assertEquals(300, body.getEmptyTimeout());
+    }
+
+    @Test
+    void deleteRoomSendsDeleteRoomSignedWithTheRoomCreateGrant() {
+        gateway().deleteRoom(room);
 
         Received request = onlyRequest();
         assertEquals("POST", request.method());
@@ -101,21 +111,21 @@ class LiveKitMediaServiceTest {
     }
 
     @Test
-    void updatePublishPermissionSendsTheRequestedPermissions() throws Exception {
-        service().updatePublishPermission(room, "alice", true);
+    void setPublishPermissionSendsTheRequestedPermissions() throws Exception {
+        gateway().setPublishPermission(room, alice, true);
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/UpdateParticipant"), request.path());
         var body = LivekitRoom.UpdateParticipantRequest.parseFrom(request.body());
         assertEquals(room.toString(), body.getRoom());
-        assertEquals("alice", body.getIdentity());
+        assertEquals(alice.toString(), body.getIdentity());
         assertTrue(body.getPermission().getCanPublish());
         assertTrue(body.getPermission().getCanSubscribe());
     }
 
     @Test
     void revokingPublishRightsIsSentToo() throws Exception {
-        service().updatePublishPermission(room, "alice", false);
+        gateway().setPublishPermission(room, alice, false);
 
         var body = LivekitRoom.UpdateParticipantRequest.parseFrom(onlyRequest().body());
         assertFalse(body.getPermission().getCanPublish());
@@ -124,71 +134,47 @@ class LiveKitMediaServiceTest {
 
     @Test
     void removeParticipantDisconnectsThemAndRevokesTheirEarlierTokens() throws Exception {
-        service().removeParticipant(room, "mallory");
+        gateway().removeParticipant(room, bob);
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/RemoveParticipant"), request.path());
         var body = LivekitRoom.RoomParticipantIdentity.parseFrom(request.body());
         assertEquals(room.toString(), body.getRoom());
-        assertEquals("mallory", body.getIdentity());
+        assertEquals(bob.toString(), body.getIdentity());
         assertEquals(NOW.toEpochMilli(), body.getRevokeTokenTs(), "tokens issued before the kick must stop working");
     }
 
     @Test
-    void setSubscriptionsSendsUpdateSubscriptionsAndSkipsEmptyLists() throws Exception {
-        LiveKitMediaService service = service();
-        service.setSubscriptions(room, "bob", List.of(), true);
+    void updateSubscriptionsSendsTheTracksAndSkipsEmptyLists() throws Exception {
+        LiveKitGatewayImpl gateway = gateway();
+        gateway.updateSubscriptions(room, bob, List.of(), true);
         assertEquals(0, requests.size(), "nothing to change, nothing sent");
 
-        service.setSubscriptions(room, "bob", List.of("TR_a", "TR_b"), false);
+        gateway.updateSubscriptions(room, bob, List.of("TR_a", "TR_b"), false);
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/UpdateSubscriptions"), request.path());
         var body = LivekitRoom.UpdateSubscriptionsRequest.parseFrom(request.body());
         assertEquals(room.toString(), body.getRoom());
-        assertEquals("bob", body.getIdentity());
+        assertEquals(bob.toString(), body.getIdentity());
         assertEquals(List.of("TR_a", "TR_b"), body.getTrackSidsList());
         assertFalse(body.getSubscribe());
     }
 
     @Test
-    void sendSignalTargetsIdentitiesNotSids() throws Exception {
+    void sendDataTargetsIdentitiesNotSids() throws Exception {
         byte[] payload = "{\"action\":\"start\"}".getBytes();
 
-        service().sendSignal(room, "whisper", payload, List.of("alice", "bob"));
+        gateway().sendData(room, "whisper", payload, List.of(alice, bob));
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/SendData"), request.path());
         var body = LivekitRoom.SendDataRequest.parseFrom(request.body());
-        assertEquals(List.of("alice", "bob"), body.getDestinationIdentitiesList());
+        assertEquals(List.of(alice.toString(), bob.toString()), body.getDestinationIdentitiesList());
         assertEquals(List.of(), body.getDestinationSidsList(), "the SDK takes SIDs before identities; they must not be swapped");
         assertEquals("whisper", body.getTopic());
         assertEquals(LivekitModels.DataPacket.Kind.RELIABLE, body.getKind());
         assertEquals(new String(payload), body.getData().toStringUtf8());
-    }
-
-    @Test
-    void whisperRoomsArePrivateAndEachSideGetsOnlyItsOwnRights() {
-        LiveKitMediaService service = service();
-        Map<String, Object> speaker = JWT.decode(service.issueWhisperConnection(room, "alice", "bob", "alice").token()).getClaim("video").asMap();
-        Map<String, Object> target = JWT.decode(service.issueWhisperConnection(room, "alice", "bob", "bob").token()).getClaim("video").asMap();
-
-        assertEquals("whisper-" + room + "-alice-bob", speaker.get("room"));
-        assertEquals(speaker.get("room"), target.get("room"), "both sides meet in the same private room");
-        assertEquals(true, speaker.get("canPublish"));
-        assertEquals(false, speaker.get("canSubscribe"));
-        assertEquals(false, target.get("canPublish"));
-        assertEquals(true, target.get("canSubscribe"));
-        assertEquals(0, requests.size(), "issuing a token is local");
-    }
-
-    @Test
-    void closingAWhisperDeletesOnlyItsPrivateRoom() throws Exception {
-        service().closeWhisper(room, "alice", "bob");
-
-        Received request = onlyRequest();
-        assertTrue(request.path().endsWith("/DeleteRoom"), request.path());
-        assertEquals("whisper-" + room + "-alice-bob", LivekitRoom.DeleteRoomRequest.parseFrom(request.body()).getRoom());
     }
 
     // ---- error handling ---------------------------------------------------------------------------
@@ -199,7 +185,7 @@ class LiveKitMediaServiceTest {
         contentType = "application/json";
         responseBody = "{\"code\":\"invalid_argument\",\"msg\":\"room name invalid\"}".getBytes();
 
-        ThrowableProblem problem = assertThrows(ThrowableProblem.class, () -> service().closeRoom(room));
+        ThrowableProblem problem = assertThrows(ThrowableProblem.class, () -> gateway().deleteRoom(room));
 
         assertEquals("urn:jtalk:live-communication:problem:media-server-error", problem.getType().toString());
         assertEquals(502, problem.getStatus().getStatusCode());
@@ -211,18 +197,18 @@ class LiveKitMediaServiceTest {
         status = 404;
         contentType = "application/json";
         responseBody = "{\"code\":\"not_found\",\"msg\":\"no such room\"}".getBytes();
-        LiveKitMediaService service = service();
+        LiveKitGatewayImpl gateway = gateway();
 
-        assertDoesNotThrow(() -> service.closeRoom(room));
-        assertDoesNotThrow(() -> service.updatePublishPermission(room, "ghost", true));
+        assertDoesNotThrow(() -> gateway.deleteRoom(room));
+        assertDoesNotThrow(() -> gateway.setPublishPermission(room, bob, true));
     }
 
     @Test
     void anUnreachableServerBecomesABadGatewayProblem() {
-        LiveKitMediaService service = service();
+        LiveKitGatewayImpl gateway = gateway();
         server.stop(0);
 
-        ThrowableProblem problem = assertThrows(ThrowableProblem.class, () -> service.closeRoom(room));
+        ThrowableProblem problem = assertThrows(ThrowableProblem.class, () -> gateway.deleteRoom(room));
 
         assertEquals("urn:jtalk:live-communication:problem:media-server-unreachable", problem.getType().toString());
         assertEquals(502, problem.getStatus().getStatusCode());
@@ -232,20 +218,42 @@ class LiveKitMediaServiceTest {
 
     @Test
     void joinTokenCarriesIdentityRoomPublishRightsAndExpiry() {
-        MediaConnection listener = service().issueConnection(room, "bob", false);
-        MediaConnection speaker = service().issueConnection(room, "alice", true);
+        String listener = gateway().generateToken(room, bob, false);
+        String speaker = gateway().generateToken(room, alice, true);
 
-        DecodedJWT listenerJwt = JWT.decode(listener.token());
+        DecodedJWT listenerJwt = JWT.decode(listener);
         Map<String, Object> grants = listenerJwt.getClaim("video").asMap();
-        assertEquals("bob", listenerJwt.getSubject());
+        assertEquals(bob.toString(), listenerJwt.getSubject());
         assertEquals(room.toString(), grants.get("room"));
         assertEquals(true, grants.get("roomJoin"));
         assertEquals(false, grants.get("canPublish"));
         assertEquals(true, grants.get("canSubscribe"));
         assertEquals(NOW.plus(Duration.ofHours(1)).getEpochSecond(), listenerJwt.getExpiresAt().toInstant().getEpochSecond());
-
-        assertEquals(true, JWT.decode(speaker.token()).getClaim("video").asMap().get("canPublish"));
-        assertEquals("ws://localhost:" + server.getAddress().getPort(), listener.url());
+        assertEquals(true, JWT.decode(speaker).getClaim("video").asMap().get("canPublish"));
         assertEquals(0, requests.size(), "issuing a token is local; it must not call LiveKit");
+    }
+
+    @Test
+    void whisperRoomsArePrivateAndEachSideGetsOnlyItsOwnRights() {
+        LiveKitGatewayImpl gateway = gateway();
+        Map<String, Object> speaker = JWT.decode(gateway.generateWhisperToken(room, alice, bob, alice)).getClaim("video").asMap();
+        Map<String, Object> target = JWT.decode(gateway.generateWhisperToken(room, alice, bob, bob)).getClaim("video").asMap();
+
+        assertEquals("whisper-" + room + "-" + alice + "-" + bob, speaker.get("room"));
+        assertEquals(speaker.get("room"), target.get("room"), "both sides meet in the same private room");
+        assertEquals(true, speaker.get("canPublish"));
+        assertEquals(false, speaker.get("canSubscribe"));
+        assertEquals(false, target.get("canPublish"));
+        assertEquals(true, target.get("canSubscribe"));
+        assertEquals(0, requests.size(), "issuing a token is local");
+    }
+
+    @Test
+    void closingAWhisperDeletesOnlyItsPrivateRoom() throws Exception {
+        gateway().deleteWhisperRoom(room, alice, bob);
+
+        Received request = onlyRequest();
+        assertTrue(request.path().endsWith("/DeleteRoom"), request.path());
+        assertEquals("whisper-" + room + "-" + alice + "-" + bob, LivekitRoom.DeleteRoomRequest.parseFrom(request.body()).getRoom());
     }
 }

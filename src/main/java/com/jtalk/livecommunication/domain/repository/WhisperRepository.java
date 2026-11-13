@@ -20,19 +20,19 @@ public class WhisperRepository {
         this.ttlSeconds = properties.whisperTtl().toSeconds();
     }
 
-    public void start(UUID roomId, String speakerId, String targetId) {
-        connection.sync().set(key(roomId, speakerId), targetId, SetArgs.Builder.ex(ttlSeconds));
+    public void start(UUID roomId, UUID speakerId, UUID targetId) {
+        connection.sync().set(key(roomId, speakerId), targetId.toString(), SetArgs.Builder.ex(ttlSeconds));
     }
 
-    public Optional<String> find(UUID roomId, String speakerId) {
-        return Optional.ofNullable(connection.sync().get(key(roomId, speakerId)));
+    public Optional<UUID> find(UUID roomId, UUID speakerId) {
+        return Optional.ofNullable(connection.sync().get(key(roomId, speakerId))).map(UUID::fromString);
     }
 
-    public void stop(UUID roomId, String speakerId) {
+    public void stop(UUID roomId, UUID speakerId) {
         connection.sync().del(key(roomId, speakerId));
     }
 
-    private static String key(UUID roomId, String speakerId) {
+    private static String key(UUID roomId, UUID speakerId) {
         return "voiceroom:{" + roomId + "}:whisper:" + speakerId;
     }
 }

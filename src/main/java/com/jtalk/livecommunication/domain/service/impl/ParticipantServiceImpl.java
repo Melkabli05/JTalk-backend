@@ -1,114 +1,142 @@
 package com.jtalk.livecommunication.domain.service.impl;
 
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
+import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
+import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.ParticipantRole;
 import com.jtalk.livecommunication.domain.enums.PresenceStatus;
+import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
+import com.jtalk.livecommunication.domain.mapper.ApiMapper;
 import com.jtalk.livecommunication.domain.model.Participant;
+import com.jtalk.livecommunication.domain.repository.LeaseRepository;
 import com.jtalk.livecommunication.domain.repository.PresenceRepository;
-import com.jtalk.livecommunication.domain.service.MediaService;
-import com.jtalk.livecommunication.domain.service.MediaService.MediaConnection;
+import com.jtalk.livecommunication.domain.repository.StageRepository;
+import com.jtalk.livecommunication.domain.repository.VoiceRoomRepository;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
-import com.jtalk.livecommunication.domain.service.StageLeaseService;
-import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.exception.ProblemType;
+import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 @Singleton
+@Slf4j
+@RequiredArgsConstructor
 class ParticipantServiceImpl implements ParticipantService {
 
     private final VoiceRoomService rooms;
-    private final StageService stage;
-    private final StageLeaseService leases;
+    private final VoiceRoomRepository roomRepository;
+    private final StageRepository stage;
     private final PresenceRepository presence;
-    private final MediaService media;
+    private final LeaseRepository leases;
+    private final LiveKitGateway gateway;
+    private final ApiMapper mapper;
     private final Clock clock;
-    private final Duration presenceTimeout;
-
-    ParticipantServiceImpl(VoiceRoomService rooms,
-                           StageService stage,
-                           StageLeaseService leases,
-                           PresenceRepository presence,
-                           MediaService media,
-                           Clock clock,
-                           VoiceRoomProperties properties) {
-        this.rooms = rooms;
-        this.stage = stage;
-        this.leases = leases;
-        this.presence = presence;
-        this.media = media;
-        this.clock = clock;
-        this.presenceTimeout = properties.presenceTimeout();
-    }
+    private final VoiceRoomProperties properties;
 
     @Override
-    public Joined join(UUID roomId, String userId) {
-        VoiceRoom room = rooms.getActive(roomId);
+    public RoomSessionResponse joinRoom(UUID roomId, UUID userId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         if (presence.isBanned(roomId, userId)) {
             throw ProblemType.KICKED_FROM_ROOM.because(userId + " was removed from this room by the host");
         }
-        ParticipantRole role = roleOf(room, userId, stage.isOnStage(roomId, userId));
-        MediaConnection connection = media.issueConnection(roomId, userId, role != ParticipantRole.LISTENER);
+        boolean onStage = stage.isOnStage(roomId, userId);
+        if (!onStage && room.isHost(userId)) {
+            onStage = stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats());   // the host's seat is permanent
+        }
+        if (onStage) {
+            leases.delete(roomId, userId);   // reconnecting within the grace lease restores the seat
+        }
         presence.touch(roomId, userId, clock.instant());
-        leases.onReconnect(roomId, userId);
-        return new Joined(connection, role);
+        return new RoomSessionResponse(rooms.toResponse(room), gateway.generateToken(roomId, userId, onStage),
+                roleOf(room, userId, onStage), onStage);
     }
 
     @Override
-    public void heartbeat(UUID roomId, String userId) {
-        rooms.getActive(roomId);
-        presence.touch(roomId, userId, clock.instant());
-    }
-
-    @Override
-    public void leave(UUID roomId, String userId) {
+    public void leaveRoom(UUID roomId, UUID userId) {
         presence.remove(roomId, userId);
-        stage.clearUser(roomId, userId);
+        stage.removeHandRaise(roomId, userId);
+        if (isHost(roomId, userId)) {
+            return;   // the host keeps their seat
+        }
+        stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> gateway.setPublishPermission(roomId, promoted, true));
     }
 
     @Override
-    public void kick(UUID roomId, String hostId, String targetUserId) {
-        VoiceRoom room = rooms.getActiveAsHost(roomId, hostId);
+    public void kickParticipant(UUID roomId, UUID hostId, UUID targetUserId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        if (!room.isHost(hostId)) {
+            throw ProblemType.NOT_ROOM_HOST.because("Only the room host can kick participants");
+        }
         if (room.isHost(targetUserId)) {
             throw ProblemType.CANNOT_KICK_HOST.because("The host cannot be kicked from their own room");
         }
         presence.ban(roomId, targetUserId);
-        if (stage.isOnStage(roomId, targetUserId)) {
-            stage.releaseSeatAndPromoteNext(roomId, targetUserId);
-        } else {
-            stage.clearUser(roomId, targetUserId);
+        leaveRoom(roomId, targetUserId);
+        gateway.removeParticipant(roomId, targetUserId);
+        log.info("Host {} kicked participant {} from room {}", hostId, targetUserId, roomId);
+    }
+
+    @Override
+    public void handleMediaDisconnected(UUID roomId, UUID userId) {
+        Optional<VoiceRoom> room = activeRoom(roomId);
+        if (room.isEmpty() || room.get().isHost(userId)) {
+            return;   // a closed room, or the host, whose seat is permanent
         }
-        presence.remove(roomId, targetUserId);
-        media.removeParticipant(roomId, targetUserId);
+        if (stage.isOnStage(roomId, userId)) {
+            log.info("Speaker {} media dropped in room {}. Starting the stage grace lease.", userId, roomId);
+            leases.create(roomId, userId);
+        } else {
+            presence.remove(roomId, userId);
+            stage.removeHandRaise(roomId, userId);
+        }
     }
 
     @Override
-    public boolean isPresent(UUID roomId, String userId) {
-        return presence.isPresent(roomId, userId, presenceCutoff());
+    public void handleMediaReconnected(UUID roomId, UUID userId) {
+        leases.delete(roomId, userId);
     }
 
     @Override
-    public List<Participant> listPresent(UUID roomId) {
-        VoiceRoom room = rooms.get(roomId);
-        var speakers = new HashSet<>(stage.getStage(roomId).speakers());
-        List<String> present = presence.findPresent(roomId, presenceCutoff());
-        Set<String> reconnecting = leases.reconnecting(roomId, present);
-        return present.stream()
-                .map(userId -> new Participant(userId,
-                        roleOf(room, userId, speakers.contains(userId)),
+    public void handleDisconnectLeaseExpired(UUID roomId, UUID expiredUserId) {
+        if (activeRoom(roomId).filter(room -> !room.isHost(expiredUserId)).isEmpty()) {
+            return;
+        }
+        log.info("Grace lease expired for speaker {} in room {}. Evicting from stage.", expiredUserId, roomId);
+        stage.releaseAndPromoteNext(roomId, expiredUserId).ifPresent(promoted -> {
+            log.info("Auto-promoting queued user {} to stage in room {}", promoted, roomId);
+            gateway.setPublishPermission(roomId, promoted, true);
+        });
+    }
+
+    @Override
+    public void heartbeat(UUID roomId, UUID userId) {
+        rooms.getRequiredActiveRoom(roomId);
+        presence.touch(roomId, userId, clock.instant());
+    }
+
+    @Override
+    public List<ParticipantResponse> listParticipants(UUID roomId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        Set<UUID> speakers = new HashSet<>(stage.snapshot(roomId).speakers());
+        List<UUID> present = presence.findPresent(roomId, presenceCutoff());
+        Set<UUID> reconnecting = leases.usersWithLease(roomId, present);
+        return mapper.toParticipantResponses(present.stream()
+                .map(userId -> new Participant(userId, roleOf(room, userId, speakers.contains(userId)),
                         reconnecting.contains(userId) ? PresenceStatus.RECONNECTING : PresenceStatus.ACTIVE))
-                .toList();
+                .toList());
     }
 
     @TransactionalEventListener
@@ -116,11 +144,20 @@ class ParticipantServiceImpl implements ParticipantService {
         presence.clear(event.roomId());
     }
 
-    private Instant presenceCutoff() {
-        return clock.instant().minus(presenceTimeout);
+    /** Webhook paths must not fail for a room that has just been closed, so they look the room up without a 404. */
+    private Optional<VoiceRoom> activeRoom(UUID roomId) {
+        return roomRepository.findByIdAndStatus(roomId, VoiceRoomStatus.ACTIVE);
     }
 
-    private static ParticipantRole roleOf(VoiceRoom room, String userId, boolean onStage) {
+    private boolean isHost(UUID roomId, UUID userId) {
+        return activeRoom(roomId).filter(room -> room.isHost(userId)).isPresent();
+    }
+
+    private Instant presenceCutoff() {
+        return clock.instant().minus(properties.presenceTimeout());
+    }
+
+    private static ParticipantRole roleOf(VoiceRoom room, UUID userId, boolean onStage) {
         if (room.isHost(userId)) {
             return ParticipantRole.HOST;
         }

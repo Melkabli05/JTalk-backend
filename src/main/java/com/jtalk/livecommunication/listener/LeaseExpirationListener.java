@@ -1,7 +1,7 @@
 package com.jtalk.livecommunication.listener;
 
 import com.jtalk.livecommunication.domain.repository.LeaseRepository;
-import com.jtalk.livecommunication.domain.service.StageLeaseService;
+import com.jtalk.livecommunication.domain.service.ParticipantService;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.pubsub.RedisPubSubAdapter;
@@ -31,17 +31,17 @@ public class LeaseExpirationListener {
 
     private final RedisClient client;
     private final StatefulRedisConnection<String, String> connection;
-    private final StageLeaseService leases;
+    private final ParticipantService participants;
     private final ExecutorService executor;
     private StatefulRedisPubSubConnection<String, String> pubSub;
 
     public LeaseExpirationListener(RedisClient client,
                                    StatefulRedisConnection<String, String> connection,
-                                   StageLeaseService leases,
+                                   ParticipantService participants,
                                    @Named(TaskExecutors.BLOCKING) ExecutorService executor) {
         this.client = client;
         this.connection = connection;
-        this.leases = leases;
+        this.participants = participants;
         this.executor = executor;
     }
 
@@ -60,7 +60,7 @@ public class LeaseExpirationListener {
 
     private void reclaim(LeaseRepository.LeaseKey lease) {
         try {
-            leases.reclaim(lease.roomId(), lease.userId());
+            participants.handleDisconnectLeaseExpired(lease.roomId(), lease.userId());
         } catch (RuntimeException e) {
             log.error("Failed to reclaim stage seat of {} in room {}", lease.userId(), lease.roomId(), e);
         }

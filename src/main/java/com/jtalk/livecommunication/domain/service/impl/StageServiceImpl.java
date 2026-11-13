@@ -1,113 +1,166 @@
 package com.jtalk.livecommunication.domain.service.impl;
 
+import com.jtalk.livecommunication.config.VoiceRoomProperties;
+import com.jtalk.livecommunication.domain.dto.request.NetworkModeRequest;
+import com.jtalk.livecommunication.domain.dto.request.WhisperRequest;
+import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.domain.dto.response.StageResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
-import com.jtalk.livecommunication.domain.enums.SeatResult;
+import com.jtalk.livecommunication.domain.enums.NetworkMode;
+import com.jtalk.livecommunication.domain.enums.ParticipantRole;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
-import com.jtalk.livecommunication.domain.model.StageState;
+import com.jtalk.livecommunication.domain.mapper.ApiMapper;
+import com.jtalk.livecommunication.domain.model.WhisperSignal;
+import com.jtalk.livecommunication.domain.repository.PresenceRepository;
+import com.jtalk.livecommunication.domain.repository.QualityRepository;
 import com.jtalk.livecommunication.domain.repository.StageRepository;
-import com.jtalk.livecommunication.domain.service.MediaService;
+import com.jtalk.livecommunication.domain.repository.WhisperRepository;
 import com.jtalk.livecommunication.domain.service.StageService;
 import com.jtalk.livecommunication.domain.service.VoiceRoomService;
 import com.jtalk.livecommunication.exception.ProblemType;
+import com.jtalk.livecommunication.integration.LiveKitGateway;
+import io.micronaut.serde.ObjectMapper;
 import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
-import org.zalando.problem.ThrowableProblem;
+import lombok.extern.slf4j.Slf4j;
 
-import java.util.Optional;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.time.Clock;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Singleton
+@Slf4j
 @RequiredArgsConstructor
 class StageServiceImpl implements StageService {
 
+    private static final String WHISPER_TOPIC = "whisper";
+
     private final VoiceRoomService rooms;
     private final StageRepository stage;
-    private final MediaService media;
+    private final PresenceRepository presence;
+    private final WhisperRepository whispers;
+    private final QualityRepository quality;
+    private final LiveKitGateway gateway;
+    private final ApiMapper mapper;
+    private final ObjectMapper json;
+    private final Clock clock;
+    private final VoiceRoomProperties properties;
 
     @Override
-    public int raiseHand(UUID roomId, String userId) {
-        VoiceRoom room = rooms.getActive(roomId);
+    public RoomSessionResponse claimStageSeat(UUID roomId, UUID userId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        if (!stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats())) {
+            throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
+        }
+        gateway.setPublishPermission(roomId, userId, true);
+        return new RoomSessionResponse(rooms.toResponse(room), gateway.generateToken(roomId, userId, true),
+                room.isHost(userId) ? ParticipantRole.HOST : ParticipantRole.SPEAKER, true);
+    }
+
+    @Override
+    public void leaveStageSeat(UUID roomId, UUID userId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         if (room.isHost(userId)) {
-            throw ProblemType.HOST_DOES_NOT_NEED_SEAT.because("The host can always speak and does not need a stage seat");
+            throw ProblemType.HOST_CANNOT_LEAVE_STAGE.because("The host keeps their stage seat");
         }
-        int position = stage.raiseHand(roomId, userId);
-        if (position < 0) {
-            throw alreadyOnStage(userId);
-        }
-        return position;
+        gateway.setPublishPermission(roomId, userId, false);
+        stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> gateway.setPublishPermission(roomId, promoted, true));
     }
 
     @Override
-    public void lowerHand(UUID roomId, String userId) {
-        rooms.getActive(roomId);
-        stage.lowerHand(roomId, userId);
-    }
-
-    @Override
-    public void approveSpeaker(UUID roomId, String hostId, String userId) {
-        VoiceRoom room = rooms.getActiveAsHost(roomId, hostId);
-        SeatResult result = stage.approve(roomId, userId, room.maxSpeakers());
-        switch (result) {
-            case STAGE_FULL -> throw ProblemType.STAGE_FULL.because("All " + room.maxSpeakers() + " stage seats are taken");
-            case ALREADY_ON_STAGE -> throw alreadyOnStage(userId);
-            case NOT_IN_QUEUE -> throw ProblemType.NOT_IN_HAND_RAISE_QUEUE.because(userId + " has not raised a hand");
-            case SEATED -> {
-                try {
-                    media.updatePublishPermission(roomId, userId, true);
-                } catch (RuntimeException e) {
-                    stage.leaveStage(roomId, userId);
-                    throw e;
-                }
-            }
+    public void raiseHand(UUID roomId, UUID userId) {
+        rooms.getRequiredActiveRoom(roomId);
+        if (stage.raiseHand(roomId, userId) < 0) {
+            throw ProblemType.ALREADY_ON_STAGE.because(userId + " is already on stage");
         }
     }
 
     @Override
-    public void removeSpeaker(UUID roomId, String requesterId, String userId) {
-        VoiceRoom room = rooms.getActive(roomId);
-        if (!requesterId.equals(userId) && !room.isHost(requesterId)) {
-            throw ProblemType.CANNOT_REMOVE_SPEAKER.because("Only the host can remove another speaker from the stage");
+    public void lowerHand(UUID roomId, UUID userId) {
+        rooms.getRequiredActiveRoom(roomId);
+        stage.removeHandRaise(roomId, userId);
+    }
+
+    @Override
+    public void promoteToStage(UUID roomId, UUID hostId, UUID targetUserId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        if (!room.isHost(hostId)) {
+            throw ProblemType.NOT_ROOM_HOST.because("Only the room host can promote listeners to the stage");
         }
-        stage.leaveStage(roomId, userId);
-        if (!room.isHost(userId)) {
-            media.updatePublishPermission(roomId, userId, false);
+        if (!stage.tryClaimStageSeat(roomId, targetUserId, room.maxStageSeats())) {
+            throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
+        }
+        gateway.setPublishPermission(roomId, targetUserId, true);
+        log.info("Host {} promoted user {} to stage in room {}", hostId, targetUserId, roomId);
+    }
+
+    @Override
+    public void demoteToListener(UUID roomId, UUID hostId, UUID targetUserId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        if (!room.isHost(hostId)) {
+            throw ProblemType.NOT_ROOM_HOST.because("Only the room host can demote speakers");
+        }
+        leaveStageSeat(roomId, targetUserId);
+        log.info("Host {} demoted speaker {} to listener in room {}", hostId, targetUserId, roomId);
+    }
+
+    @Override
+    public void startWhisper(UUID roomId, UUID speakerId, WhisperRequest request) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        UUID targetId = request.targetUserId();
+        if (!room.allowWhisper()) {
+            throw ProblemType.WHISPER_NOT_PERMITTED.because("Whisper side-channels are disabled in this room");
+        }
+        if (!stage.isOnStage(roomId, speakerId)) {
+            throw ProblemType.WHISPER_NOT_PERMITTED.because("Only stage speakers can whisper");
+        }
+        if (speakerId.equals(targetId)) {
+            throw ProblemType.WHISPER_TO_SELF.because("You cannot whisper to yourself");
+        }
+        if (!presence.isPresent(roomId, targetId, clock.instant().minus(properties.presenceTimeout()))) {
+            throw ProblemType.WHISPER_TARGET_NOT_PRESENT.because(targetId + " is not in the room");
+        }
+        stopWhisper(roomId, speakerId);   // one whisper at a time
+        whispers.start(roomId, speakerId, targetId);
+        for (UUID side : List.of(speakerId, targetId)) {
+            send(roomId, side, new WhisperSignal("start", speakerId, targetId, gateway.generateWhisperToken(roomId, speakerId, targetId, side)));
         }
     }
 
     @Override
-    public StageState getStage(UUID roomId) {
-        rooms.get(roomId);
-        return stage.snapshot(roomId);
-    }
-
-    @Override
-    public boolean isOnStage(UUID roomId, String userId) {
-        return stage.isOnStage(roomId, userId);
-    }
-
-    @Override
-    public void clearUser(UUID roomId, String userId) {
-        stage.lowerHand(roomId, userId);
-        stage.leaveStage(roomId, userId);
-    }
-
-    @Override
-    public Optional<String> releaseSeatAndPromoteNext(UUID roomId, String userId) {
-        VoiceRoom room = rooms.get(roomId);
-        if (!room.isActive()) {
-            return Optional.empty();   // the room-closed event clears the stage
-        }
-        Optional<String> promoted = stage.releaseAndPromoteNext(roomId, userId, room.maxSpeakers());
-        promoted.ifPresent(promotedId -> {
-            try {
-                media.updatePublishPermission(roomId, promotedId, true);
-            } catch (RuntimeException e) {
-                stage.leaveStage(roomId, promotedId);
-                throw e;
+    public void stopWhisper(UUID roomId, UUID speakerId) {
+        whispers.find(roomId, speakerId).ifPresent(targetId -> {
+            whispers.stop(roomId, speakerId);
+            gateway.deleteWhisperRoom(roomId, speakerId, targetId);
+            for (UUID side : List.of(speakerId, targetId)) {
+                send(roomId, side, new WhisperSignal("stop", speakerId, targetId, null));
             }
         });
-        return promoted;
+    }
+
+    @Override
+    public void updateNetworkMode(UUID roomId, UUID userId, NetworkModeRequest request) {
+        rooms.getRequiredActiveRoom(roomId);
+        if (request.mode() == NetworkMode.LOW_BANDWIDTH) {
+            quality.addPruned(roomId, userId, request.secondaryTrackSidsToDrop());
+            gateway.updateSubscriptions(roomId, userId, request.secondaryTrackSidsToDrop(), false);
+            gateway.updateSubscriptions(roomId, userId, request.primaryTrackSidsToKeep(), true);
+        } else {
+            Set<String> restore = new LinkedHashSet<>(quality.takePruned(roomId, userId));
+            restore.addAll(request.secondaryTrackSidsToDrop());
+            gateway.updateSubscriptions(roomId, userId, List.copyOf(restore), true);
+        }
+    }
+
+    @Override
+    public StageResponse getStage(UUID roomId) {
+        rooms.getRequiredActiveRoom(roomId);
+        return mapper.toResponse(stage.snapshot(roomId));
     }
 
     @TransactionalEventListener
@@ -115,7 +168,11 @@ class StageServiceImpl implements StageService {
         stage.clear(event.roomId());
     }
 
-    private static ThrowableProblem alreadyOnStage(String userId) {
-        return ProblemType.ALREADY_ON_STAGE.because(userId + " is already on stage");
+    private void send(UUID roomId, UUID recipient, WhisperSignal signal) {
+        try {
+            gateway.sendData(roomId, WHISPER_TOPIC, json.writeValueAsBytes(signal), List.of(recipient));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

@@ -13,12 +13,16 @@ import java.util.UUID;
 @Serdeable.Serializable
 public record VoiceRoomResponse(
         UUID id,
-        String name,
-        String hostId,
-        int maxSpeakers,
+        String title,
+        String topic,
+        UUID hostId,
+        String targetLanguage,
+        String nativeLanguage,
+        int maxStageSeats,
+        boolean allowWhisper,
         VoiceRoomStatus status,
         Instant createdAt,
-        List<String> speakers,
+        List<UUID> speakers,
         long participantCount,
         long handRaiseCount) {
 }

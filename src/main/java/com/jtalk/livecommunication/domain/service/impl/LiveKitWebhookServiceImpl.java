@@ -2,7 +2,6 @@ package com.jtalk.livecommunication.domain.service.impl;
 
 import com.jtalk.livecommunication.domain.service.LiveKitWebhookService;
 import com.jtalk.livecommunication.domain.service.ParticipantService;
-import com.jtalk.livecommunication.domain.service.StageLeaseService;
 import com.jtalk.livecommunication.exception.ProblemType;
 import io.livekit.server.WebhookReceiver;
 import jakarta.inject.Singleton;
@@ -17,25 +16,19 @@ import java.util.UUID;
 class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
 
     private final WebhookReceiver receiver;
-    private final StageLeaseService leases;
     private final ParticipantService participants;
 
     @Override
     public void handle(String body, String authorizationHeader) {
         WebhookEvent event = verify(body, authorizationHeader);
-        Optional<UUID> roomId = parseRoomId(event.getRoom().getName());
-        String identity = event.getParticipant().getIdentity();
-        if (roomId.isEmpty() || identity.isBlank()) {
-            return;
+        Optional<UUID> roomId = parseId(event.getRoom().getName());
+        Optional<UUID> userId = parseId(event.getParticipant().getIdentity());
+        if (roomId.isEmpty() || userId.isEmpty()) {
+            return;   // not one of our voice rooms (e.g. a whisper's private room) or not one of our users
         }
         switch (event.getEvent()) {
-            // A speaker keeps their seat under a grace lease; everyone else simply leaves.
-            case "participant_left" -> {
-                if (!leases.onDisconnect(roomId.get(), identity)) {
-                    participants.leave(roomId.get(), identity);
-                }
-            }
-            case "participant_joined" -> leases.onReconnect(roomId.get(), identity);
+            case "participant_left" -> participants.handleMediaDisconnected(roomId.get(), userId.get());
+            case "participant_joined" -> participants.handleMediaReconnected(roomId.get(), userId.get());
             default -> { /* other events are not needed */ }
         }
     }
@@ -48,11 +41,11 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
         }
     }
 
-    private static Optional<UUID> parseRoomId(String roomName) {
+    private static Optional<UUID> parseId(String value) {
         try {
-            return Optional.of(UUID.fromString(roomName));
+            return Optional.of(UUID.fromString(value));
         } catch (IllegalArgumentException e) {
-            return Optional.empty();   // a LiveKit room that is not one of our voice rooms
+            return Optional.empty();
         }
     }
 }

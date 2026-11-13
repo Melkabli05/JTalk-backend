@@ -1,7 +1,6 @@
 package com.jtalk.livecommunication.domain.repository;
 
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
-import com.jtalk.livecommunication.domain.enums.SeatResult;
 import com.jtalk.livecommunication.domain.model.StageState;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -14,10 +13,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Stage state in Redis. Keys share the {@code {roomId}} hash tag so multi-key Lua scripts stay valid
- * on Redis Cluster.
+ * Stage state in Redis. Keys share the {@code {roomId}} hash tag so multi-key Lua scripts stay valid on Redis Cluster.
  * <ul>
- *   <li>{@code voiceroom:{id}:stage} - ZSET userId -> seated-at millis</li>
+ *   <li>{@code voiceroom:{id}:stage} - ZSET userId -> seated-at millis (the host is seated at creation)</li>
  *   <li>{@code voiceroom:{id}:hand-queue} - ZSET userId -> raised-at millis (FIFO)</li>
  * </ul>
  */
@@ -28,7 +26,7 @@ public class StageRepository {
     private final Clock clock;
     private final String ttlSeconds;
     private final LuaScript raiseHandScript;
-    private final LuaScript approveScript;
+    private final LuaScript claimSeatScript;
     private final LuaScript releaseAndPromoteScript;
 
     public StageRepository(StatefulRedisConnection<String, String> connection,
@@ -39,55 +37,53 @@ public class StageRepository {
         this.clock = clock;
         this.ttlSeconds = Long.toString(properties.stateTtl().toSeconds());
         this.raiseHandScript = LuaScript.load(resources, "lua/raise_hand.lua");
-        this.approveScript = LuaScript.load(resources, "lua/approve_speaker.lua");
+        this.claimSeatScript = LuaScript.load(resources, "lua/claim_stage_seat.lua");
         this.releaseAndPromoteScript = LuaScript.load(resources, "lua/release_and_promote.lua");
     }
 
-    public int raiseHand(UUID roomId, String userId) {
+    public void initializeStage(UUID roomId, UUID hostId) {
+        RedisCommands<String, String> redis = redis();
+        redis.zadd(stageKey(roomId), clock.millis(), hostId.toString());
+        redis.expire(stageKey(roomId), Long.parseLong(ttlSeconds));
+    }
+
+    /** Adds the user to the queue if not already queued. Returns the 1-based position, or -1 if already on stage. */
+    public int raiseHand(UUID roomId, UUID userId) {
         Long position = raiseHandScript.execute(redis(), ScriptOutputType.INTEGER,
                 new String[]{stageKey(roomId), queueKey(roomId)},
-                userId, nowMillis(), ttlSeconds);
+                userId.toString(), nowMillis(), ttlSeconds);
         return position.intValue();
     }
 
-    public void lowerHand(UUID roomId, String userId) {
-        redis().zrem(queueKey(roomId), userId);
+    public void removeHandRaise(UUID roomId, UUID userId) {
+        redis().zrem(queueKey(roomId), userId.toString());
     }
 
-    public SeatResult approve(UUID roomId, String userId, int maxSeats) {
-        Long code = approveScript.execute(redis(), ScriptOutputType.INTEGER,
+    /** Atomically takes a free seat (and leaves the queue). Returns false if the stage is full. */
+    public boolean tryClaimStageSeat(UUID roomId, UUID userId, int maxSeats) {
+        Long result = claimSeatScript.execute(redis(), ScriptOutputType.INTEGER,
                 new String[]{stageKey(roomId), queueKey(roomId)},
-                userId, Integer.toString(maxSeats), nowMillis(), ttlSeconds);
-        return switch (code.intValue()) {
-            case 1 -> SeatResult.SEATED;
-            case 0 -> SeatResult.STAGE_FULL;
-            case 2 -> SeatResult.ALREADY_ON_STAGE;
-            case 3 -> SeatResult.NOT_IN_QUEUE;
-            default -> throw new IllegalStateException("Unexpected approve_speaker.lua result: " + code);
-        };
+                userId.toString(), Integer.toString(maxSeats), nowMillis(), ttlSeconds);
+        return result != 0;
     }
 
-    /** Frees the user's seat and seats the longest-waiting hand-raiser in one atomic step; returns who was seated. */
-    public Optional<String> releaseAndPromoteNext(UUID roomId, String userId, int maxSeats) {
+    /** Frees the user's seat and, atomically, seats the longest-waiting hand-raiser; returns who was seated. */
+    public Optional<UUID> releaseAndPromoteNext(UUID roomId, UUID userId) {
         String promoted = releaseAndPromoteScript.execute(redis(), ScriptOutputType.VALUE,
                 new String[]{stageKey(roomId), queueKey(roomId)},
-                userId, Integer.toString(maxSeats), nowMillis(), ttlSeconds);
-        return Optional.ofNullable(promoted);
+                userId.toString(), nowMillis(), ttlSeconds);
+        return Optional.ofNullable(promoted).map(UUID::fromString);
     }
 
-    public boolean leaveStage(UUID roomId, String userId) {
-        return redis().zrem(stageKey(roomId), userId) > 0;
-    }
-
-    public boolean isOnStage(UUID roomId, String userId) {
-        return redis().zscore(stageKey(roomId), userId) != null;
+    public boolean isOnStage(UUID roomId, UUID userId) {
+        return redis().zscore(stageKey(roomId), userId.toString()) != null;
     }
 
     public StageState snapshot(UUID roomId) {
         RedisCommands<String, String> redis = redis();
         return new StageState(
-                redis.zrange(stageKey(roomId), 0, -1),
-                redis.zrange(queueKey(roomId), 0, -1));
+                redis.zrange(stageKey(roomId), 0, -1).stream().map(UUID::fromString).toList(),
+                redis.zrange(queueKey(roomId), 0, -1).stream().map(UUID::fromString).toList());
     }
 
     public void clear(UUID roomId) {

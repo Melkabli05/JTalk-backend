@@ -70,7 +70,7 @@ public class LiveStatsRepository {
     private static RoomLiveStats read(UUID roomId, Pending p) {
         try {
             return new RoomLiveStats(
-                    p.speakers.get(0, TimeUnit.MILLISECONDS),
+                    p.speakers.get(0, TimeUnit.MILLISECONDS).stream().map(UUID::fromString).toList(),
                     p.present.get(0, TimeUnit.MILLISECONDS),
                     p.handRaises.get(0, TimeUnit.MILLISECONDS));
         } catch (Exception e) {
