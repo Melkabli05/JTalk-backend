@@ -14,5 +14,3 @@ livekit:
 
 voice-room:
   lease-ttl: PT1S
-  quality:
-    recovery-window: PT1S

@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Grace leases, LiveKit webhooks, stage moderation, whisper, kick, low-bandwidth mode and adaptive quality. */
+/** Grace leases, LiveKit webhooks, stage moderation, whisper, kick and low-bandwidth mode. */
 class RealtimeFeaturesApiTest extends ApiTestBase {
 
     private static final String API_KEY = "test-key";
@@ -312,55 +312,6 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         assertEquals(List.of(), gateway.subscriptionChanges, "nothing left to restore");
     }
 
-    // ---- adaptive quality -------------------------------------------------------------------------
-
-    @Test
-    void strugglingListenerIsPrunedToThePrimaryTrackAndRestoredAfterRecovering() throws InterruptedException {
-        String roomId = createRoom("host", "Quality", 3);
-        join(roomId, "bob");
-
-        report(roomId, "bob", 20, 100, List.of("TR_host", "TR_alice", "TR_carol"), "TR_host");   // >15% loss
-        assertEquals(List.of(new SubscriptionChange(uuid(roomId), id("bob"), List.of("TR_alice", "TR_carol"), false)), gateway.subscriptionChanges);
-
-        gateway.subscriptionChanges.clear();
-        report(roomId, "bob", 20, 100, List.of("TR_host"), "TR_host");   // nothing left to prune: no call to LiveKit
-        report(roomId, "bob", 1, 100, List.of("TR_host"), "TR_host");    // healthy streak starts, not long enough yet
-        assertEquals(List.of(), gateway.subscriptionChanges);
-        Thread.sleep(1_200);                                             // recovery window is 1s in tests
-        report(roomId, "bob", 1, 100, List.of("TR_host"), "TR_host");
-
-        assertEquals(1, gateway.subscriptionChanges.size());
-        SubscriptionChange restore = gateway.subscriptionChanges.getFirst();
-        assertTrue(restore.subscribe());
-        assertEquals(List.of("TR_alice", "TR_carol"), restore.trackSids().stream().sorted().toList());
-    }
-
-    @Test
-    void lowDownstreamBandwidthAlsoCountsAsStruggling() {
-        String roomId = createRoom("host", "Bandwidth", 3);
-        join(roomId, "bob");
-
-        report(roomId, "bob", 0, 10, List.of("TR_a", "TR_b"), "TR_a");   // <25 kbps
-
-        assertEquals(List.of(new SubscriptionChange(uuid(roomId), id("bob"), List.of("TR_b"), false)), gateway.subscriptionChanges);
-    }
-
-    @Test
-    void aReportWithoutTracksNeverCallsLiveKit() {
-        String roomId = createRoom("host", "No tracks", 3);
-        join(roomId, "bob");
-
-        assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/quality", "bob", Map.of("lossPercent", 30, "downstreamKbps", 100)).status());
-
-        assertEquals(List.of(), gateway.subscriptionChanges);
-    }
-
-    @Test
-    void invalidQualityReportIsRejected() {
-        String roomId = createRoom("host", "Validation", 3);
-        assertProblem(HttpStatus.BAD_REQUEST, null, () -> postJson(roomId, "/quality", "bob", Map.of("lossPercent", 120, "downstreamKbps", 100)));
-    }
-
     // ---- helpers ----------------------------------------------------------------------------------
 
     private Set<String> speakers(String roomId) {
@@ -382,12 +333,6 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
 
     private Signal signalTo(String userName) {
         return gateway.signals.stream().filter(s -> s.destinations().equals(List.of(id(userName)))).findFirst().orElseThrow();
-    }
-
-    private void report(String roomId, String userName, double lossPercent, int downstreamKbps, List<String> subscribed, String primary) {
-        assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/quality", userName, Map.of(
-                "lossPercent", lossPercent, "downstreamKbps", downstreamKbps,
-                "subscribedTrackSids", subscribed, "primaryTrackSid", primary)).status());
     }
 
     private void webhook(String event, String roomId, String userName) {

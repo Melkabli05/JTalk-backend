@@ -1,12 +1,10 @@
 package com.jtalk.livecommunication.domain.mapper;
 
-import com.jtalk.livecommunication.domain.dto.request.QualityReportRequest;
 import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.domain.dto.response.StageResponse;
 import com.jtalk.livecommunication.domain.dto.response.VoiceRoomResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.model.Participant;
-import com.jtalk.livecommunication.domain.model.QualityReport;
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.domain.model.StageState;
 import org.mapstruct.Mapper;
@@ -30,6 +28,4 @@ public interface ApiMapper {
     List<ParticipantResponse> toParticipantResponses(List<Participant> participants);
 
     StageResponse toResponse(StageState state);
-
-    QualityReport toReport(QualityReportRequest request);
 }

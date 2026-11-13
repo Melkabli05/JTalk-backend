@@ -12,7 +12,7 @@ import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.domain.mapper.ApiMapper;
 import com.jtalk.livecommunication.domain.model.WhisperSignal;
 import com.jtalk.livecommunication.domain.repository.PresenceRepository;
-import com.jtalk.livecommunication.domain.repository.QualityRepository;
+import com.jtalk.livecommunication.domain.repository.PrunedTrackRepository;
 import com.jtalk.livecommunication.domain.repository.StageRepository;
 import com.jtalk.livecommunication.domain.repository.WhisperRepository;
 import com.jtalk.livecommunication.domain.service.StageService;
@@ -44,7 +44,7 @@ class StageServiceImpl implements StageService {
     private final StageRepository stage;
     private final PresenceRepository presence;
     private final WhisperRepository whispers;
-    private final QualityRepository quality;
+    private final PrunedTrackRepository prunedTracks;
     private final LiveKitGateway gateway;
     private final ApiMapper mapper;
     private final ObjectMapper json;
@@ -147,11 +147,11 @@ class StageServiceImpl implements StageService {
     public void updateNetworkMode(UUID roomId, UUID userId, NetworkModeRequest request) {
         rooms.getRequiredActiveRoom(roomId);
         if (request.mode() == NetworkMode.LOW_BANDWIDTH) {
-            quality.addPruned(roomId, userId, request.secondaryTrackSidsToDrop());
+            prunedTracks.add(roomId, userId, request.secondaryTrackSidsToDrop());
             gateway.updateSubscriptions(roomId, userId, request.secondaryTrackSidsToDrop(), false);
             gateway.updateSubscriptions(roomId, userId, request.primaryTrackSidsToKeep(), true);
         } else {
-            Set<String> restore = new LinkedHashSet<>(quality.takePruned(roomId, userId));
+            Set<String> restore = new LinkedHashSet<>(prunedTracks.take(roomId, userId));
             restore.addAll(request.secondaryTrackSidsToDrop());
             gateway.updateSubscriptions(roomId, userId, List.copyOf(restore), true);
         }
@@ -166,6 +166,7 @@ class StageServiceImpl implements StageService {
     @TransactionalEventListener
     void onRoomClosed(VoiceRoomClosed event) {
         stage.clear(event.roomId());
+        prunedTracks.clear(event.roomId());
     }
 
     private void send(UUID roomId, UUID recipient, WhisperSignal signal) {
