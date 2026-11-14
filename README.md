@@ -157,6 +157,26 @@ Redis must have keyspace notifications for expired keys (`notify-keyspace-events
   `7880/TCP`, `443/TCP` (TURN/TLS) and the configured UDP media range.
 - **Databases:** PostgreSQL and Redis never share a transaction; services hold no database transaction while calling
   LiveKit or Redis.
+- **Health:** `GET /health/liveness` and `/health/readiness` are anonymous (details hidden). Readiness goes 503 when
+  Redis or PostgreSQL is unreachable and recovers by itself; with PostgreSQL down it answers in about 3 s
+  (`datasources.default.connection-timeout`), while API calls fail with a 500 after the same 3 s.
+- **Verified as a deployment** (built jar, external PostgreSQL and Redis, default profile, credentials only through
+  environment variables): Flyway migrates, the service starts in about a second, unauthenticated calls and the dev
+  endpoints answer 401, a real LiveKit room is created, joined, refused to a non-host and closed.
+
+## Before going to production
+
+Not built, or not verified, and worth deciding on:
+- **Abandoned rooms stay listed.** LiveKit deletes an empty room after `emptyRoomTimeoutSeconds` (300 s), but nothing
+  closes the PostgreSQL row, so a room whose host crashed stays `ACTIVE` in discovery until its host closes it. Handling
+  LiveKit's `room_finished` webhook (or a janitor) would close that gap.
+- **No rate limiting, CORS or metrics/tracing** are configured. Browser clients on another origin need CORS.
+- **One active room per host is not a database constraint**, so two simultaneous creates by one host can open two
+  rooms (every lookup tolerates it).
+- **Several instances are untested.** Each instance listens for lease expiry and a webhook goes to one of them; the
+  seat rule is idempotent but this has not been exercised with more than one instance.
+- **No load test, no container image build and no HTTP/3 client test** have been run.
+- **Rotate the LiveKit credentials** committed in `application-dev.yml` before the repository is shared.
 
 ## Deliberate decisions and known limits
 

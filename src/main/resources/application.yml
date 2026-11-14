@@ -20,6 +20,8 @@ micronaut:
 datasources:
   default:
     dialect: POSTGRES
+    # Fail fast when the database is down: Hikari's default is 30 s, which keeps probes and callers hanging.
+    connection-timeout: 3000
 
 flyway:
   datasources:
