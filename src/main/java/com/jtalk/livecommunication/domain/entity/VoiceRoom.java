@@ -26,27 +26,26 @@ public record VoiceRoom(
         String targetLanguage,
         String nativeLanguage,
         int maxStageSeats,
-        boolean allowWhisper,
         VoiceRoomStatus status,
         @DateCreated Instant createdAt,
         @DateUpdated Instant updatedAt) {
 
     /** A new, unsaved room: the id and timestamps are filled in by Micronaut Data when it is inserted. */
     public static VoiceRoom open(String title, @Nullable String topic, UUID hostId, String targetLanguage,
-                                 String nativeLanguage, int maxStageSeats, boolean allowWhisper) {
+                                 String nativeLanguage, int maxStageSeats) {
         return new VoiceRoom(null, title.strip(), topic, hostId, targetLanguage, nativeLanguage, maxStageSeats,
-                allowWhisper, VoiceRoomStatus.ACTIVE, null, null);
+                VoiceRoomStatus.ACTIVE, null, null);
     }
 
     /** Applies a partial update; a null argument keeps the current value. */
     public VoiceRoom withSettings(@Nullable String newTitle, @Nullable String newTopic, @Nullable Integer newMaxStageSeats) {
         return new VoiceRoom(id, newTitle == null ? title : newTitle.strip(), newTopic == null ? topic : newTopic, hostId,
                 targetLanguage, nativeLanguage, newMaxStageSeats == null ? maxStageSeats : newMaxStageSeats,
-                allowWhisper, status, createdAt, updatedAt);
+                status, createdAt, updatedAt);
     }
 
     public VoiceRoom close() {
-        return new VoiceRoom(id, title, topic, hostId, targetLanguage, nativeLanguage, maxStageSeats, allowWhisper,
+        return new VoiceRoom(id, title, topic, hostId, targetLanguage, nativeLanguage, maxStageSeats,
                 VoiceRoomStatus.CLOSED, createdAt, updatedAt);
     }
 

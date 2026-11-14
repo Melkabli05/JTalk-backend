@@ -30,23 +30,8 @@ public interface LiveKitGateway {
     void removeParticipant(@NonNull UUID roomId, @NonNull UUID userId);
 
     /**
-     * Token for the private two-person LiveKit room of one whisper (nobody else can join it): the speaker may only
-     * publish, the target may only listen.
-     */
-    String generateWhisperToken(@NonNull UUID roomId, @NonNull UUID speakerId, @NonNull UUID targetId, @NonNull UUID userId);
-
-    /** Deletes the whisper's private room, disconnecting both. Idempotent. */
-    void deleteWhisperRoom(@NonNull UUID roomId, @NonNull UUID speakerId, @NonNull UUID targetId);
-
-    /**
      * Pushes a room event to everyone in the room over LiveKit's reliable data channel, so clients update their UI without
      * polling. Best effort: a failure is logged and never fails the request that caused the event.
      */
     void broadcastRoomEvent(@NonNull UUID roomId, @NonNull RoomEventType type, @Nullable UUID targetUserId);
-
-    /**
-     * Sends a reliable data message (serialized to JSON) to specific participants of the room; an empty list means
-     * everyone.
-     */
-    void sendData(@NonNull UUID roomId, @NonNull String topic, @NonNull Object message, @NonNull List<UUID> destinationUserIds);
 }

@@ -21,7 +21,7 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
     @Override
     public void handle(String body, String authorizationHeader) {
         WebhookEvent event = verify(body, authorizationHeader);
-        // Not one of our voice rooms (e.g. a whisper's private room) or not one of our users: nothing to do.
+        // Not one of our voice rooms or not one of our users: nothing to do.
         MediaParticipant.of(event).ifPresent(who -> {
             switch (event.getEvent()) {
                 case "participant_left" -> participants.handleMediaDisconnected(who.roomId(), who.userId());

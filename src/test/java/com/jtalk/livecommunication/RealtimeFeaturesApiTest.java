@@ -6,9 +6,7 @@ import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.support.ApiTestBase;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.PermissionChange;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.Removal;
-import com.jtalk.livecommunication.support.FakeLiveKitGateway.Signal;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.SubscriptionChange;
-import com.jtalk.livecommunication.support.FakeLiveKitGateway.WhisperClose;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
@@ -26,11 +24,10 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Grace leases, LiveKit webhooks, stage moderation, whisper, kick and low-bandwidth mode. */
+/** Grace leases, LiveKit webhooks, stage moderation, kick and low-bandwidth mode. */
 class RealtimeFeaturesApiTest extends ApiTestBase {
 
     private static final String API_KEY = "test-key";
@@ -130,7 +127,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     @Test
     void webhooksForRoomsOrUsersThatAreNotOursAreIgnored() {
         assertEquals(HttpStatus.OK, sendWebhook(
-                "{\"event\":\"participant_left\",\"room\":{\"name\":\"whisper-room\"},\"participant\":{\"identity\":\"" + id("x") + "\"}}"));
+                "{\"event\":\"participant_left\",\"room\":{\"name\":\"not-a-voice-room\"},\"participant\":{\"identity\":\"" + id("x") + "\"}}"));
         assertEquals(HttpStatus.OK, sendWebhook(
                 "{\"event\":\"participant_left\",\"room\":{\"name\":\"" + id("some-room") + "\"},\"participant\":{\"identity\":\"not-a-uuid\"}}"));
     }
@@ -280,67 +277,6 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("bob"), true)));
     }
 
-    // ---- whisper ----------------------------------------------------------------------------------
-
-    @Test
-    void aWhisperGetsItsOwnPrivateRoomAndEachSideIsToldOnlyItsOwnToken() {
-        String roomId = createRoom("host", "Whisper", 3);
-        join(roomId, "host");
-        seatSpeaker(roomId, "alice");
-        join(roomId, "bob");
-        join(roomId, "carol");
-
-        assertProblem(HttpStatus.FORBIDDEN, "whisper-not-permitted", () -> whisper(roomId, "bob", "alice"));
-        assertProblem(HttpStatus.NOT_FOUND, "whisper-target-not-present", () -> whisper(roomId, "alice", "ghost"));
-        assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "whisper-to-self", () -> whisper(roomId, "alice", "alice"));
-
-        assertEquals(HttpStatus.NO_CONTENT, whisper(roomId, "alice", "bob").status());
-
-        assertEquals(2, gateway.signals.size());
-        Signal toSpeaker = signalTo("alice");
-        Signal toTarget = signalTo("bob");
-        assertEquals("whisper", toSpeaker.topic());
-        assertTrue(toSpeaker.payload().contains("\"action\":\"start\""), toSpeaker.payload());
-        assertTrue(toSpeaker.payload().contains("whisper:" + id("alice") + ">" + id("bob") + ":" + id("alice") + ":publish=true"));
-        assertTrue(toTarget.payload().contains("whisper:" + id("alice") + ">" + id("bob") + ":" + id("bob") + ":publish=false"));
-        assertFalse(toTarget.payload().contains("publish=true"), "the speaker's token never goes to the target");
-        assertFalse(toSpeaker.payload().contains("publish=false"), "the target's token never goes to the speaker");
-        assertTrue(gateway.signals.stream().noneMatch(s -> s.destinations().contains(id("carol"))), "nobody else is told");
-
-        gateway.signals.clear();
-        assertEquals(HttpStatus.NO_CONTENT, delete(roomId, "/stage/whisper", "alice").status());
-        assertEquals(List.of(new WhisperClose(uuid(roomId), id("alice"), id("bob"))), gateway.closedWhispers);
-        assertEquals(2, gateway.signals.size());
-        assertTrue(gateway.signals.stream().allMatch(s -> s.payload().contains("\"action\":\"stop\"")));
-
-        delete(roomId, "/stage/whisper", "alice");   // idempotent
-        assertEquals(1, gateway.closedWhispers.size());
-    }
-
-    @Test
-    void startingANewWhisperEndsThePreviousOne() {
-        String roomId = createRoom("host", "Switch whisper", 3);
-        join(roomId, "host");
-        seatSpeaker(roomId, "alice");
-        join(roomId, "bob");
-        join(roomId, "carol");
-
-        whisper(roomId, "alice", "bob");
-        whisper(roomId, "alice", "carol");
-
-        assertEquals(List.of(new WhisperClose(uuid(roomId), id("alice"), id("bob"))), gateway.closedWhispers);
-        assertTrue(gateway.signals.stream().anyMatch(s -> s.destinations().equals(List.of(id("carol"))) && s.payload().contains("\"action\":\"start\"")));
-    }
-
-    @Test
-    void whisperCanBeSwitchedOffPerRoom() {
-        String roomId = (String) createRoom("host", Map.of("title", "No whisper", "targetLanguage", "en", "nativeLanguage", "ar", "allowWhisper", false)).get("id");
-        join(roomId, "host");
-        join(roomId, "bob");
-
-        assertProblem(HttpStatus.FORBIDDEN, "whisper-not-permitted", () -> whisper(roomId, "host", "bob"));
-    }
-
     // ---- low-bandwidth mode -----------------------------------------------------------------------
 
     @Test
@@ -379,14 +315,6 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
                 .filter(p -> id(userName).toString().equals(p.get("userId")))
                 .map(p -> (String) p.get("status"))
                 .findFirst().orElseThrow();
-    }
-
-    private io.micronaut.http.HttpResponse<?> whisper(String roomId, String speaker, String target) {
-        return postJson(roomId, "/stage/whisper", speaker, Map.of("targetUserId", id(target).toString()));
-    }
-
-    private Signal signalTo(String userName) {
-        return gateway.signals.stream().filter(s -> s.destinations().equals(List.of(id(userName)))).findFirst().orElseThrow();
     }
 
     private void webhook(String event, String roomId, String userName) {

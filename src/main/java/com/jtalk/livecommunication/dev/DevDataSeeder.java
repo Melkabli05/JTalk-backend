@@ -22,7 +22,7 @@ import java.util.stream.Stream;
 
 /**
  * Gives a fresh development database something realistic to look at: seven language-exchange rooms in different
- * states (a full stage, a queue of raised hands, a quiet room, whispering switched off), filled with eleven named
+ * states (a full stage, a queue of raised hands, and a quiet room), filled with eleven named
  * people. It goes through the real services, so PostgreSQL, Redis and LiveKit all agree about what exists (the rooms
  * are real LiveKit rooms). Safe to run on every start: a host who already has an active room gets it back, and the
  * repeated joins, promotions and hand-raises are simply refused and ignored. It runs in the background after startup,
@@ -38,7 +38,7 @@ class DevDataSeeder {
 
     /** One room: who hosts it, who is promoted to the stage, who listens, and which listeners have a hand up. */
     private record Plan(DevUser host, String title, String topic, String target, String nativeLanguage, int seats,
-                        boolean whisper, List<DevUser> speakers, List<DevUser> listeners, List<DevUser> hands) {
+                        List<DevUser> speakers, List<DevUser> listeners, List<DevUser> hands) {
 
         List<DevUser> everyone() {
             return Stream.of(List.of(host), speakers, listeners).flatMap(List::stream).toList();
@@ -49,19 +49,19 @@ class DevDataSeeder {
     }
 
     private static final List<Plan> PLANS = List.of(
-            new Plan(DevUser.ALICE, "Spanish for beginners", "Ordering food and drinks", "es", "en", 6, true,
+            new Plan(DevUser.ALICE, "Spanish for beginners", "Ordering food and drinks", "es", "en", 6,
                     List.of(DevUser.LUCAS, DevUser.MAYA), List.of(DevUser.BOB, DevUser.CAROL, DevUser.OMAR), List.of(DevUser.BOB)),
-            new Plan(DevUser.BOB, "English conversation club", "Talk about your week", "en", "ar", 4, true,
+            new Plan(DevUser.BOB, "English conversation club", "Talk about your week", "en", "ar", 4,
                     List.of(DevUser.PRIYA), List.of(DevUser.CAROL, DevUser.DINA, DevUser.YUKI, DevUser.HANS), List.of(DevUser.CAROL, DevUser.DINA)),
-            new Plan(DevUser.CAROL, "Arabic cafe", "Greetings and small talk", "ar", "en", 8, true,
+            new Plan(DevUser.CAROL, "Arabic cafe", "Greetings and small talk", "ar", "en", 8,
                     List.of(DevUser.OMAR), List.of(DevUser.ALICE, DevUser.SOFIA), List.of()),
-            new Plan(DevUser.DINA, "French practice: au restaurant", "Booking a table and ordering", "fr", "en", 6, true,
+            new Plan(DevUser.DINA, "French practice: au restaurant", "Booking a table and ordering", "fr", "en", 6,
                     List.of(DevUser.SOFIA), List.of(DevUser.ALICE, DevUser.LUCAS), List.of(DevUser.ALICE)),
-            new Plan(DevUser.YUKI, "Japanese N5 study group", "Hiragana warm-up and greetings", "ja", "en", 5, true,
+            new Plan(DevUser.YUKI, "Japanese N5 study group", "Hiragana warm-up and greetings", "ja", "en", 5,
                     List.of(DevUser.HANS, DevUser.MAYA), List.of(DevUser.BOB, DevUser.PRIYA), List.of()),
-            new Plan(DevUser.HANS, "Deutsch am Morgen", "Small talk over coffee (stage is full)", "de", "en", 4, true,
+            new Plan(DevUser.HANS, "Deutsch am Morgen", "Small talk over coffee (stage is full)", "de", "en", 4,
                     List.of(DevUser.ALICE, DevUser.DINA, DevUser.OMAR), List.of(DevUser.CAROL, DevUser.BOB), List.of(DevUser.BOB)),
-            new Plan(DevUser.SOFIA, "Portuguese for travellers", "A quiet room, whispering is off", "pt", "en", 6, false,
+            new Plan(DevUser.SOFIA, "Portuguese for travellers", "A quiet room with a single listener", "pt", "en", 6,
                     List.of(), List.of(DevUser.LUCAS), List.of()));
 
     private final VoiceRoomService rooms;
@@ -87,7 +87,7 @@ class DevDataSeeder {
         UUID roomId;
         try {
             roomId = rooms.createRoom(plan.host().id(), new CreateVoiceRoomRequest(plan.title(), plan.topic(), plan.target(),
-                    plan.nativeLanguage(), plan.seats(), plan.whisper())).room().id();
+                    plan.nativeLanguage(), plan.seats())).room().id();
         } catch (RuntimeException e) {
             log.warn("Dev data: could not create room '{}' for {}: {}", plan.title(), plan.host().name(), e.getMessage());
             return;

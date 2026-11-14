@@ -13,7 +13,5 @@ public record VoiceRoomProperties(
         /* Safety net: ephemeral Redis keys of abandoned rooms expire after this long. */
         @Bindable(defaultValue = "PT24H") Duration stateTtl,
         /* How long a disconnected speaker keeps their seat before it is reclaimed. */
-        @Bindable(defaultValue = "PT30S") Duration leaseTtl,
-        /* Safety net: a whisper session that is never stopped expires after this long. */
-        @Bindable(defaultValue = "PT2M") Duration whisperTtl) {
+        @Bindable(defaultValue = "PT30S") Duration leaseTtl) {
 }

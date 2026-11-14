@@ -1,7 +1,6 @@
 package com.jtalk.livecommunication.controller;
 
 import com.jtalk.livecommunication.domain.dto.request.NetworkModeRequest;
-import com.jtalk.livecommunication.domain.dto.request.WhisperRequest;
 import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.domain.dto.response.StageResponse;
 import com.jtalk.livecommunication.domain.service.StageService;
@@ -71,18 +70,6 @@ class StageController {
     @Status(HttpStatus.NO_CONTENT)
     void demoteToListener(UUID roomId, UUID targetUserId, @CurrentUser UUID userId) {
         stage.demoteToListener(roomId, userId, targetUserId);
-    }
-
-    @Post("/whisper")
-    @Status(HttpStatus.NO_CONTENT)
-    void startWhisper(UUID roomId, @CurrentUser UUID userId, @Body @Valid WhisperRequest request) {
-        stage.startWhisper(roomId, userId, request);
-    }
-
-    @Delete("/whisper")
-    @Status(HttpStatus.NO_CONTENT)
-    void stopWhisper(UUID roomId, @CurrentUser UUID userId) {
-        stage.stopWhisper(roomId, userId);
     }
 
     @Post("/network-mode")

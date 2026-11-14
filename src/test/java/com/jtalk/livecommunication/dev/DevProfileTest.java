@@ -67,7 +67,6 @@ class DevProfileTest {
         Map<String, Object> full = byTitle.get("Deutsch am Morgen");
         assertEquals(((Number) full.get("maxStageSeats")).intValue(), ((List<?>) full.get("speakers")).size(), "the German room's stage is full");
         assertEquals(2L, ((Number) byTitle.get("English conversation club").get("handRaiseCount")).longValue(), "two hands up in the English club");
-        assertEquals(false, byTitle.get("Portuguese for travellers").get("allowWhisper"));
         assertTrue(((Number) byTitle.get("Spanish for beginners").get("participantCount")).intValue() >= 6, "Alice's room has an audience: ");
     }
 

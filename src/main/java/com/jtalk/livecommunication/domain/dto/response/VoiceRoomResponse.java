@@ -19,7 +19,6 @@ public record VoiceRoomResponse(
         String targetLanguage,
         String nativeLanguage,
         int maxStageSeats,
-        boolean allowWhisper,
         VoiceRoomStatus status,
         Instant createdAt,
         List<UUID> speakers,

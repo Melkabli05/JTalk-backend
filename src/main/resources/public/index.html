@@ -65,7 +65,6 @@
   .hands { display:flex; gap:8px; flex-wrap:wrap; }
   .hand { display:flex; align-items:center; gap:7px; padding:5px 6px 5px 5px; border-radius:999px; background:var(--card); box-shadow:0 0 0 1px var(--line); }
   .hand button { padding:4px 10px; font-size:12px; }
-  .banner { margin:8px 0; padding:8px 12px; border-radius:12px; background:var(--green-soft); font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
 
   .roombar { position:absolute; left:0; right:0; bottom:0; padding:12px 14px 16px; background:linear-gradient(transparent, var(--paper) 30%); display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
   .roombar button { padding:9px 13px; font-size:13px; }
@@ -198,7 +197,7 @@ class Phone {
   constructor(userId) {
     this.userId = userId; this.screen = 'hall'; this.rooms = []; this.filter = ''; this.room = null;
     this.stage = { speakers: [], handRaiseQueue: [] }; this.people = []; this.session = null; this.sheet = null;
-    this.lk = null; this.whisperRoom = null; this.speaking = new Set(); this.whisperWith = null; this.lowBandwidth = false;
+    this.lk = null; this.speaking = new Set(); this.lowBandwidth = false;
     this.root = h('div', { class: 'phone' }); this.toasts = h('div', { class: 'toastbox' });
   }
   get me() { return this.userId; }
@@ -241,7 +240,7 @@ class Phone {
     } catch (e) { console.error(e); }
     this.render();
   }
-  async goHall() { await this.stopAudio(); this.screen = 'hall'; this.room = null; this.session = null; this.stage = { speakers: [], handRaiseQueue: [] }; this.people = []; this.sheet = null; this.whisperWith = null; await this.loadRooms(); this.render(); }
+  async goHall() { await this.stopAudio(); this.screen = 'hall'; this.room = null; this.session = null; this.stage = { speakers: [], handRaiseQueue: [] }; this.people = []; this.sheet = null; await this.loadRooms(); this.render(); }
 
   // -- actions (each wrapped by act(): errors toast, then re-render)
   enter = this.act(async id => {
@@ -262,8 +261,6 @@ class Phone {
   accept = this.act(async id => { await this.api('POST', `/${this.roomId}/stage/promote/${id}`); this.toast(nameOf(id) + ' is on stage'); this.sheet = null; await this.refreshRoom(); });
   demote = this.act(async id => { await this.api('POST', `/${this.roomId}/stage/demote/${id}`); this.sheet = null; await this.refreshRoom(); });
   kick = this.act(async id => { await this.api('DELETE', `/${this.roomId}/participants/${id}`); this.toast(nameOf(id) + ' was removed'); this.sheet = null; await this.refreshRoom(); });
-  whisper = this.act(async id => { await this.api('POST', `/${this.roomId}/stage/whisper`, { targetUserId: id }); this.whisperWith = id; this.sheet = null; this.toast('Whispering to ' + nameOf(id)); });
-  stopWhisper = this.act(async () => { await this.api('DELETE', `/${this.roomId}/stage/whisper`); this.whisperWith = null; });
   toggleBandwidth = this.act(async () => { const mode = this.lowBandwidth ? 'OPTIMAL' : 'LOW_BANDWIDTH'; await this.api('POST', `/${this.roomId}/stage/network-mode`, { mode }); this.lowBandwidth = !this.lowBandwidth; this.sheet = null; });
   save = this.act(async form => { await this.api('PATCH', `/${this.roomId}`, form); this.sheet = null; this.toast('Room updated'); await this.refreshRoom(); });
   bots = this.act(async n => { this.sheet = null; this.toast(`Adding ${n} bots…`); await addBots(this.roomId, n); await this.refreshRoom(); });
@@ -278,29 +275,15 @@ class Phone {
     room.on(LivekitClient.RoomEvent.TrackSubscribed, t => { if (t.kind === 'audio') document.body.append(t.attach()); });
     room.on(LivekitClient.RoomEvent.TrackUnsubscribed, t => t.detach().forEach(e => e.remove()));
     room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, list => { this.speaking = new Set(list.map(p => p.identity)); this.render(); });
-    room.on(LivekitClient.RoomEvent.DataReceived, (payload, p, kind, topic) => this.onData(new TextDecoder().decode(payload), topic));
+    room.on(LivekitClient.RoomEvent.DataReceived, (payload, p, kind, topic) => { if (topic === 'room-events') this.refreshRoom().then(() => this.render()); });
     room.on(LivekitClient.RoomEvent.Disconnected, () => { if (this.lk === room) { this.lk = null; this.render(); } });
     await room.connect($('lkUrl').value.trim(), this.session.liveKitToken);
     this.lk = room;
     if (this.session.canPublishAudio) await room.localParticipant.setMicrophoneEnabled(true).catch(e => this.toast('Microphone: ' + e.message, true));
   }
-  async stopAudio() { const r = this.lk; this.lk = null; this.speaking = new Set(); await r?.disconnect(); await this.whisperRoom?.disconnect(); this.whisperRoom = null; }
+  async stopAudio() { const r = this.lk; this.lk = null; this.speaking = new Set(); await r?.disconnect(); }
   toggleAudio = this.act(async () => { if (this.lk) await this.stopAudio(); else await this.startAudio().catch(e => this.toast('LiveKit: ' + e.message, true)); });
   toggleMic = this.act(async () => { const lp = this.lk?.localParticipant; if (lp) await lp.setMicrophoneEnabled(!lp.isMicrophoneEnabled).catch(e => this.toast('Microphone: ' + e.message, true)); });
-  onData(text, topic) {
-    let msg; try { msg = JSON.parse(text); } catch { return; }
-    if (topic === 'room-events') this.refreshRoom().then(() => this.render());
-    if (topic === 'whisper' && msg.action === 'start') {
-      const other = msg.speakerId === this.me ? msg.targetId : msg.speakerId;
-      this.sheet = { kind: 'whisperInvite', other, token: msg.token }; this.render();
-    }
-    if (topic === 'whisper' && msg.action === 'stop') { this.whisperRoom?.disconnect(); this.whisperRoom = null; this.whisperWith = null; this.toast('Whisper ended'); this.render(); }
-  }
-  joinWhisper = this.act(async () => {
-    const { other, token } = this.sheet; this.sheet = null; this.whisperWith = other;
-    this.whisperRoom = new LivekitClient.Room(); await this.whisperRoom.connect($('lkUrl').value.trim(), token);
-    await this.whisperRoom.localParticipant.setMicrophoneEnabled(true).catch(() => {});
-  });
 
   // -- rendering
   render() {
@@ -354,7 +337,6 @@ class Phone {
         h('div', { class: 't' }, h('h3', {}, this.room.title), h('div', { class: 'topic' }, this.room.topic || ' ')),
         h('button', { class: 'ghost', dataset: { act: 'more' }, onclick: () => { this.sheet = { kind: 'more' }; this.render(); } }, '•••')),
       this.langBadges(this.room),
-      this.whisperWith ? h('div', { class: 'banner' }, `🤫 Whispering with ${nameOf(this.whisperWith)}`, h('button', { class: 'ghost', onclick: () => this.stopWhisper() }, 'Stop')) : null,
       h('div', { class: 'section' }, h('span', {}, 'On stage'), h('span', {}, `${this.stage.speakers.length}/${this.room.maxStageSeats}`)),
       h('div', { class: 'grid stage' },
         this.stage.speakers.map(id => cell(id, 76, id === this.room.hostId ? 'host' : 'speaker')),
@@ -387,7 +369,6 @@ class Phone {
         h('div', { class: 'actions' },
           this.isHost && !isMe && !theirsOnStage ? h('button', { class: 'primary', dataset: { act: 'invite' }, onclick: () => this.accept(id) }, 'Invite to stage') : null,
           this.isHost && !isMe && theirsOnStage ? h('button', { dataset: { act: 'demote' }, onclick: () => this.demote(id) }, 'Move to audience') : null,
-          this.onStage && !isMe && theirsOnStage && this.room.allowWhisper ? h('button', { dataset: { act: 'whisper' }, onclick: () => this.whisper(id) }, `🤫 Whisper to ${p.name}`) : null,
           isMe && theirsOnStage && !theirHost ? h('button', { dataset: { act: 'leave-stage' }, onclick: () => this.leaveStage() }, 'Step down to the audience') : null,
           this.isHost && !isMe ? h('button', { class: 'danger', dataset: { act: 'kick' }, onclick: () => this.kick(id) }, 'Remove from room') : null,
           h('button', { class: 'ghost', onclick: close }, 'Close'))]);
@@ -406,21 +387,15 @@ class Phone {
       const editing = s.kind === 'edit', r = this.room || {};
       const f = { title: h('input', { value: editing ? r.title : 'Practice room', dataset: { f: 'title' } }), topic: h('input', { value: editing ? r.topic || '' : 'Just chatting', dataset: { f: 'topic' } }),
         target: h('select', { dataset: { f: 'target' } }, langOptions('es')), native: h('select', { dataset: { f: 'native' } }, langOptions('en')),
-        seats: h('select', { dataset: { f: 'seats' } }, Array.from({ length: 11 }, (_, i) => h('option', { value: i + 2, selected: i + 2 === (editing ? r.maxStageSeats : 6) }, i + 2))),
-        whisper: h('input', { type: 'checkbox', checked: true, style: { width: 'auto' }, dataset: { f: 'whisper' } }) };
+        seats: h('select', { dataset: { f: 'seats' } }, Array.from({ length: 11 }, (_, i) => h('option', { value: i + 2, selected: i + 2 === (editing ? r.maxStageSeats : 6) }, i + 2))) };
       const submit = () => editing
         ? this.save({ title: f.title.value, topic: f.topic.value, maxStageSeats: +f.seats.value })
-        : this.start({ title: f.title.value, topic: f.topic.value, targetLanguage: f.target.value, nativeLanguage: f.native.value, maxStageSeats: +f.seats.value, allowWhisper: f.whisper.checked });
+        : this.start({ title: f.title.value, topic: f.topic.value, targetLanguage: f.target.value, nativeLanguage: f.native.value, maxStageSeats: +f.seats.value });
       return bg([h('h3', {}, editing ? 'Edit room' : 'Start a room'),
         h('label', {}, 'Title'), f.title, h('label', {}, 'Topic'), f.topic,
         editing ? null : h('div', { class: 'two' }, h('div', {}, h('label', {}, 'I want to practice'), f.target), h('div', {}, h('label', {}, 'Speakers of'), f.native)),
         h('label', {}, 'Stage seats (including you)'), f.seats,
-        editing ? null : h('label', { style: { display: 'flex', gap: '8px', alignItems: 'center', color: 'inherit' } }, f.whisper, 'Allow whispering'),
         h('div', { class: 'actions' }, h('button', { class: 'primary', dataset: { act: 'go' }, onclick: submit }, editing ? 'Save' : "Let's go"), h('button', { class: 'ghost', onclick: close }, 'Cancel'))]);
-    }
-    if (s.kind === 'whisperInvite') {
-      return bg([h('h3', {}, '🤫 Private whisper'), h('div', {}, `${nameOf(s.other)} wants a private word. Joining moves your microphone into a two-person room.`),
-        h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => this.joinWhisper() }, 'Join whisper'), h('button', { class: 'ghost', onclick: close }, 'Not now'))]);
     }
     return h('span');
   }
@@ -460,7 +435,6 @@ async function smokeTest() {
   await step('Listener raises a hand', async () => { must(await call('POST', `/${id}/stage/raise-hand`, null, B, true), 202); const d = must(await call('GET', `/${id}/stage`, null, A, true), 200); expect(d.handRaiseQueue.includes(B), 'not queued'); });
   await step('Only the host can promote', async () => { expect(!(await call('POST', `/${id}/stage/promote/${B}`, null, C, true)).ok, 'a stranger could promote'); });
   await step('Host promotes the listener', async () => { must(await call('POST', `/${id}/stage/promote/${B}`, null, A, true), 204); const d = must(await call('GET', `/${id}/stage`, null, A, true), 200); expect(d.speakers.includes(B) && !d.handRaiseQueue.includes(B), 'stage not updated'); });
-  await step('Speaker whispers to a speaker, then stops', async () => { must(await call('POST', `/${id}/stage/whisper`, { targetUserId: B }, A, true), 204); must(await call('DELETE', `/${id}/stage/whisper`, null, A, true), 204); });
   await step('Network mode can be switched', async () => { must(await call('POST', `/${id}/stage/network-mode`, { mode: 'LOW_BANDWIDTH' }, B, true), 204); });
   await step('Kicked user is barred, heartbeat included', async () => {
     must(await call('POST', `/${id}/participants/join`, null, C, true), 200);

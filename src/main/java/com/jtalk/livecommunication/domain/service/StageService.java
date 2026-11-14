@@ -1,7 +1,6 @@
 package com.jtalk.livecommunication.domain.service;
 
 import com.jtalk.livecommunication.domain.dto.request.NetworkModeRequest;
-import com.jtalk.livecommunication.domain.dto.request.WhisperRequest;
 import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.domain.dto.response.StageResponse;
 import io.micronaut.core.annotation.NonNull;
@@ -11,7 +10,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.util.UUID;
 
-/** Stage seats, the hand-raise queue, host promotions and demotions, private whispers and low-bandwidth mode. */
+/** Stage seats, the hand-raise queue, host promotions and demotions and low-bandwidth mode. */
 @Validated
 public interface StageService {
 
@@ -37,16 +36,6 @@ public interface StageService {
 
     /** Host-only: steps a speaker down to the audience. */
     void demoteToListener(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
-
-    /**
-     * Starts a private whisper from a speaker to one present participant (ending the speaker's previous one). Each
-     * whisper gets its own two-person LiveKit room, so the audio never touches the main room; each side receives their own
-     * token for it in a data message addressed only to them.
-     */
-    void startWhisper(@NonNull UUID roomId, @NonNull UUID speakerId, @Valid @NotNull WhisperRequest request);
-
-    /** Ends the speaker's whisper by deleting its room. Idempotent. */
-    void stopWhisper(@NonNull UUID roomId, @NonNull UUID speakerId);
 
     /**
      * {@code LOW_BANDWIDTH} unsubscribes the user from their secondary tracks and remembers them; {@code OPTIMAL} restores

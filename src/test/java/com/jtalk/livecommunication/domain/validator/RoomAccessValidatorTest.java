@@ -17,7 +17,7 @@ class RoomAccessValidatorTest {
 
     private final UUID host = UUID.randomUUID();
     private final UUID guest = UUID.randomUUID();
-    private final VoiceRoom room = VoiceRoom.open("Rules", null, host, "en", "ar", 4, true);
+    private final VoiceRoom room = VoiceRoom.open("Rules", null, host, "en", "ar", 4);
 
     @Inject
     RoomAccessValidator access;

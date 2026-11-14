@@ -90,27 +90,12 @@ class LiveKitGatewayImpl implements LiveKitGateway {
     }
 
     @Override
-    public String generateWhisperToken(UUID roomId, UUID speakerId, UUID targetId, UUID userId) {
-        boolean speaker = userId.equals(speakerId);
-        return token(whisperRoom(roomId, speakerId, targetId), userId, speaker, !speaker);
-    }
-
-    @Override
-    public void deleteWhisperRoom(UUID roomId, UUID speakerId, UUID targetId) {
-        execute(roomService.deleteRoom(whisperRoom(roomId, speakerId, targetId)), "delete whisper room");
-    }
-
-    @Override
-    public void sendData(UUID roomId, String topic, Object message, List<UUID> destinationUserIds) {
-        // Parameter order in the SDK: destination SIDs first, then destination identities.
-        execute(roomService.sendData(roomId.toString(), toJson(message), DataPacket.Kind.RELIABLE, List.of(),
-                destinationUserIds.stream().map(UUID::toString).toList(), topic), "send data message");
-    }
-
-    @Override
     public void broadcastRoomEvent(UUID roomId, RoomEventType type, UUID targetUserId) {
         try {
-            sendData(roomId, ROOM_EVENTS_TOPIC, new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant()), List.of());
+            RoomRealtimeEvent event = new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant());
+            // SDK parameter order: destination SIDs, then destination identities; both empty means everyone in the room.
+            execute(roomService.sendData(roomId.toString(), toJson(event), DataPacket.Kind.RELIABLE, List.of(), List.of(), ROOM_EVENTS_TOPIC),
+                    "send data message");
         } catch (RuntimeException e) {
             log.warn("Could not broadcast {} to room {}", type, roomId, e);
         }
@@ -135,11 +120,6 @@ class LiveKitGatewayImpl implements LiveKitGateway {
                 new CanPublish(canPublish),
                 new CanPublishData(canPublish));
         return token.toJwt();
-    }
-
-    /** Not a UUID on purpose: the webhook handler ignores rooms that are not voice rooms. */
-    private static String whisperRoom(UUID roomId, UUID speakerId, UUID targetId) {
-        return "whisper-" + roomId + "-" + speakerId + "-" + targetId;
     }
 
     /** Runs the call; a 404 is tolerated (callers treat it as "nothing to do"), other failures become a 502. */

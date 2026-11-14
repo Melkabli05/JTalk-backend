@@ -6,7 +6,6 @@ import com.jtalk.livecommunication.config.LiveKitProperties;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.sun.net.httpserver.HttpServer;
 import io.livekit.server.RoomServiceClient;
-import livekit.LivekitModels;
 import livekit.LivekitRoom;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -163,22 +162,6 @@ class LiveKitGatewayImplTest {
         assertFalse(body.getSubscribe());
     }
 
-    /** Reads the SDK's deprecated SIDs field on purpose: it must stay empty, since SIDs and identities are easy to swap. */
-    @SuppressWarnings("deprecation")
-    @Test
-    void sendDataTargetsIdentitiesNotSids() throws Exception {
-        gateway().sendData(room, "whisper", Map.of("action", "start"), List.of(alice, bob));
-
-        Received request = onlyRequest();
-        assertTrue(request.path().endsWith("/SendData"), request.path());
-        var body = LivekitRoom.SendDataRequest.parseFrom(request.body());
-        assertEquals(List.of(alice.toString(), bob.toString()), body.getDestinationIdentitiesList());
-        assertEquals(List.of(), body.getDestinationSidsList(), "the SDK takes SIDs before identities; they must not be swapped");
-        assertEquals("whisper", body.getTopic());
-        assertEquals(LivekitModels.DataPacket.Kind.RELIABLE, body.getKind());
-        assertEquals("{\"action\":\"start\"}", body.getData().toStringUtf8());
-    }
-
     @Test
     void broadcastRoomEventSendsOneDataMessageToTheWholeRoom() throws Exception {
         gateway().broadcastRoomEvent(room, RoomEventType.HAND_RAISED, bob);
@@ -260,27 +243,4 @@ class LiveKitGatewayImplTest {
         assertEquals(0, requests.size(), "issuing a token is local; it must not call LiveKit");
     }
 
-    @Test
-    void whisperRoomsArePrivateAndEachSideGetsOnlyItsOwnRights() {
-        LiveKitGatewayImpl gateway = gateway();
-        Map<String, Object> speaker = JWT.decode(gateway.generateWhisperToken(room, alice, bob, alice)).getClaim("video").asMap();
-        Map<String, Object> target = JWT.decode(gateway.generateWhisperToken(room, alice, bob, bob)).getClaim("video").asMap();
-
-        assertEquals("whisper-" + room + "-" + alice + "-" + bob, speaker.get("room"));
-        assertEquals(speaker.get("room"), target.get("room"), "both sides meet in the same private room");
-        assertEquals(true, speaker.get("canPublish"));
-        assertEquals(false, speaker.get("canSubscribe"));
-        assertEquals(false, target.get("canPublish"));
-        assertEquals(true, target.get("canSubscribe"));
-        assertEquals(0, requests.size(), "issuing a token is local");
-    }
-
-    @Test
-    void closingAWhisperDeletesOnlyItsPrivateRoom() throws Exception {
-        gateway().deleteWhisperRoom(room, alice, bob);
-
-        Received request = onlyRequest();
-        assertTrue(request.path().endsWith("/DeleteRoom"), request.path());
-        assertEquals("whisper-" + room + "-" + alice + "-" + bob, LivekitRoom.DeleteRoomRequest.parseFrom(request.body()).getRoom());
-    }
 }

@@ -16,7 +16,7 @@ class VoiceRoomTest {
     private final UUID host = UUID.randomUUID();
 
     private VoiceRoom room() {
-        return VoiceRoom.open("  English practice ", "Daily life", host, "en", "ar", 8, true);
+        return VoiceRoom.open("  English practice ", "Daily life", host, "en", "ar", 8);
     }
 
     @Test

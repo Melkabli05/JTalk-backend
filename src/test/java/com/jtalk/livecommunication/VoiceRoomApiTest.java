@@ -98,11 +98,18 @@ class VoiceRoomApiTest extends ApiTestBase {
     }
 
     @Test
+    void aClientStillSendingTheRemovedAllowWhisperFieldIsNotRejected() {
+        Map<String, Object> room = createRoom("host", Map.of("title", "Old client", "targetLanguage", "en", "nativeLanguage", "ar", "allowWhisper", true));
+
+        assertEquals("Old client", room.get("title"));
+        assertFalse(room.containsKey("allowWhisper"), "the field is gone from responses");
+    }
+
+    @Test
     void roomDefaultsAndTheHostsFixedSeat() {
         Map<String, Object> room = createRoom("host", Map.of("title", "Defaults", "targetLanguage", "en", "nativeLanguage", "ar"));
         String roomId = (String) room.get("id");
         assertEquals(8, room.get("maxStageSeats"));
-        assertEquals(true, room.get("allowWhisper"));
         assertEquals(id("host").toString(), room.get("hostId"));
 
         join(roomId, "host");

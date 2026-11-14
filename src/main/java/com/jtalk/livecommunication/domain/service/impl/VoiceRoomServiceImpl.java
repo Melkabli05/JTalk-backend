@@ -59,7 +59,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     private RoomSessionResponse open(UUID hostId, CreateVoiceRoomRequest request) {
         VoiceRoom saved = rooms.save(VoiceRoom.open(request.title(), request.topic(), hostId, request.targetLanguage(),
-                request.nativeLanguage(), request.seatsOrDefault(), request.whisperAllowed()));
+                request.nativeLanguage(), request.seatsOrDefault()));
         try {
             gateway.createRoom(saved.id());
             stage.initializeStage(saved.id(), hostId);

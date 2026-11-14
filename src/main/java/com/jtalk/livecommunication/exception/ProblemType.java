@@ -23,9 +23,6 @@ public enum ProblemType {
     HOST_CANNOT_LEAVE_STAGE(HttpStatus.UNPROCESSABLE_ENTITY, "The host keeps their stage seat"),
     CANNOT_KICK_HOST(HttpStatus.UNPROCESSABLE_ENTITY, "The host cannot be kicked"),
     KICKED_FROM_ROOM(HttpStatus.FORBIDDEN, "Removed from this room"),
-    WHISPER_NOT_PERMITTED(HttpStatus.FORBIDDEN, "Whisper not permitted"),
-    WHISPER_TO_SELF(HttpStatus.UNPROCESSABLE_ENTITY, "Cannot whisper to yourself"),
-    WHISPER_TARGET_NOT_PRESENT(HttpStatus.NOT_FOUND, "Whisper target not in the room"),
     INVALID_WEBHOOK_SIGNATURE(HttpStatus.UNAUTHORIZED, "Invalid webhook signature"),
     MEDIA_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "Media server rejected the request"),
     MEDIA_SERVER_UNREACHABLE(HttpStatus.BAD_GATEWAY, "Media server unreachable");
