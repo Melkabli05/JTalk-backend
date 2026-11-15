@@ -5,14 +5,19 @@ and low-bandwidth mode.
 Java 25 · Micronaut 5 · PostgreSQL · Redis · LiveKit.
 
 
-## Frontend (temporary home)
+## Frontend
 
-`frontend/` is the Angular 22 client (an empty, rules-enforced skeleton with the account pages, shell, theme and i18n; see
-`frontend/README.md` and `frontend/CLAUDE.md`). It lives in this repository only for now and is meant to move to its own repository:
-nothing here depends on it and it does not depend on the backend's source. `pnpm start` proxies `/api` to `localhost:8080`.
+The Angular client lives in its own repository: [Melkabli05/JTalk](https://github.com/Melkabli05/JTalk). It talks to this service over `/api`
+(its dev server proxies `/api` and `/dev` to `localhost:8080`) and does not depend on this repository's source.
+
+## Running locally
+
+The `dev` profile (activated by `./gradlew run`) needs a LiveKit project, read from the environment:
 
 ```bash
-cd frontend && pnpm install && pnpm start   # http://localhost:4200
+export LIVEKIT_API_KEY=...      # from your LiveKit Cloud project (or a self-hosted server)
+export LIVEKIT_API_SECRET=...
+./gradlew run
 ```
 
 ## Architecture
