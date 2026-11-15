@@ -8,6 +8,7 @@ import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.livekit.server.AccessToken;
 import io.livekit.server.CanPublish;
 import io.livekit.server.CanPublishData;
+import io.livekit.server.CanPublishSources;
 import io.livekit.server.CanSubscribe;
 import io.livekit.server.RoomJoin;
 import io.livekit.server.RoomName;
@@ -18,6 +19,7 @@ import io.micronaut.serde.ObjectMapper;
 import jakarta.inject.Singleton;
 import livekit.LivekitModels.DataPacket;
 import livekit.LivekitModels.ParticipantPermission;
+import livekit.LivekitModels.TrackSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import retrofit2.Call;
@@ -40,6 +42,8 @@ import java.util.UUID;
 class LiveKitGatewayImpl implements LiveKitGateway {
 
     private static final String ROOM_EVENTS_TOPIC = "room-events";
+    /** The name of the microphone source in a join token's canPublishSources grant. */
+    private static final String MICROPHONE_SOURCE = "microphone";
 
     private final LiveKitProperties properties;
     private final RoomServiceClient roomService;
@@ -70,10 +74,13 @@ class LiveKitGatewayImpl implements LiveKitGateway {
 
     @Override
     public void setPublishPermission(UUID roomId, UUID userId, boolean canPublish) {
+        // The media server enforces this, not the client: a speaker may publish a microphone and nothing else (no camera or screen
+        // share into an audio room), and nobody may write to the data channel: room events are sent by this service alone.
         var permission = ParticipantPermission.newBuilder()
                 .setCanSubscribe(true)
                 .setCanPublish(canPublish)
-                .setCanPublishData(canPublish)
+                .addAllCanPublishSources(canPublish ? List.of(TrackSource.MICROPHONE) : List.of())
+                .setCanPublishData(false)
                 .build();
         // 404 = participant not connected right now; the permission then applies via the token issued on join.
         execute(roomService.updateParticipant(roomId.toString(), userId.toString(), null, null, permission),
@@ -118,12 +125,15 @@ class LiveKitGatewayImpl implements LiveKitGateway {
         var token = new AccessToken(properties.apiKey(), properties.apiSecret());
         token.setIdentity(userId.toString());
         token.setExpiration(Date.from(clock.instant().plus(properties.tokenTtl())));
+        // Enforced by the media server whatever a modified client does with the token: listeners cannot publish at all, speakers only a
+        // microphone, and no one can write to the data channel (room events are sent by this service alone, so a client cannot fake one).
         token.addGrants(
                 new RoomJoin(true),
                 new RoomName(roomName),
                 new CanSubscribe(canSubscribe),
                 new CanPublish(canPublish),
-                new CanPublishData(canPublish));
+                new CanPublishSources(canPublish ? List.of(MICROPHONE_SOURCE) : List.of()),
+                new CanPublishData(false));
         return token.toJwt();
     }
 

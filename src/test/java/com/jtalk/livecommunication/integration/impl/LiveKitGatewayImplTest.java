@@ -125,6 +125,16 @@ class LiveKitGatewayImplTest {
     }
 
     @Test
+    void aSpeakerMayPublishAMicrophoneAndNothingElseAndNeverWriteToTheDataChannel() throws Exception {
+        gateway().setPublishPermission(room, alice, true);
+
+        var permission = LivekitRoom.UpdateParticipantRequest.parseFrom(onlyRequest().body()).getPermission();
+        assertEquals(List.of(livekit.LivekitModels.TrackSource.MICROPHONE), permission.getCanPublishSourcesList(),
+                "an empty list would let a modified client publish a camera or a screen share");
+        assertFalse(permission.getCanPublishData(), "room events are sent by the service; a client must not be able to fake one");
+    }
+
+    @Test
     void revokingPublishRightsIsSentToo() throws Exception {
         gateway().setPublishPermission(room, alice, false);
 
@@ -241,6 +251,17 @@ class LiveKitGatewayImplTest {
         assertEquals(NOW.plus(Duration.ofHours(1)).getEpochSecond(), listenerJwt.getExpiresAt().toInstant().getEpochSecond());
         assertEquals(true, JWT.decode(speaker).getClaim("video").asMap().get("canPublish"));
         assertEquals(0, requests.size(), "issuing a token is local; it must not call LiveKit");
+    }
+
+    @Test
+    void aTokenLimitsWhatAModifiedClientCanDoWithIt() {
+        Map<String, Object> speaker = JWT.decode(gateway().generateToken(room, alice, true)).getClaim("video").asMap();
+        Map<String, Object> listener = JWT.decode(gateway().generateToken(room, bob, false)).getClaim("video").asMap();
+
+        assertEquals(List.of("microphone"), speaker.get("canPublishSources"), "a speaker publishes a microphone, not video or a screen");
+        assertEquals(false, speaker.get("canPublishData"), "nobody writes to the data channel, so nobody can fake a room event");
+        assertEquals(false, listener.get("canPublishData"));
+        assertEquals(false, listener.get("canPublish"), "a listener who unmutes in a custom client is dropped by the media server");
     }
 
 }

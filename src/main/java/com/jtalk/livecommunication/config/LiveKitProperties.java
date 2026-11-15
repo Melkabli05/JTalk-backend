@@ -17,7 +17,8 @@ public record LiveKitProperties(
         @NotBlank String url,
         @NotBlank String apiKey,
         @NotBlank String apiSecret,
-        @Bindable(defaultValue = "PT2H") Duration tokenTtl,
+        /* A join token is used within seconds of being issued, so it is short-lived: a copy taken from the page is soon useless. */
+        @Bindable(defaultValue = "PT5M") Duration tokenTtl,
         /* LiveKit closes a room this many seconds after the last participant leaves. */
         @Bindable(defaultValue = "300") int emptyRoomTimeoutSeconds) {
 

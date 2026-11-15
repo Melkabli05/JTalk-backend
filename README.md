@@ -32,6 +32,15 @@ export MICRONAUT_ENVIRONMENTS=cloud JWT_SECRET=... LIVEKIT_URL=wss://... LIVEKIT
 ./gradlew run
 ```
 
+### What the media server enforces
+
+A client can be modified, so the rights in the LiveKit token and in the permission update are what count, not the app's buttons. A listener's token has
+`canPublish: false`, so unmuting in a custom client sends nothing the server accepts. A speaker's is limited to the `microphone` source (no camera or
+screen share into an audio room). Nobody may write to the data channel (`canPublishData: false`), so only this service can send a room event, and the
+frontend also ignores any data message that names a sender. The token lives 5 minutes (`livekit.token-ttl`): it is used within seconds, so a copy taken
+from the page is soon useless, and "Reconnect audio" asks the backend for a fresh one. Every host action is checked against the room's host in the
+database on each call, and the caller is taken from the verified token, never from the request body.
+
 ### Deploying on Render
 
 The `Dockerfile` is what Render builds ([Render: Docker](https://render.com/docs/docker)). The environment is chosen outside the code, by the image's
