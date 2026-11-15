@@ -8,6 +8,12 @@
 # This repository is public, so these credentials are public too. They guard free-tier databases; if they are ever misused, rotate
 # them in the Neon and Upstash consoles and change them here. Nothing else (tests, "dev") loads this file.
 
+# Hosts such as Render say which port to bind through PORT (on all interfaces, which is Micronaut's default). It is set here, not in
+# application.yml, because an explicit port there would also stop the tests from picking a random one.
+micronaut:
+  server:
+    port: ${PORT:8080}
+
 datasources:
   default:
     url: jdbc:postgresql://ep-calm-shape-beap5h80-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require

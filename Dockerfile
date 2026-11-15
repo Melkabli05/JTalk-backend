@@ -11,6 +11,8 @@
 # Upstash, hardcoded), so it only needs JWT_SECRET and the LiveKit variables below. Override MICRONAUT_ENVIRONMENTS to point it
 # elsewhere, and set the variables below instead.
 #
+# On Render (render.yaml) the same image works unchanged: the service binds the port in PORT (application-cloud.yml), 10000 there, 8080 elsewhere.
+#
 # Configuration comes from the environment (see src/main/resources/application.yml):
 #   JWT_SECRET                                         HS256 secret, 32+ characters
 #   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET   the LiveKit project

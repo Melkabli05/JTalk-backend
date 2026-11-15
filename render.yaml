@@ -1,0 +1,26 @@
+# Render Blueprint (https://render.com/docs/blueprint-spec): New > Blueprint, pick this repository. Render builds the Dockerfile,
+# which already runs with the "cloud" profile (MICRONAUT_ENVIRONMENTS=cloud: Neon and Upstash, hardcoded in application-cloud.yml),
+# and tells the service which port to bind through PORT (application-cloud.yml reads it).
+services:
+  - type: web
+    name: live-communication-service
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    # Neon (PostgreSQL) is in us-east-2, which is Ohio.
+    region: ohio
+    branch: main
+    autoDeployTrigger: commit
+    # Liveness only: it answers without a token and does not depend on the database, so a slow Neon wake-up never restarts the service.
+    healthCheckPath: /health/liveness
+    envVars:
+      # HS256 secret shared with whatever issues the user tokens (32+ characters). Render asks for it when the Blueprint is created.
+      - key: JWT_SECRET
+        sync: false
+      - key: LIVEKIT_URL
+        value: wss://jtalk-eimd2bul.livekit.cloud
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false

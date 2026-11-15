@@ -32,6 +32,18 @@ export MICRONAUT_ENVIRONMENTS=cloud JWT_SECRET=... LIVEKIT_URL=wss://... LIVEKIT
 ./gradlew run
 ```
 
+### Deploying on Render
+
+The `Dockerfile` is what Render builds ([Render: Docker](https://render.com/docs/docker)). The environment is chosen outside the code, by the image's
+`MICRONAUT_ENVIRONMENTS=cloud` (Micronaut reads it, or `-Dmicronaut.environments=...`), and the service binds the port Render gives it in `PORT`
+(10000 by default, on all interfaces: [Render: web services](https://render.com/docs/web-services)); locally it is 8080.
+
+- **With the Blueprint** (`render.yaml`): in Render, New > Blueprint and pick this repository. Render asks for the three secrets (`JWT_SECRET`,
+  `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`); `LIVEKIT_URL` and the health check (`/health/liveness`) are set for you.
+- **By hand:** New > Web Service, language **Docker**, then set those four environment variables and the health check path `/health/liveness`.
+
+On the free plan the service sleeps when idle and takes a moment to wake.
+
 Two things to know. The repository is public, so those database credentials are public: rotate them in the Neon and Upstash consoles
 if they are ever misused. And behind a corporate TLS-inspection proxy (Zscaler and the like) the connection to Upstash can fail with
 `PKIX path building failed`; that is the proxy's certificate, not the service: run from another network, or add the proxy's root CA to
