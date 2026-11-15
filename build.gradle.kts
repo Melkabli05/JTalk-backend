@@ -32,6 +32,7 @@ dependencies {
     implementation("io.micronaut.serde:micronaut-serde-jackson")
     implementation("io.micronaut.validation:micronaut-validation")
     implementation("io.micronaut.problem:micronaut-problem-json")
+    implementation("io.micronaut:micronaut-management")   // /health for the load balancer or orchestrator
     implementation("io.micronaut.security:micronaut-security-jwt")
 
     // PostgreSQL: persistent room metadata
@@ -99,6 +100,6 @@ tasks.named<JavaExec>("run") {
     }
 }
 
-tasks.named<io.micronaut.gradle.docker.MicronautDockerfile>("dockerfile") {
-    baseImage = "eclipse-temurin:25-jre"
-}
+// Docker: the Dockerfile at the project root is the source of truth (it began as the output of `./gradlew dockerfile` and builds
+// the layered jar itself), so `docker build .` builds the image. With a root Dockerfile the plugin no longer configures its own
+// `dockerfile` task, which is why that task is not tuned here.

@@ -1,16 +1,50 @@
-Thumbs.db
-.gradle
+# Gradle
+.gradle/
+build/
+!src/**/build/
+!gradle/wrapper/gradle-wrapper.jar
+.gradletasknamecache
+
+# Micronaut
+.micronaut/
+
+# Java
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+# Maven / IntelliJ output directories
 target/
 out/
-.micronaut/
+
+# IDEs
+.idea/
 *.iml
 *.ipr
 *.iws
+.vscode/
 .project
-.settings
+.settings/
 .classpath
 .factorypath
-build/
-# Tooling
-.idea/
+.apt_generated/
+.sts4-cache/
+*.swp
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Local configuration and secrets: these stay on the machine (use the environment, see application.yml)
+.env
+.env.*
+!.env.example
+application-local*.yml
+*.pem
+*.key
+*.p12
+*.jks
+
+# Local Docker overrides
+docker-compose.override.yml
