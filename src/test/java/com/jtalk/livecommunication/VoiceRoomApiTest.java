@@ -2,6 +2,7 @@ package com.jtalk.livecommunication;
 
 import com.jtalk.livecommunication.exception.ProblemType;
 import com.jtalk.livecommunication.support.ApiTestBase;
+import com.jtalk.livecommunication.support.FakeLiveKitGateway;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.PermissionChange;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
@@ -34,6 +35,7 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertEquals("HOST", hostSession.get("role"));
         assertEquals(true, hostSession.get("canPublishAudio"));
         assertEquals("token:" + id("host") + ":publish=true", hostSession.get("liveKitToken"));
+        assertEquals(FakeLiveKitGateway.SERVER_URL, hostSession.get("liveKitUrl"), "clients are told where to connect");
         Map<String, Object> aliceSession = join(roomId, "alice");
         assertEquals("LISTENER", aliceSession.get("role"));
         assertEquals(false, aliceSession.get("canPublishAudio"));

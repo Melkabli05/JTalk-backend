@@ -59,6 +59,11 @@ class LiveKitGatewayImpl implements LiveKitGateway {
     }
 
     @Override
+    public String serverUrl() {
+        return properties.url();
+    }
+
+    @Override
     public String generateToken(UUID roomId, UUID userId, boolean canPublish) {
         return token(roomId.toString(), userId, canPublish, true);
     }

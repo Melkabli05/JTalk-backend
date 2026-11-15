@@ -52,7 +52,7 @@ class ParticipantServiceImpl implements ParticipantService {
             gateway.broadcastRoomEvent(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
         }
         presence.touch(roomId, userId);
-        return new RoomSessionResponse(rooms.toResponse(room), gateway.generateToken(roomId, userId, onStage),
+        return new RoomSessionResponse(rooms.toResponse(room), gateway.serverUrl(), gateway.generateToken(roomId, userId, onStage),
                 room.roleOf(userId, onStage), onStage);
     }
 

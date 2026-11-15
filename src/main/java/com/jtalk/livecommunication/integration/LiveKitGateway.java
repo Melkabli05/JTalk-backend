@@ -18,6 +18,9 @@ public interface LiveKitGateway {
     /** Disconnects everyone and discards the media room. Idempotent. */
     void deleteRoom(@NonNull UUID roomId);
 
+    /** The websocket URL clients connect to with a token from {@link #generateToken}. */
+    String serverUrl();
+
     String generateToken(@NonNull UUID roomId, @NonNull UUID userId, boolean canPublish);
 
     /** Grants or revokes publish rights of a participant that is already connected. Idempotent. */

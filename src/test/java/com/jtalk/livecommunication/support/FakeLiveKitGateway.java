@@ -56,6 +56,13 @@ public class FakeLiveKitGateway implements LiveKitGateway {
         closedRooms.add(roomId);
     }
 
+    public static final String SERVER_URL = "wss://livekit.test";
+
+    @Override
+    public String serverUrl() {
+        return SERVER_URL;
+    }
+
     @Override
     public String generateToken(UUID roomId, UUID userId, boolean canPublish) {
         return "token:" + userId + ":publish=" + canPublish;

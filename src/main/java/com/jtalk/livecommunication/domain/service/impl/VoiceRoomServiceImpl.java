@@ -54,7 +54,8 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     private RoomSessionResponse rejoin(VoiceRoom room, UUID hostId) {
         log.info("Host {} already has active room {}, re-joining it", hostId, room.id());
-        return new RoomSessionResponse(toResponse(room), gateway.generateToken(room.id(), hostId, true), ParticipantRole.HOST, true);
+        return new RoomSessionResponse(toResponse(room), gateway.serverUrl(), gateway.generateToken(room.id(), hostId, true),
+                ParticipantRole.HOST, true);
     }
 
     private RoomSessionResponse open(UUID hostId, CreateVoiceRoomRequest request) {
@@ -70,7 +71,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         String token = gateway.generateToken(saved.id(), hostId, true);
         log.info("Created voice room {} hosted by {}", saved.id(), hostId);
 
-        return new RoomSessionResponse(toResponse(saved), token, ParticipantRole.HOST, true);
+        return new RoomSessionResponse(toResponse(saved), gateway.serverUrl(), token, ParticipantRole.HOST, true);
     }
 
     @Override
