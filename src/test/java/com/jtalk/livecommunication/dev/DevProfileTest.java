@@ -4,6 +4,7 @@ import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import com.jtalk.livecommunication.domain.repository.StageRepository;
 import com.jtalk.livecommunication.domain.repository.VoiceRoomRepository;
+import io.micronaut.context.annotation.Property;
 import io.micronaut.core.type.Argument;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.client.HttpClient;
@@ -18,8 +19,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Boots the real "dev" profile: the mock data must exist, must be consistent across stores, and must not duplicate. */
+/** Boots the real "dev" profile with room seeding switched on: the mock data must exist, be consistent across stores, and not duplicate. */
 @MicronautTest(environments = "dev")
+@Property(name = "dev.seed-rooms", value = "true")
 class DevProfileTest {
 
     private static final List<DevUser> HOSTS = List.of(DevUser.ALICE, DevUser.BOB, DevUser.CAROL, DevUser.DINA, DevUser.YUKI, DevUser.HANS, DevUser.SOFIA);

@@ -21,7 +21,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 /**
- * Gives a fresh development database something realistic to look at: seven language-exchange rooms in different
+ * Off unless {@code dev.seed-rooms=true} (env {@code DEV_SEED_ROOMS=true}): by default the rooms are whatever people open.
+ * When on, it gives a fresh development database something realistic to look at: seven language-exchange rooms in different
  * states (a full stage, a queue of raised hands, and a quiet room), filled with eleven named
  * people. It goes through the real services, so PostgreSQL, Redis and LiveKit all agree about what exists (the rooms
  * are real LiveKit rooms). Safe to run on every start: a host who already has an active room gets it back, and the
@@ -32,6 +33,7 @@ import java.util.stream.Stream;
  */
 @Singleton
 @Requires(env = Environment.DEVELOPMENT)
+@Requires(property = "dev.seed-rooms", value = "true")
 @Slf4j
 @RequiredArgsConstructor
 class DevDataSeeder {

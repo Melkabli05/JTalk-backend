@@ -120,7 +120,7 @@ Needs JDK 25 and Docker. PostgreSQL and Redis are started automatically by Micro
 | Security | off; caller = `X-User-Id` header | on; JWT bearer token |
 | LiveKit | the hardcoded `jtalk` Cloud project | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
 | Test page | <http://localhost:8080/ui/index.html> | not served |
-| Mock data | eleven people with language profiles and seven rooms in different states (a full stage, hand-raise queues, and a quiet room), seeded in the background by `dev/DevDataSeeder` through the real services, so PostgreSQL, Redis and LiveKit agree; safe to run on every start, and a scheduled task keeps them present | none |
+| Sample data | none by default: the rooms are whatever people open. Clients register the profile their person fills in with `POST /dev/users` and read everyone's name from `GET /dev/users` (in memory, until a real user service exists); the eleven named sample users appear only with sample rooms. To get eleven people and seven sample rooms in different states, run with `DEV_SEED_ROOMS=true` (`dev/DevDataSeeder`, through the real services, in the background; safe on every start) | none |
 
 ```bash
 ./gradlew run                                      # dev profile
