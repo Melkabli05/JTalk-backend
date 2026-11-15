@@ -1,10 +1,10 @@
 package com.jtalk.livecommunication.controller;
 
-import com.jtalk.livecommunication.domain.dto.request.CreateVoiceRoomRequest;
-import com.jtalk.livecommunication.domain.dto.request.UpdateVoiceRoomRequest;
-import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
-import com.jtalk.livecommunication.domain.dto.response.VoiceRoomResponse;
-import com.jtalk.livecommunication.domain.service.VoiceRoomService;
+import com.jtalk.livecommunication.dto.request.CreateVoiceRoomRequest;
+import com.jtalk.livecommunication.dto.request.UpdateVoiceRoomRequest;
+import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.dto.response.VoiceRoomResponse;
+import com.jtalk.livecommunication.service.VoiceRoomService;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.model.CursoredPage;
 import io.micronaut.data.model.CursoredPageable;

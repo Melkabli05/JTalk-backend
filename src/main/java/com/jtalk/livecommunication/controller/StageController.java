@@ -1,9 +1,9 @@
 package com.jtalk.livecommunication.controller;
 
-import com.jtalk.livecommunication.domain.dto.request.NetworkModeRequest;
-import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
-import com.jtalk.livecommunication.domain.dto.response.StageResponse;
-import com.jtalk.livecommunication.domain.service.StageService;
+import com.jtalk.livecommunication.dto.request.NetworkModeRequest;
+import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.dto.response.StageResponse;
+import com.jtalk.livecommunication.service.StageService;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;

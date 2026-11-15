@@ -8,16 +8,34 @@ Java 25 · Micronaut 5 · PostgreSQL · Redis · LiveKit.
 ## Frontend
 
 The Angular client lives in its own repository: [Melkabli05/JTalk](https://github.com/Melkabli05/JTalk). It talks to this service over `/api`
-(its dev server proxies `/api` and `/dev` to `localhost:8080`) and does not depend on this repository's source.
+(its dev server proxies `/api` to `localhost:8080`) and does not depend on this repository's source.
+
+## Project structure
+
+```
+src/main/java/com/jtalk/livecommunication/
+├── LiveCommunicationApplication.java
+├── config/        LiveKitConfig, LiveKitBeanFactory, VoiceRoomProperties, CommunicationConstants, ProblemType (RFC 9457 problems)
+├── controller/    VoiceRoomController, StageController, ParticipantController, LiveKitWebhookController
+├── service/       service interfaces, the room access validator, and impl/ with their implementations
+├── repository/    VoiceRoomRepository (JDBC), the Redis repositories (Lua scripts) and RedisLeaseExpirationListener
+├── integration/   LiveKitGateway and impl/LiveKitGatewayImpl
+├── domain/        entity/, enums/, event/ (VoiceRoomClosed, LeaseExpired), model/
+└── dto/           request/, response/ and the ApiMapper
+src/main/resources/  application.yml (+ cloud, quic), db/migration/, lua/
+```
 
 ## Running locally
 
-`./gradlew run` uses the `dev` profile (security off, a test page, mock data); Micronaut Test Resources starts PostgreSQL and Redis in
-Docker for it. The dev profile reads its LiveKit project from the environment:
+`./gradlew run` starts the service with the default configuration; Micronaut Test Resources starts PostgreSQL and Redis in Docker for it. It needs the
+secret that verifies tokens and a LiveKit project:
 
 ```bash
-export LIVEKIT_API_KEY=...      # from your LiveKit Cloud project (or a self-hosted server)
+export JWT_SECRET=...           # 32+ characters; only checked when security is on
+export LIVEKIT_URL=wss://...    # your LiveKit Cloud project (or a self-hosted server)
+export LIVEKIT_API_KEY=...
 export LIVEKIT_API_SECRET=...
+export MICRONAUT_SECURITY_ENABLED=false   # optional, local work only: no token, the caller is named by the X-User-Id header
 ./gradlew run
 ```
 
@@ -53,11 +71,10 @@ The `Dockerfile` is what Render builds ([Render: Docker](https://render.com/docs
 
 On the free plan the service sleeps when idle and takes a moment to wake.
 
-**Open testing mode.** `render.yaml` sets `MICRONAUT_ENVIRONMENTS=cloud,dev`, which switches security off: the caller is whoever the `X-User-Id`
-header says, and `/dev/users` serves the frontend's profile dialog. That is what lets the frontend work before a user service exists, and it means
-anyone who finds the URL can act as anyone, so keep it to testing. To turn security back on, set `MICRONAUT_ENVIRONMENTS=cloud` in Render
-(Environment) and send `Authorization: Bearer` tokens signed with `JWT_SECRET`. An existing service needs the variable set by hand in
-Render; the Blueprint only applies it when it creates or syncs the service.
+**Open testing mode.** `render.yaml` sets `MICRONAUT_SECURITY_ENABLED=false`, which switches security off: the caller is whoever the `X-User-Id` header
+says. That lets the frontend work before a user service exists, and it means anyone who finds the URL can act as anyone, so keep it to testing. To turn
+security back on, delete that variable in Render (Environment) and send `Authorization: Bearer` tokens signed with `JWT_SECRET`. An existing service
+needs the variable changed by hand in Render; the Blueprint only applies it when it creates or syncs the service.
 
 **CORS.** A frontend on another origin may call the API (preflights carry no token and are answered). Any origin is allowed until
 `CORS_ALLOWED_ORIGINS` (a regular expression, e.g. `https://app\.example\.com|http://localhost:4200`) narrows it.
@@ -165,32 +182,20 @@ Tokens are issued upstream (gateway / identity provider) and verified here with 
 Needs JDK 25 and Docker. PostgreSQL and Redis are started automatically by Micronaut Test Resources for
 `./gradlew run` and `./gradlew test`.
 
-**Development** - `./gradlew run` activates the `dev` profile (`application-dev.yml`) by itself:
-
-| | `dev` (local `./gradlew run`) | everything else (jar, container) |
-|---|---|---|
-| Security | off; caller = `X-User-Id` header | on; JWT bearer token |
-| LiveKit | the hardcoded `jtalk` Cloud project | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
-| Test page | <http://localhost:8080/ui/index.html> | not served |
-| Sample data | none by default: the rooms are whatever people open. Clients register the profile their person fills in with `POST /dev/users` and read everyone's name from `GET /dev/users` (in memory, until a real user service exists); the eleven named sample users appear only with sample rooms. To get eleven people and seven sample rooms in different states, run with `DEV_SEED_ROOMS=true` (`dev/DevDataSeeder`, through the real services, in the background; safe on every start) | none |
+**Local development** - `./gradlew run` uses the default configuration (see Running locally above). Profiles are chosen with `MICRONAUT_ENVIRONMENTS`:
+`cloud` (hosted Neon and Upstash, hardcoded in `application-cloud.yml`) and `quic` (HTTP/3).
 
 ```bash
-./gradlew run                                      # dev profile
-MICRONAUT_ENVIRONMENTS=dev,quic ./gradlew run     # choosing profiles yourself replaces the default
+./gradlew run                                      # local containers, security on
+MICRONAUT_SECURITY_ENABLED=false ./gradlew run     # no token; the X-User-Id header names the caller
+MICRONAUT_ENVIRONMENTS=quic ./gradlew run          # HTTP/3
 ```
 
 Behind a TLS-inspecting corporate proxy (for example Zscaler) the JVM rejects LiveKit Cloud's re-signed certificate and
 room creation fails with `media-server-unreachable` (`PKIX path building failed` in the log). Make the JVM trust the
 OS keychain instead of editing `cacerts`: `export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStoreType=KeychainStore -Djavax.net.ssl.trustStore=NONE"`.
 
-**Test UI** (`dev` only, `src/main/resources/public/index.html`, no build) - a Clubhouse / HelloTalk style client at <http://localhost:8080/ui/index.html>. Each **phone** on the page is a different person (pick them from the menu at the top of the phone; `＋ Phone` adds more), so you can watch host, speaker and listener side by side in one tab:
-
-- **Hallway:** room cards with language badges (`🇪🇸 Spanish practice for 🇬🇧 English speakers`), overlapping speaker avatars, live seat / audience / hand counts, language filter chips, and *Start a room*.
-- **Room:** stage with open seats you can tap to take, raised hands (the host gets an *Invite* button), the audience, and a bottom bar with *Leave quietly*, *Raise hand* and *Audio*. Tap any avatar for their profile (speaks / learning) and moderation: invite to stage, move to audience, remove. The `•••` sheet edits the room, switches low-bandwidth mode, ends the room, and adds **bot listeners** or has a bot raise a hand, to test with a crowd.
-- Every phone sends heartbeats and refreshes itself, like a real client; a promotion or demotion fetches a fresh LiveKit token. *Audio* connects the phone to LiveKit (speakers publish their microphone; the green ring follows who is talking).
-- **Developer tools** (bottom of the page): *Run API smoke test* walks the whole lifecycle through the HTTP API, and *Run UI self-test* drives two phones by clicking their real buttons. Open `/ui/index.html?smoke` or `?selftest` to run them on load, or `?enter=Spanish` to put every phone in the room whose title contains "Spanish".
-
-**Deployed** - the default profile; nothing from `dev` is active:
+**Deployed** - the default profile, security on:
 
 ```bash
 export JWT_SECRET=<HS256 secret shared with whatever issues your user tokens, 32+ chars>
@@ -221,8 +226,8 @@ Redis must have keyspace notifications for expired keys (`notify-keyspace-events
   Redis or PostgreSQL is unreachable and recovers by itself; with PostgreSQL down it answers in about 3 s
   (`datasources.default.connection-timeout`), while API calls fail with a 500 after the same 3 s.
 - **Verified as a deployment** (built jar, external PostgreSQL and Redis, default profile, credentials only through
-  environment variables): Flyway migrates, the service starts in about a second, unauthenticated calls and the dev
-  endpoints answer 401, a real LiveKit room is created, joined, refused to a non-host and closed.
+  environment variables): Flyway migrates, the service starts in about a second, unauthenticated calls
+  answer 401, a real LiveKit room is created, joined, refused to a non-host and closed.
 
 ## Before going to production
 
@@ -236,7 +241,7 @@ Not built, or not verified, and worth deciding on:
 - **Several instances are untested.** Each instance listens for lease expiry and a webhook goes to one of them; the
   seat rule is idempotent but this has not been exercised with more than one instance.
 - **No load test, no container image build and no HTTP/3 client test** have been run.
-- **Rotate the LiveKit credentials** committed in `application-dev.yml` before the repository is shared.
+- **Rotate the Neon and Upstash credentials** committed in `application-cloud.yml` before the repository is shared (it is public).
 
 ## Deliberate decisions and known limits
 

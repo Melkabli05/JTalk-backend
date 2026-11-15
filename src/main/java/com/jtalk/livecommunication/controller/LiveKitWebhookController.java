@@ -1,6 +1,6 @@
 package com.jtalk.livecommunication.controller;
 
-import com.jtalk.livecommunication.domain.service.LiveKitWebhookService;
+import com.jtalk.livecommunication.service.LiveKitWebhookService;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.http.HttpHeaders;
 import io.micronaut.http.MediaType;

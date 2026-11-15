@@ -2,7 +2,7 @@ package com.jtalk.livecommunication.support;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
-import com.jtalk.livecommunication.domain.repository.VoiceRoomRepository;
+import com.jtalk.livecommunication.repository.VoiceRoomRepository;
 import io.micronaut.core.type.Argument;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;

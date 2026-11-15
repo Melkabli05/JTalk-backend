@@ -4,7 +4,7 @@ micronaut:
   security:
     # Secure by default: callers authenticate with a JWT bearer token issued upstream (API gateway / identity provider);
     # the token's subject is the user id. Tokens are verified with this shared HS256 secret (32+ characters), or switch to
-    # a JWKS endpoint with micronaut.security.token.jwt.signatures.jwks. The "dev" profile switches this off.
+    # a JWKS endpoint with micronaut.security.token.jwt.signatures.jwks. Switch it off for local work with MICRONAUT_SECURITY_ENABLED=false.
     authentication: bearer
     token:
       jwt:
@@ -40,7 +40,7 @@ flyway:
     default:
       enabled: true
 
-# LiveKit (Cloud or self-hosted). The "dev" profile hardcodes the development project.
+# LiveKit (Cloud or self-hosted): set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.
 livekit:
   url: ${LIVEKIT_URL}
   api-key: ${LIVEKIT_API_KEY}

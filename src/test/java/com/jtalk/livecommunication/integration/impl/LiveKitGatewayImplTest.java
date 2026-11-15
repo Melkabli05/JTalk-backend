@@ -2,7 +2,7 @@ package com.jtalk.livecommunication.integration.impl;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
-import com.jtalk.livecommunication.config.LiveKitProperties;
+import com.jtalk.livecommunication.config.LiveKitConfig;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.sun.net.httpserver.HttpServer;
 import io.livekit.server.RoomServiceClient;
@@ -75,7 +75,7 @@ class LiveKitGatewayImplTest {
 
     private LiveKitGatewayImpl gateway() {
         String host = "http://localhost:" + server.getAddress().getPort();
-        var properties = new LiveKitProperties("ws://localhost:" + server.getAddress().getPort(), API_KEY, API_SECRET, Duration.ofHours(1), 300);
+        var properties = new LiveKitConfig("ws://localhost:" + server.getAddress().getPort(), API_KEY, API_SECRET, Duration.ofHours(1), 300);
         return new LiveKitGatewayImpl(properties, RoomServiceClient.createClient(host, API_KEY, API_SECRET), Clock.fixed(NOW, ZoneOffset.UTC),
                 io.micronaut.serde.ObjectMapper.getDefault());
     }

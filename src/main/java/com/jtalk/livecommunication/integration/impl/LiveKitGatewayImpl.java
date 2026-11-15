@@ -1,9 +1,9 @@
 package com.jtalk.livecommunication.integration.impl;
 
-import com.jtalk.livecommunication.config.LiveKitProperties;
+import com.jtalk.livecommunication.config.LiveKitConfig;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
-import com.jtalk.livecommunication.exception.ProblemType;
+import com.jtalk.livecommunication.config.ProblemType;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.livekit.server.AccessToken;
 import io.livekit.server.CanPublish;
@@ -45,7 +45,7 @@ class LiveKitGatewayImpl implements LiveKitGateway {
     /** The name of the microphone source in a join token's canPublishSources grant. */
     private static final String MICROPHONE_SOURCE = "microphone";
 
-    private final LiveKitProperties properties;
+    private final LiveKitConfig properties;
     private final RoomServiceClient roomService;
     private final Clock clock;
     private final ObjectMapper json;

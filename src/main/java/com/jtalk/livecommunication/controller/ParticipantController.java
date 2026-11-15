@@ -1,8 +1,8 @@
 package com.jtalk.livecommunication.controller;
 
-import com.jtalk.livecommunication.domain.dto.response.ParticipantResponse;
-import com.jtalk.livecommunication.domain.dto.response.RoomSessionResponse;
-import com.jtalk.livecommunication.domain.service.ParticipantService;
+import com.jtalk.livecommunication.dto.response.ParticipantResponse;
+import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.service.ParticipantService;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Delete;

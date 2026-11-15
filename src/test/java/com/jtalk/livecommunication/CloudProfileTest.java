@@ -37,16 +37,6 @@ class CloudProfileTest {
     }
 
     @Test
-    void openTestingModeIsTheCloudServicesWithSecurityOff() {
-        // MICRONAUT_ENVIRONMENTS=cloud,dev, which render.yaml sets until a user service issues tokens
-        Environment open = ApplicationContext.builder("cloud", "dev").deduceEnvironment(false).build().getEnvironment().start();
-
-        assertEquals(Optional.of(false), open.getProperty("micronaut.security.enabled", Boolean.class));
-        assertTrue(open.getProperty("datasources.default.url", String.class).orElse("").contains("neon.tech"));
-        assertTrue(cloud().getProperty("micronaut.security.enabled", Boolean.class).isEmpty(), "the cloud profile alone stays secure");
-    }
-
-    @Test
     void usesTheHostedServices() {
         Environment cloud = cloud();
 

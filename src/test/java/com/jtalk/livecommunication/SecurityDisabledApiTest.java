@@ -14,10 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The dev configuration: no token is needed, and the caller is named by the X-User-Id header. */
+/** With security switched off (micronaut.security.enabled=false): no token is needed, and the caller is named by the X-User-Id header. */
 @Property(name = "micronaut.security.enabled", value = "false")
-@Property(name = "micronaut.router.static-resources.ui.paths", value = "classpath:public")
-@Property(name = "micronaut.router.static-resources.ui.mapping", value = "/ui/**")
 class SecurityDisabledApiTest extends ApiTestBase {
 
     private static final Map<String, Object> BODY = Map.of("title", "Open", "targetLanguage", "en", "nativeLanguage", "ar");
@@ -29,14 +27,6 @@ class SecurityDisabledApiTest extends ApiTestBase {
 
         assertEquals(HttpStatus.CREATED, created.status());
         assertEquals(id("host").toString(), ((Map<?, ?>) created.body().get("room")).get("hostId"), "the header user became the host");
-    }
-
-    @Test
-    void theDeveloperTestPageIsServed() {
-        HttpResponse<String> page = http.exchange(HttpRequest.GET("/ui/index.html"), String.class);
-
-        assertEquals(HttpStatus.OK, page.status());
-        assertTrue(page.body().contains("Live Communication Tester"));
     }
 
     @Test

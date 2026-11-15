@@ -1,6 +1,6 @@
 package com.jtalk.livecommunication;
 
-import com.jtalk.livecommunication.exception.ProblemType;
+import com.jtalk.livecommunication.config.ProblemType;
 import com.jtalk.livecommunication.support.ApiTestBase;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.PermissionChange;

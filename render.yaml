@@ -15,11 +15,11 @@ services:
     # Liveness only: it answers without a token and does not depend on the database, so a slow Neon wake-up never restarts the service.
     healthCheckPath: /health/liveness
     envVars:
-      # TEMPORARY open testing mode: "dev" on top of "cloud" turns security off (the caller is whoever the X-User-Id header says) and
-      # serves /dev/users, which the frontend's profile dialog uses. Anyone who finds the URL can act as anyone, so use it only while the
-      # app is being tried out. Remove ",dev" (leaving "cloud") once a user service issues tokens that JWT_SECRET verifies.
-      - key: MICRONAUT_ENVIRONMENTS
-        value: cloud,dev
+      # TEMPORARY open testing mode: with security off the caller is whoever the X-User-Id header says, which is what lets the frontend
+      # work before a user service exists. Anyone who finds the URL can act as anyone, so use it only while the app is being tried out.
+      # Delete this variable (security is on by default) once a user service issues tokens that JWT_SECRET verifies.
+      - key: MICRONAUT_SECURITY_ENABLED
+        value: "false"
       # Optional: restrict which frontend may call this API (a regular expression). Any origin until set, e.g.
       # https://app\.example\.com|http://localhost:4200
       - key: CORS_ALLOWED_ORIGINS

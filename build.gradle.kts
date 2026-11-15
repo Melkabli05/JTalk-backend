@@ -63,7 +63,7 @@ dependencies {
 }
 
 application {
-    mainClass = "com.jtalk.livecommunication.LiveCommunicationServiceApplication"
+    mainClass = "com.jtalk.livecommunication.LiveCommunicationApplication"
 }
 
 java {
@@ -90,13 +90,6 @@ micronaut {
         deduceEnvironment = false
         optimizeNetty = true
         replaceLogbackXml = true
-    }
-}
-
-// Local runs use the "dev" profile (security off, test page, mock data). Set MICRONAUT_ENVIRONMENTS yourself to choose others.
-tasks.named<JavaExec>("run") {
-    if (System.getenv("MICRONAUT_ENVIRONMENTS") == null) {
-        systemProperty("micronaut.environments", "dev")
     }
 }
 
