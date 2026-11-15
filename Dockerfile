@@ -20,7 +20,18 @@ WORKDIR /workspace
 COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY gradle gradle
 COPY src src
-RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon --console=plain buildLayers
+# Maven Central sometimes drops a connection mid-build. Gradle gets longer timeouts and more download attempts, the whole step is
+# retried, and the cache mount keeps what was already downloaded, so every attempt (and a re-run of `docker build`) resumes.
+RUN --mount=type=cache,target=/root/.gradle \
+    for attempt in 1 2 3; do \
+        ./gradlew --no-daemon --console=plain \
+            -Dorg.gradle.internal.http.connectionTimeout=60000 \
+            -Dorg.gradle.internal.http.socketTimeout=120000 \
+            -Dorg.gradle.internal.repository.max.tentatives=5 \
+            buildLayers && break; \
+        [ "$attempt" = 3 ] && exit 1; \
+        echo "Gradle failed (attempt $attempt of 3), retrying"; sleep 10; \
+    done
 
 FROM eclipse-temurin:25-jre
 WORKDIR /home/app
