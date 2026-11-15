@@ -43,6 +43,7 @@ class DevController {
     @Post("/users")
     @Status(HttpStatus.NO_CONTENT)
     void register(@Body @Valid DevUserRequest request) {
-        registered.put(request.id(), new DevUser(request.id(), request.name().strip(), request.nativeLanguage(), request.learning()));
+        registered.put(request.id(), new DevUser(request.id(), request.name().strip(), request.nativeLanguage(), request.learning(),
+                request.avatar() == null ? "" : request.avatar().strip()));
     }
 }

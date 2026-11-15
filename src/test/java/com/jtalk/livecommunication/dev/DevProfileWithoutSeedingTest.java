@@ -47,9 +47,9 @@ class DevProfileWithoutSeedingTest {
     void aClientRegistersItsPersonAndEveryoneCanThenReadTheirName() {
         UUID id = UUID.randomUUID();
 
-        assertEquals(HttpStatus.NO_CONTENT, register(Map.of("id", id.toString(), "name", "  Mona  ", "nativeLanguage", "ar", "learning", "en")));
+        assertEquals(HttpStatus.NO_CONTENT, register(Map.of("id", id.toString(), "name", "  Mona  ", "nativeLanguage", "ar", "learning", "en", "avatar", "avatar-04")));
 
-        assertEquals(List.of(Map.of("id", id.toString(), "name", "Mona", "nativeLanguage", "ar", "learning", "en")),
+        assertEquals(List.of(Map.of("id", id.toString(), "name", "Mona", "nativeLanguage", "ar", "learning", "en", "avatar", "avatar-04")),
                 users().stream().filter(u -> id.toString().equals(u.get("id"))).toList());
     }
 
@@ -60,6 +60,14 @@ class DevProfileWithoutSeedingTest {
         register(Map.of("id", id.toString(), "name", "New", "nativeLanguage", "fr", "learning", "de"));
 
         assertEquals(List.of("New"), users().stream().filter(u -> id.toString().equals(u.get("id"))).map(u -> u.get("name")).toList());
+    }
+
+    @Test
+    void thePictureIsOptional() {
+        UUID id = UUID.randomUUID();
+        register(Map.of("id", id.toString(), "name", "Sami", "nativeLanguage", "ar", "learning", "en"));
+
+        assertEquals(List.of(""), users().stream().filter(u -> id.toString().equals(u.get("id"))).map(u -> u.get("avatar")).toList());
     }
 
     @Test
