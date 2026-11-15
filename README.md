@@ -12,13 +12,30 @@ The Angular client lives in its own repository: [Melkabli05/JTalk](https://githu
 
 ## Running locally
 
-The `dev` profile (activated by `./gradlew run`) needs a LiveKit project, read from the environment:
+`./gradlew run` uses the `dev` profile (security off, a test page, mock data); Micronaut Test Resources starts PostgreSQL and Redis in
+Docker for it. The dev profile reads its LiveKit project from the environment:
 
 ```bash
 export LIVEKIT_API_KEY=...      # from your LiveKit Cloud project (or a self-hosted server)
 export LIVEKIT_API_SECRET=...
 ./gradlew run
 ```
+
+## Running against the hosted services (`cloud` profile)
+
+`src/main/resources/application-cloud.yml` points the service at hosted free-tier databases, hardcoded on purpose: PostgreSQL on Neon
+(the app uses Neon's pooler; Flyway migrates over the direct endpoint) and Redis on Upstash. The Docker image runs with this profile.
+Security stays on, so it also needs the JWT secret and the LiveKit project:
+
+```bash
+export MICRONAUT_ENVIRONMENTS=cloud JWT_SECRET=... LIVEKIT_URL=wss://... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=...
+./gradlew run
+```
+
+Two things to know. The repository is public, so those database credentials are public: rotate them in the Neon and Upstash consoles
+if they are ever misused. And behind a corporate TLS-inspection proxy (Zscaler and the like) the connection to Upstash can fail with
+`PKIX path building failed`; that is the proxy's certificate, not the service: run from another network, or add the proxy's root CA to
+the JVM truststore.
 
 ## Architecture
 

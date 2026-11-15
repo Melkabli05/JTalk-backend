@@ -7,12 +7,16 @@
 #   docker build -t live-communication-service .
 #   docker run --rm -p 8080:8080 --env-file .env live-communication-service
 #
+# The image runs with the "cloud" profile (src/main/resources/application-cloud.yml: hosted PostgreSQL on Neon and Redis on
+# Upstash, hardcoded), so it only needs JWT_SECRET and the LiveKit variables below. Override MICRONAUT_ENVIRONMENTS to point it
+# elsewhere, and set the variables below instead.
+#
 # Configuration comes from the environment (see src/main/resources/application.yml):
 #   JWT_SECRET                                         HS256 secret, 32+ characters
 #   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET   the LiveKit project
 #   DATASOURCES_DEFAULT_URL / _USERNAME / _PASSWORD    PostgreSQL
 #   REDIS_URI                                          Redis
-#   MICRONAUT_ENVIRONMENTS                             optional, e.g. "quic"; never "dev" in a deployed image
+#   MICRONAUT_ENVIRONMENTS                             defaults to "cloud"; e.g. "cloud,quic" adds HTTP/3; never "dev" in a deployed image
 
 FROM eclipse-temurin:25-jdk AS build
 WORKDIR /workspace
@@ -43,6 +47,7 @@ COPY --link --chown=10001:10001 --from=build /workspace/build/docker/main/layers
 COPY --link --chown=10001:10001 --from=build /workspace/build/docker/main/layers/resources /home/app/resources
 USER 10001:10001
 # Size the heap from the container's memory limit rather than the JVM's small default share of it.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0"
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0" \
+    MICRONAUT_ENVIRONMENTS=cloud
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/home/app/application.jar"]

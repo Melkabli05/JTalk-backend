@@ -1,0 +1,25 @@
+# The "cloud" profile: the hosted free-tier services this service runs on, hardcoded on purpose so the app starts with nothing but
+#   MICRONAUT_ENVIRONMENTS=cloud   (plus JWT_SECRET and the LiveKit variables, see application.yml)
+#
+#   PostgreSQL  Neon    (the app connects through Neon's pooler; Flyway migrates over the direct endpoint, because the
+#                        pooler runs PgBouncer in transaction mode, which breaks the advisory locks Flyway takes)
+#   Redis       Upstash (TLS; the app needs Lua scripts and, for grace-lease expiry, keyspace notifications)
+#
+# This repository is public, so these credentials are public too. They guard free-tier databases; if they are ever misused, rotate
+# them in the Neon and Upstash consoles and change them here. Nothing else (tests, "dev") loads this file.
+
+datasources:
+  default:
+    url: jdbc:postgresql://ep-calm-shape-beap5h80-pooler.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
+    username: neondb_owner
+    password: npg_zmR3lt2yPadv
+
+flyway:
+  datasources:
+    default:
+      url: jdbc:postgresql://ep-calm-shape-beap5h80.c-9.us-east-2.aws.neon.tech/neondb?sslmode=require
+      user: neondb_owner
+      password: npg_zmR3lt2yPadv
+
+redis:
+  uri: rediss://default:gQAAAAAAAxsoAAIgcDJiOWU5ZWRhMjJkMjE0ZGJhODFmZjY0MGU2ODc4YTVlMA@proud-mayfly-203560.upstash.io:6379
