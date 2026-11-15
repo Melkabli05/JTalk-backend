@@ -44,6 +44,15 @@ The `Dockerfile` is what Render builds ([Render: Docker](https://render.com/docs
 
 On the free plan the service sleeps when idle and takes a moment to wake.
 
+**Open testing mode.** `render.yaml` sets `MICRONAUT_ENVIRONMENTS=cloud,dev`, which switches security off: the caller is whoever the `X-User-Id`
+header says, and `/dev/users` serves the frontend's profile dialog. That is what lets the frontend work before a user service exists, and it means
+anyone who finds the URL can act as anyone, so keep it to testing. To turn security back on, set `MICRONAUT_ENVIRONMENTS=cloud` in Render
+(Environment) and send `Authorization: Bearer` tokens signed with `JWT_SECRET`. An existing service needs the variable set by hand in
+Render; the Blueprint only applies it when it creates or syncs the service.
+
+**CORS.** A frontend on another origin may call the API (preflights carry no token and are answered). Any origin is allowed until
+`CORS_ALLOWED_ORIGINS` (a regular expression, e.g. `https://app\.example\.com|http://localhost:4200`) narrows it.
+
 Two things to know. The repository is public, so those database credentials are public: rotate them in the Neon and Upstash consoles
 if they are ever misused. And behind a corporate TLS-inspection proxy (Zscaler and the like) the connection to Upstash can fail with
 `PKIX path building failed`; that is the proxy's certificate, not the service: run from another network, or add the proxy's root CA to

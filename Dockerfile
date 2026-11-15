@@ -18,7 +18,7 @@
 #   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET   the LiveKit project
 #   DATASOURCES_DEFAULT_URL / _USERNAME / _PASSWORD    PostgreSQL
 #   REDIS_URI                                          Redis
-#   MICRONAUT_ENVIRONMENTS                             defaults to "cloud"; e.g. "cloud,quic" adds HTTP/3; never "dev" in a deployed image
+#   MICRONAUT_ENVIRONMENTS                             defaults to "cloud"; e.g. "cloud,quic" adds HTTP/3; "cloud,dev" only as the temporary open testing mode in render.yaml (security off)
 
 FROM eclipse-temurin:25-jdk AS build
 WORKDIR /workspace
