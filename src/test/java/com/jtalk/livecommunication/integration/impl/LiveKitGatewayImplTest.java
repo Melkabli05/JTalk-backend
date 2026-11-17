@@ -4,6 +4,8 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.jtalk.livecommunication.config.LiveKitConfig;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
+import com.jtalk.livecommunication.domain.model.StageState;
+import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.sun.net.httpserver.HttpServer;
 import io.livekit.server.RoomServiceClient;
 import livekit.LivekitRoom;
@@ -174,7 +176,7 @@ class LiveKitGatewayImplTest {
 
     @Test
     void broadcastRoomEventSendsOneDataMessageToTheWholeRoom() throws Exception {
-        gateway().broadcastRoomEvent(room, RoomEventType.HAND_RAISED, bob);
+        gateway().broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.HAND_RAISED, room, bob, Instant.now(), new StageState(List.of(bob), List.of()), null));
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/SendData"), request.path());
@@ -184,6 +186,7 @@ class LiveKitGatewayImplTest {
         assertEquals("room-events", body.getTopic());
         String json = body.getData().toStringUtf8();
         assertTrue(json.contains("\"type\":\"HAND_RAISED\"") && json.contains(bob.toString()), json);
+        assertTrue(json.contains("\"stage\":{\"speakers\":[\"" + bob + "\"],\"handRaiseQueue\":[]}"), "the new state travels in the event: " + json);
     }
 
     @Test
@@ -192,9 +195,13 @@ class LiveKitGatewayImplTest {
         contentType = "application/json";
         responseBody = "{\"code\":\"invalid_argument\",\"msg\":\"nope\"}".getBytes();
 
-        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(room, RoomEventType.STAGE_UPDATED, null));
+        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(stageUpdated()));
         server.stop(0);
-        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(room, RoomEventType.STAGE_UPDATED, null));
+        assertDoesNotThrow(() -> gateway().broadcastRoomEvent(stageUpdated()));
+    }
+
+    private RoomRealtimeEvent stageUpdated() {
+        return new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, Instant.now(), null, null);
     }
 
     // ---- error handling ---------------------------------------------------------------------------

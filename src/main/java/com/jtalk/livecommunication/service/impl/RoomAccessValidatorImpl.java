@@ -39,12 +39,7 @@ class RoomAccessValidatorImpl implements RoomAccessValidator {
 
     @Override
     public void requireNotBanned(UUID roomId, UUID userId) {
-        requireAdmitted(!presence.isBanned(roomId, userId), userId);
-    }
-
-    @Override
-    public void requireAdmitted(boolean admitted, UUID userId) {
-        if (!admitted) {
+        if (presence.isBanned(roomId, userId)) {
             throw ProblemType.KICKED_FROM_ROOM.because(userId + " was removed from this room by the host");
         }
     }

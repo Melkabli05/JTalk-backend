@@ -25,7 +25,7 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
         MediaParticipant.of(event).ifPresent(who -> {
             switch (event.getEvent()) {
                 case "participant_left" -> participants.handleMediaDisconnected(who.roomId(), who.userId());
-                case "participant_joined" -> participants.handleMediaReconnected(who.roomId(), who.userId());
+                case "participant_joined" -> participants.handleMediaConnected(who.roomId(), who.userId());
                 default -> { /* other events are not needed */ }
             }
         });

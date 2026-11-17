@@ -24,10 +24,4 @@ public interface RoomAccessValidator {
 
     /** A user the host has removed may not come back: 403 {@code kicked-from-room}. */
     void requireNotBanned(UUID roomId, UUID userId);
-
-    /**
-     * For callers that learn about the ban as part of another Redis round trip (the heartbeat): 403
-     * {@code kicked-from-room} when {@code admitted} is false.
-     */
-    void requireAdmitted(boolean admitted, UUID userId);
 }

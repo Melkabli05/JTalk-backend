@@ -63,11 +63,4 @@ class RoomAccessValidatorTest {
         assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", guest.toString(), () -> access.requireNotBanned(roomId, guest));
         assertDoesNotThrow(() -> access.requireNotBanned(roomId, host));
     }
-
-    @Test
-    void anAdmissionDeniedByAnotherRedisRoundTripIsTheSameProblem() {
-        assertDoesNotThrow(() -> access.requireAdmitted(true, guest));
-
-        assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", "removed from this room", () -> access.requireAdmitted(false, guest));
-    }
 }

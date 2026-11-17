@@ -27,6 +27,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     /** When set, {@link #createRoom} fails with it, to test what happens if the media server is down. */
     public volatile RuntimeException createRoomFailure;
     public final List<RoomRealtimeEvent> events = new CopyOnWriteArrayList<>();
+    public final List<RoomRealtimeEvent> presenceEvents = new CopyOnWriteArrayList<>();
     public final List<UUID> createdRooms = new CopyOnWriteArrayList<>();
     public final List<UUID> closedRooms = new CopyOnWriteArrayList<>();
     public final List<PermissionChange> permissionChanges = new CopyOnWriteArrayList<>();
@@ -36,6 +37,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     public void reset() {
         createRoomFailure = null;
         events.clear();
+        presenceEvents.clear();
         createdRooms.clear();
         closedRooms.clear();
         permissionChanges.clear();
@@ -87,8 +89,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     }
 
     @Override
-    public void broadcastRoomEvent(UUID roomId, RoomEventType type, UUID targetUserId) {
-        RoomRealtimeEvent event = new RoomRealtimeEvent(type, roomId, targetUserId, java.time.Instant.now());
-        events.add(event);
+    public void broadcastRoomEvent(RoomRealtimeEvent event) {
+        (event.type() == RoomEventType.PRESENCE_CHANGED ? presenceEvents : events).add(event);
     }
 }

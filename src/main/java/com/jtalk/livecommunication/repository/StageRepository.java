@@ -46,7 +46,7 @@ public class StageRepository extends RedisRepository {
         redis.expire(stageKey(roomId), Long.parseLong(ttlSeconds));
     }
 
-    /** Adds the user to the queue if not already queued. Returns the 1-based position, or -1 if already on stage. */
+    /** Adds the user to the queue if not already queued. Returns the new 1-based position, 0 if already queued, or -1 if already on stage. */
     public int raiseHand(UUID roomId, UUID userId) {
         Long position = raiseHandScript.execute(redis(), ScriptOutputType.INTEGER,
                 new String[]{stageKey(roomId), queueKey(roomId)},
@@ -54,8 +54,8 @@ public class StageRepository extends RedisRepository {
         return position.intValue();
     }
 
-    public void removeHandRaise(UUID roomId, UUID userId) {
-        redis().zrem(queueKey(roomId), userId.toString());
+    public boolean removeHandRaise(UUID roomId, UUID userId) {
+        return redis().zrem(queueKey(roomId), userId.toString()) > 0;
     }
 
     /** Atomically takes a free seat (and leaves the queue). Returns false if the stage is full. */

@@ -25,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -41,6 +42,7 @@ class ParticipantServiceImpl implements ParticipantService {
     private final LiveKitGateway gateway;
     private final ApiMapper mapper;
     private final RoomAccessValidator access;
+    private final RoomEvents events;
 
     @Override
     public RoomSessionResponse joinRoom(UUID roomId, UUID userId) {
@@ -51,16 +53,17 @@ class ParticipantServiceImpl implements ParticipantService {
             onStage = stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats());   // the host's seat is permanent
         }
         if (onStage && leases.delete(roomId, userId)) {   // reconnecting within the grace lease restores the seat
-            gateway.broadcastRoomEvent(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
+            events.announce(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
         }
-        presence.touch(roomId, userId);
+        presence.enter(roomId, userId);
+        events.userJoined(roomId, userId);
         return new RoomSessionResponse(rooms.toResponse(room), gateway.serverUrl(), gateway.generateToken(roomId, userId, onStage),
                 room.roleOf(userId, onStage), onStage);
     }
 
     @Override
     public void leaveRoom(UUID roomId, UUID userId) {
-        presence.remove(roomId, userId);
+        dropPresence(roomId, userId);
         stage.removeHandRaise(roomId, userId);
         if (!stage.isOnStage(roomId, userId) || isHost(roomId, userId)) {
             return;   // a listener leaving changes nothing on the stage; the host keeps their seat
@@ -80,24 +83,33 @@ class ParticipantServiceImpl implements ParticipantService {
 
     @Override
     public void handleMediaDisconnected(UUID roomId, UUID userId) {
-        if (!isActiveRoomWithoutHost(roomId, userId)) {
-            return;   // a closed room, or the host, whose seat is permanent
+        Optional<VoiceRoom> room = rooms.findActiveRoom(roomId);
+        if (room.isEmpty()) {
+            return;
         }
-        if (stage.isOnStage(roomId, userId)) {
+        if (room.get().isHost(userId)) {
+            dropPresence(roomId, userId);
+        } else if (stage.isOnStage(roomId, userId)) {
             log.info("Speaker {} media dropped in room {}. Starting the stage grace lease.", userId, roomId);
             if (leases.create(roomId, userId)) {
-                gateway.broadcastRoomEvent(roomId, RoomEventType.SPEAKER_RECONNECTING, userId);
+                events.announce(roomId, RoomEventType.SPEAKER_RECONNECTING, userId);
             }
         } else {
-            presence.remove(roomId, userId);
+            dropPresence(roomId, userId);
             stage.removeHandRaise(roomId, userId);
         }
     }
 
     @Override
-    public void handleMediaReconnected(UUID roomId, UUID userId) {
+    public void handleMediaConnected(UUID roomId, UUID userId) {
+        if (rooms.findActiveRoom(roomId).isEmpty() || presence.isBanned(roomId, userId)) {
+            return;
+        }
+        if (presence.connected(roomId, userId)) {
+            events.userJoined(roomId, userId);
+        }
         if (leases.delete(roomId, userId)) {
-            gateway.broadcastRoomEvent(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
+            events.announce(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
         }
     }
 
@@ -109,12 +121,7 @@ class ParticipantServiceImpl implements ParticipantService {
         }
         log.info("Grace lease expired for speaker {} in room {}. Evicting from stage.", event.userId(), event.roomId());
         stages.vacateSeat(event.roomId(), event.userId());
-    }
-
-    @Override
-    public void heartbeat(UUID roomId, UUID userId) {
-        rooms.getRequiredActiveRoom(roomId);
-        access.requireAdmitted(presence.touch(roomId, userId), userId);
+        dropPresence(event.roomId(), event.userId());
     }
 
     @Override
@@ -132,6 +139,12 @@ class ParticipantServiceImpl implements ParticipantService {
     @TransactionalEventListener
     void onRoomClosed(VoiceRoomClosed event) {
         presence.clear(event.roomId());
+    }
+
+    private void dropPresence(UUID roomId, UUID userId) {
+        if (presence.remove(roomId, userId)) {
+            events.userLeft(roomId, userId);
+        }
     }
 
     private boolean isHost(UUID roomId, UUID userId) {

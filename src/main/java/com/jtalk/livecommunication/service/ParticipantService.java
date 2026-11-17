@@ -27,14 +27,11 @@ public interface ParticipantService {
      */
     void kickParticipant(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
 
-    /** Webhook: a speaker's media dropped. Their seat is held under a grace lease; anyone else simply leaves. */
+    /** Webhook: a speaker's media dropped. Their seat is held under a grace lease; anyone else simply leaves the room. */
     void handleMediaDisconnected(@NonNull UUID roomId, @NonNull UUID userId);
 
-    /** Webhook: the participant is back within the lease. */
-    void handleMediaReconnected(@NonNull UUID roomId, @NonNull UUID userId);
-
-    /** Presence heartbeat. */
-    void heartbeat(@NonNull UUID roomId, @NonNull UUID userId);
+    /** Webhook: the participant's media connection is up. They are present, and back within the lease if they had one. */
+    void handleMediaConnected(@NonNull UUID roomId, @NonNull UUID userId);
 
     /** Who is in the room, with roles and whether they are inside a grace lease. */
     List<ParticipantResponse> listParticipants(@NonNull UUID roomId);

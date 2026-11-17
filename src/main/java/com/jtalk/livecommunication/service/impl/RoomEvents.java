@@ -1,0 +1,84 @@
+package com.jtalk.livecommunication.service.impl;
+
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
+import com.jtalk.livecommunication.domain.model.PresenceChange;
+import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
+import com.jtalk.livecommunication.domain.model.RoomLiveStats;
+import com.jtalk.livecommunication.integration.LiveKitGateway;
+import com.jtalk.livecommunication.repository.LiveStatsRepository;
+import com.jtalk.livecommunication.repository.StageRepository;
+import io.micronaut.core.annotation.Nullable;
+import io.micronaut.scheduling.annotation.Scheduled;
+import jakarta.inject.Singleton;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Singleton
+@Slf4j
+@RequiredArgsConstructor
+class RoomEvents {
+
+    private static final class Pending {
+        final Set<UUID> joined = new LinkedHashSet<>();
+        final Set<UUID> left = new LinkedHashSet<>();
+    }
+
+    private final LiveKitGateway gateway;
+    private final StageRepository stage;
+    private final LiveStatsRepository liveStats;
+    private final Clock clock;
+    private final Map<UUID, Pending> pending = new ConcurrentHashMap<>();
+
+    void announce(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
+        gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant(), null, null));
+    }
+
+    void announceStage(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
+        var at = clock.instant();
+        gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, at, stage.snapshot(roomId), null));
+    }
+
+    void userJoined(UUID roomId, UUID userId) {
+        pending.compute(roomId, (id, changes) -> {
+            Pending next = changes == null ? new Pending() : changes;
+            next.left.remove(userId);
+            next.joined.add(userId);
+            return next;
+        });
+    }
+
+    void userLeft(UUID roomId, UUID userId) {
+        pending.compute(roomId, (id, changes) -> {
+            Pending next = changes == null ? new Pending() : changes;
+            next.joined.remove(userId);
+            next.left.add(userId);
+            return next;
+        });
+    }
+
+    @Scheduled(fixedDelay = "${voice-room.presence-batch:2s}")
+    void sendPresenceChanges() {
+        for (UUID roomId : List.copyOf(pending.keySet())) {
+            Pending changes = pending.remove(roomId);
+            if (changes == null) {
+                continue;
+            }
+            try {
+                RoomLiveStats now = liveStats.find(List.of(roomId)).get(roomId);
+                gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.PRESENCE_CHANGED, roomId, null, clock.instant(), null,
+                        new PresenceChange(now.participantCount(), new ArrayList<>(changes.joined), new ArrayList<>(changes.left))));
+            } catch (RuntimeException e) {
+                log.warn("Could not announce who came and went in room {}", roomId, e);
+            }
+        }
+    }
+}

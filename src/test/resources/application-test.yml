@@ -16,3 +16,4 @@ livekit:
 voice-room:
   lease-ttl: PT1S
   presence-timeout: PT3S
+  presence-batch: 500ms

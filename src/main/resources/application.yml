@@ -25,6 +25,14 @@ micronaut:
           allowed-headers: [Authorization, Content-Type, X-User-Id]
           max-age: 3600
 
+  caches:
+    room-metadata:
+      expire-after-write: 10s
+      maximum-size: 5000
+    active-rooms-feed:
+      expire-after-write: 2s
+      maximum-size: 500
+
 # PostgreSQL and Redis connections are intentionally NOT configured here:
 #  - locally (./gradlew run, tests) Micronaut Test Resources starts containers for them;
 #  - deployed, set DATASOURCES_DEFAULT_URL / _USERNAME / _PASSWORD and REDIS_URI.

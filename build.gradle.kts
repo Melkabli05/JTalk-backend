@@ -45,6 +45,8 @@ dependencies {
     // Redis: ephemeral stage / presence state
     implementation("io.micronaut.redis:micronaut-redis-lettuce")
 
+    implementation("io.micronaut.cache:micronaut-cache-caffeine")
+
     // LiveKit: real-time audio (not managed by the Micronaut BOM)
     implementation("io.livekit:livekit-server:0.17.0")
 

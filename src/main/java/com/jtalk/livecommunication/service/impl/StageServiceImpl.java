@@ -37,6 +37,7 @@ class StageServiceImpl implements StageService {
     private final LiveKitGateway gateway;
     private final ApiMapper mapper;
     private final RoomAccessValidator access;
+    private final RoomEvents events;
 
     @Override
     public RoomSessionResponse claimStageSeat(UUID roomId, UUID userId) {
@@ -45,7 +46,7 @@ class StageServiceImpl implements StageService {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
         gateway.setPublishPermission(roomId, userId, true);
-        gateway.broadcastRoomEvent(roomId, RoomEventType.STAGE_UPDATED, null);
+        events.announceStage(roomId, RoomEventType.STAGE_UPDATED, null);
         return new RoomSessionResponse(rooms.toResponse(room), gateway.serverUrl(), gateway.generateToken(roomId, userId, true),
                 room.roleOf(userId, true), true);
     }
@@ -64,23 +65,27 @@ class StageServiceImpl implements StageService {
             log.info("Seat freed in room {}: promoting queued user {} to the stage", roomId, promoted);
             gateway.setPublishPermission(roomId, promoted, true);
         });
-        gateway.broadcastRoomEvent(roomId, RoomEventType.STAGE_UPDATED, null);
+        events.announceStage(roomId, RoomEventType.STAGE_UPDATED, null);
     }
 
     @Override
     public void raiseHand(UUID roomId, UUID userId) {
         rooms.getRequiredActiveRoom(roomId);
-        if (stage.raiseHand(roomId, userId) < 0) {
+        int position = stage.raiseHand(roomId, userId);
+        if (position < 0) {
             throw ProblemType.ALREADY_ON_STAGE.because(userId + " is already on stage");
         }
-        gateway.broadcastRoomEvent(roomId, RoomEventType.HAND_RAISED, userId);
+        if (position > 0) {
+            events.announceStage(roomId, RoomEventType.HAND_RAISED, userId);
+        }
     }
 
     @Override
     public void lowerHand(UUID roomId, UUID userId) {
         rooms.getRequiredActiveRoom(roomId);
-        stage.removeHandRaise(roomId, userId);
-        gateway.broadcastRoomEvent(roomId, RoomEventType.HAND_LOWERED, userId);
+        if (stage.removeHandRaise(roomId, userId)) {
+            events.announceStage(roomId, RoomEventType.HAND_LOWERED, userId);
+        }
     }
 
     @Override
@@ -91,7 +96,7 @@ class StageServiceImpl implements StageService {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
         gateway.setPublishPermission(roomId, targetUserId, true);
-        gateway.broadcastRoomEvent(roomId, RoomEventType.STAGE_UPDATED, targetUserId);
+        events.announceStage(roomId, RoomEventType.STAGE_UPDATED, targetUserId);
         log.info("Host {} promoted user {} to stage in room {}", hostId, targetUserId, roomId);
     }
 

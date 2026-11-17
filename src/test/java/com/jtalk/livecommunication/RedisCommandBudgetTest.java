@@ -38,16 +38,6 @@ class RedisCommandBudgetTest extends ApiTestBase {
     }
 
     @Test
-    void theHeartbeatIsThreeCommandsSentTogetherBanCheckIncluded() {
-        String roomId = createRoom("host", "Budget heartbeat", 3);
-        join(roomId, "alice");
-
-        List<String> commands = redis.during(() -> postEmpty(roomId, "/participants/heartbeat", "alice"));
-
-        assertEquals(List.of("SISMEMBER", "ZADD", "EXPIRE"), commands);
-    }
-
-    @Test
     void discoveryReadsLiveNumbersWithThreeCommandsPerRoomAndNothingElse() {
         for (String title : List.of("budget-a", "budget-b", "budget-c")) {
             createRoom("host-" + title, java.util.Map.of("title", title, "targetLanguage", "bu", "nativeLanguage", "en"));

@@ -37,12 +37,6 @@ class ParticipantController {
         participants.leaveRoom(roomId, userId);
     }
 
-    @Post("/heartbeat")
-    @Status(HttpStatus.NO_CONTENT)
-    void heartbeat(UUID roomId, @CurrentUser UUID userId) {
-        participants.heartbeat(roomId, userId);
-    }
-
     @Get
     List<ParticipantResponse> listParticipants(UUID roomId) {
         return participants.listParticipants(roomId);

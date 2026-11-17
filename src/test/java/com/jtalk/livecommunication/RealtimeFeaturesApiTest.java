@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,6 +57,8 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         await("bob promoted after alice's lease expired", 10_000, () -> speakers(roomId).contains(id("bob").toString()));
         assertEquals(new HashSet<>(ids("host", "bob")), speakers(roomId));
         assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
+        assertFalse(getParticipants(roomId).stream().anyMatch(p -> id("alice").toString().equals(p.get("userId"))),
+                "a speaker whose lease ran out is no longer in the room");
         assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("bob"), true)));
         assertTrue(gateway.events.stream().anyMatch(e -> e.type() == RoomEventType.STAGE_UPDATED), "the room is told the stage changed");
     }
@@ -86,6 +89,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         Thread.sleep(2_000);
 
         assertTrue(speakers(roomId).contains(id("host").toString()));
+        assertEquals(List.of(), getParticipants(roomId), "the host keeps the seat but is no longer in the room");
         assertEquals(true, join(roomId, "host").get("canPublishAudio"), "the host comes back with publish rights");
     }
 
@@ -101,18 +105,44 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     }
 
     @Test
-    void participantsWhoStopSendingHeartbeatsDropOutOfTheRoom() throws InterruptedException {
+    void someoneWhoJoinedButNeverConnectedTheirMediaDropsOutWhileAConnectedOneStays() throws InterruptedException {
         String roomId = createRoom("host", "Presence", 3);
         join(roomId, "alice");
         join(roomId, "bob");
+        webhook("participant_joined", roomId, "bob");
         assertEquals(2, getRoom(roomId).get("participantCount"));
 
-        Thread.sleep(2_000);
-        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/participants/heartbeat", "bob").status());   // only bob keeps beating
-        Thread.sleep(1_500);                                                                              // alice is now 3.5 s silent, bob 1.5 s
+        Thread.sleep(3_500);
 
         assertEquals(ids("bob"), getParticipants(roomId).stream().map(p -> p.get("userId")).toList());
-        assertEquals(1, getRoom(roomId).get("participantCount"), "the room's count ignores the silent participant too");
+        assertEquals(1, getRoom(roomId).get("participantCount"), "the room's count ignores the one who never connected too");
+    }
+
+    @Test
+    void aListenerWhoseMediaConnectionComesBackIsPresentAgainWithoutJoiningAgain() {
+        String roomId = createRoom("host", "Back again", 3);
+        join(roomId, "bob");
+        webhook("participant_joined", roomId, "bob");
+
+        webhook("participant_left", roomId, "bob");
+        assertEquals(List.of(), getParticipants(roomId));
+
+        webhook("participant_joined", roomId, "bob");
+        assertEquals(ids("bob"), getParticipants(roomId).stream().map(p -> p.get("userId")).toList());
+        await("the net result to be announced", 5000, () -> gateway.presenceEvents.stream()
+                .anyMatch(e -> e.presence().joined().contains(id("bob")) && !e.presence().left().contains(id("bob"))));
+    }
+
+    @Test
+    void aConnectedConnectionIsNotForgottenWhenTheSameUserJoinsAgain() throws InterruptedException {
+        String roomId = createRoom("host", "Rejoin", 3);
+        join(roomId, "bob");
+        webhook("participant_joined", roomId, "bob");
+
+        join(roomId, "bob");
+        Thread.sleep(3_500);
+
+        assertEquals(ids("bob"), getParticipants(roomId).stream().map(p -> p.get("userId")).toList());
     }
 
     @Test
@@ -153,6 +183,62 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
                 "SPEAKER_RECONNECTING:" + id("alice"), "SPEAKER_RECONNECTED:" + id("alice"), "STAGE_UPDATED:null"),
                 gateway.events.stream().map(e -> e.type() + ":" + e.targetUserId()).toList());
         assertTrue(gateway.events.stream().allMatch(e -> e.roomId().equals(uuid(roomId))));
+    }
+
+    @Test
+    void stageEventsCarryTheNewStageSoClientsNeverRefetchIt() {
+        String roomId = createRoom("host", "Carry state", 3);
+        join(roomId, "host");
+        join(roomId, "alice");
+        join(roomId, "bob");
+
+        postEmpty(roomId, "/stage/raise-hand", "bob");
+        post(roomId, "/stage/join", "alice");
+
+        var raised = gateway.events.get(0);
+        var seated = gateway.events.get(1);
+        assertEquals(List.of(id("host")), raised.stage().speakers());
+        assertEquals(List.of(id("bob")), raised.stage().handRaiseQueue());
+        assertEquals(List.of(id("host"), id("alice")), seated.stage().speakers());
+        assertEquals(List.of(id("bob")), seated.stage().handRaiseQueue());
+    }
+
+    @Test
+    void peopleArrivingAndLeavingAreAnnouncedInBatchesNotOneByOne() {
+        String roomId = createRoom("host", "Crowd", 3);
+        for (int i = 0; i < 6; i++) {
+            join(roomId, "guest-" + i);
+        }
+        await("the arrivals to be announced", 5000, () -> arrivals(roomId).size() == 6);
+
+        postEmpty(roomId, "/participants/leave", "guest-0");
+        await("the departure to be announced", 5000, () -> gateway.presenceEvents.stream().anyMatch(e -> e.presence().left().contains(id("guest-0"))));
+
+        assertTrue(gateway.presenceEvents.size() < 6, "six arrivals must not mean six events: " + gateway.presenceEvents);
+        var last = gateway.presenceEvents.getLast().presence();
+        assertEquals(5, last.participantCount());
+        assertEquals(List.of(), gateway.events, "people coming and going never touch the stage events");
+    }
+
+    private java.util.Set<java.util.UUID> arrivals(String roomId) {
+        return gateway.presenceEvents.stream().filter(e -> e.roomId().equals(uuid(roomId)))
+                .flatMap(e -> e.presence().joined().stream()).collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Test
+    void repeatedTapsOnTheHandButtonBroadcastOnlyTheRealChange() {
+        String roomId = createRoom("host", "Tap tap", 3);
+        join(roomId, "bob");
+
+        for (int i = 0; i < 5; i++) {
+            assertEquals(HttpStatus.ACCEPTED, postEmpty(roomId, "/stage/raise-hand", "bob").status());
+        }
+        delete(roomId, "/stage/raise-hand", "bob");
+        delete(roomId, "/stage/raise-hand", "bob");
+        postEmpty(roomId, "/stage/raise-hand", "bob");
+
+        assertEquals(List.of("HAND_RAISED:" + id("bob"), "HAND_LOWERED:" + id("bob"), "HAND_RAISED:" + id("bob")),
+                gateway.events.stream().map(e -> e.type() + ":" + e.targetUserId()).toList());
     }
 
     @Test
@@ -258,9 +344,9 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
         assertEquals(List.of(new Removal(uuid(roomId), id("mallory"))), gateway.removals);
         assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", () -> join(roomId, "mallory"));
-        assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", () -> postEmpty(roomId, "/participants/heartbeat", "mallory"));
+        webhook("participant_joined", roomId, "mallory");
         assertEquals(ids("host"), getParticipants(roomId).stream().map(p -> p.get("userId")).toList(),
-                "a kicked client that keeps sending heartbeats must not reappear in the room");
+                "a kicked client whose media connects again must not reappear in the room");
     }
 
     @Test

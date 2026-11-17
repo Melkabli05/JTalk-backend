@@ -4,6 +4,7 @@ import com.jtalk.livecommunication.config.VoiceRoomProperties;
 import io.lettuce.core.LettuceFutures;
 import io.lettuce.core.Range;
 import io.lettuce.core.RedisFuture;
+import io.lettuce.core.ZAddArgs;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
@@ -16,13 +17,15 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Who is in the room right now: ZSET {@code voiceroom:{id}:presence}, userId -> last heartbeat (epoch millis). Staleness
- * is evaluated on read, so no sweeper is needed. Kicked users are kept in {@code voiceroom:{id}:banned}.
+ * Who is in the room right now: ZSET {@code voiceroom:{id}:presence}, userId -> when they joined (epoch millis) until LiveKit
+ * confirms their media connection, then {@link #CONNECTED}, which no staleness check ever trims. Someone who joined but never
+ * connected ages out on read, so no sweeper is needed. Kicked users are kept in {@code voiceroom:{id}:banned}.
  */
 @Singleton
 public class PresenceRepository extends RedisRepository {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
+    private static final double CONNECTED = Long.MAX_VALUE;
 
     private final Clock clock;
     private final Duration presenceTimeout;
@@ -35,27 +38,22 @@ public class PresenceRepository extends RedisRepository {
         this.ttlSeconds = properties.stateTtl().toSeconds();
     }
 
-    /**
-     * The heartbeat, sent by every participant every few seconds. The ban check rides in the same pipeline as the two
-     * writes, so the hot path stays one round trip. Returns false if the host has barred this user: their entry is
-     * taken straight back out, so a kicked client that keeps heartbeating never shows up as present.
-     */
-    public boolean touch(UUID roomId, UUID userId) {
+    public void enter(UUID roomId, UUID userId) {
         RedisAsyncCommands<String, String> redis = connection.async();
-        RedisFuture<Boolean> banned = redis.sismember(bannedKey(roomId), userId.toString());
         LettuceFutures.awaitAll(TIMEOUT,
-                banned,
-                redis.zadd(key(roomId), clock.millis(), userId.toString()),
+                redis.zadd(key(roomId), ZAddArgs.Builder.gt(), clock.millis(), userId.toString()),
                 redis.expire(key(roomId), ttlSeconds));
-        if (banned.toCompletableFuture().join()) {
-            remove(roomId, userId);
-            return false;
-        }
-        return true;
     }
 
-    public void remove(UUID roomId, UUID userId) {
-        connection.sync().zrem(key(roomId), userId.toString());
+    public boolean connected(UUID roomId, UUID userId) {
+        RedisAsyncCommands<String, String> redis = connection.async();
+        RedisFuture<Long> added = redis.zadd(key(roomId), CONNECTED, userId.toString());
+        LettuceFutures.awaitAll(TIMEOUT, added, redis.expire(key(roomId), ttlSeconds));
+        return added.toCompletableFuture().join() > 0;
+    }
+
+    public boolean remove(UUID roomId, UUID userId) {
+        return connection.sync().zrem(key(roomId), userId.toString()) > 0;
     }
 
     public boolean isPresent(UUID roomId, UUID userId) {
@@ -63,7 +61,7 @@ public class PresenceRepository extends RedisRepository {
         return lastSeen != null && lastSeen >= freshnessCutoff().toEpochMilli();
     }
 
-    /** Users with a recent heartbeat; stale entries are trimmed first. */
+    /** Users whose connection is confirmed or who joined recently; stale entries are trimmed first. */
     public List<UUID> findPresent(UUID roomId) {
         RedisCommands<String, String> redis = connection.sync();
         redis.zremrangebyscore(key(roomId), Range.create(Double.NEGATIVE_INFINITY, (double) freshnessCutoff().toEpochMilli() - 1));
@@ -85,7 +83,7 @@ public class PresenceRepository extends RedisRepository {
         connection.sync().del(key(roomId), bannedKey(roomId));
     }
 
-    /** A heartbeat older than this no longer counts as present. */
+    /** A join that LiveKit has not confirmed within this long no longer counts as present. */
     Instant freshnessCutoff() {
         return clock.instant().minus(presenceTimeout);
     }

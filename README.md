@@ -123,7 +123,7 @@ The four service boundaries:
 | Service | Responsibility |
 |---|---|
 | `VoiceRoomService` | Create / update / close rooms, active-room validation (`getRequiredActiveRoom`), keyset-paginated discovery |
-| `ParticipantService` | Join (as a listener, or restoring a seat), leave, host kick, the 30 s grace lease, presence heartbeat and list |
+| `ParticipantService` | Join (as a listener, or restoring a seat), leave, host kick, the 30 s grace lease, presence (driven by LiveKit webhooks) and list |
 | `StageService` | Claim / leave a seat, hand-raise queue, host promote / demote, low-bandwidth mode |
 | `LiveKitGateway` | Rooms, signed tokens, permissions, subscriptions, kicks, data messages |
 
@@ -152,7 +152,7 @@ Conventions the code follows (and `LiveKitGatewayImplTest` pins down):
 | **Stage** | The host is seated when the room is created (seats include the host, 2-12). Anyone can take a free seat (`stage/join`), or raise a hand and wait; the host can promote or demote. Atomic Lua scripts claim a seat and release-and-promote (one call frees a seat and seats the next hand-raiser); they run by SHA and fall back to sending the source after a Redis restart. |
 | **30 s grace lease** | LiveKit `participant_left` for a seated speaker creates a Redis key with a TTL instead of freeing the seat. Rejoining (or `participant_joined`) cancels it. When it expires, Redis emits a keyspace event; `LeaseExpirationListener` calls `ParticipantService.handleDisconnectLeaseExpired`, which frees the seat and promotes the next hand-raiser. The host's seat is never reclaimed. The participant list shows `RECONNECTING` meanwhile. |
 | **Real-time room events** | Clients do not have to poll. When something changes, the server broadcasts a small JSON event to everyone in the room over LiveKit's reliable data channel (topic `room-events`): `STAGE_UPDATED` (seats changed: refetch `stage`), `HAND_RAISED` / `HAND_LOWERED` (with the user), `SPEAKER_RECONNECTING` / `SPEAKER_RECONNECTED` (a speaker's media dropped / came back within the grace lease). Events carry no state, only `type`, `roomId`, `targetUserId` and `timestamp`. Delivery is best effort: a failed broadcast is logged and never fails the request that caused it. |
-| **Webhooks** | `POST /webhooks/livekit`, signature verified with the LiveKit SDK. Events handled: `participant_left`, `participant_joined`. LiveKit does not guarantee webhook delivery (it retries, then gives up). |
+| **Webhooks** | `POST /webhooks/livekit`, signature verified with the LiveKit SDK. Events handled: `participant_left`, `participant_joined`; they also decide who is present (there is no heartbeat). LiveKit does not guarantee webhook delivery (it retries, then gives up). |
 | **Low-bandwidth mode** | `stage/network-mode`: `LOW_BANDWIDTH` unsubscribes the user from the secondary tracks they list and remembers them; `OPTIMAL` restores them (plus any the request lists). The client decides when it is struggling; nothing to prune means no call to LiveKit. |
 
 ## API
@@ -167,7 +167,7 @@ Tokens are issued upstream (gateway / identity provider) and verified here with 
 | `GET /?targetLanguage=&size=&afterCreatedAt=&afterId=` | any | Active rooms, newest first, keyset-paginated: for the next page pass the last room's `createdAt` and `id`. Each room carries live `speakers`, `participantCount`, `handRaiseCount` (one batched Redis round trip) |
 | `GET /{roomId}` / `PATCH /{roomId}` / `DELETE /{roomId}` | any / host / host | Read (with live numbers) / update `title`, `topic`, `maxStageSeats` / close |
 | `POST /{roomId}/participants/join` | any | Join: returns the room, a LiveKit token, the role and whether the user may publish |
-| `POST .../participants/heartbeat` / `POST .../participants/leave` | member | Keep presence alive / leave |
+| `POST .../participants/leave` | member | Leave |
 | `GET .../participants` | any | Who is here: role + `ACTIVE`/`RECONNECTING` |
 | `DELETE .../participants/{userId}` | host | Kick: frees their seat (promoting the next hand-raiser), disconnects them, revokes their LiveKit tokens and bars them from rejoining |
 | `GET .../stage` | any | Speakers (host included) and hand-raise queue |
@@ -258,7 +258,7 @@ Not built, or not verified, and worth deciding on:
 - **Low-bandwidth pruning is best-effort for auto-subscribing clients.** LiveKit documents no way to stop a client
   re-subscribing to new tracks on its own; for a reliable prune, connect clients with `autoSubscribe` disabled.
 - **Webhooks are not guaranteed.** A lost `participant_left` means the lease is never started, so the seat is only
-  freed when the user leaves or the host removes them.
+  freed when the user leaves or the host removes them. A lost `participant_left` also leaves that user listed as present until they leave or the room closes; a lost `participant_joined` only means a user who joined is dropped from the list after `voice-room.presence-timeout`.
 - **HTTP/3 binds, but no HTTP/3 request was made.** The `quic` profile starts a QUIC (UDP) and a TCP+TLS listener on
   8443 and answers HTTPS; there was no HTTP/3 client available to test the QUIC path itself.
 - **Lease expiry depends on Redis keyspace events**, which are not durable: if no instance is listening when a lease

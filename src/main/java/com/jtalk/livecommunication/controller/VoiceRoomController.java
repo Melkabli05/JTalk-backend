@@ -7,9 +7,6 @@ import com.jtalk.livecommunication.dto.response.VoiceRoomResponse;
 import com.jtalk.livecommunication.service.VoiceRoomService;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.model.CursoredPage;
-import io.micronaut.data.model.CursoredPageable;
-import io.micronaut.data.model.Pageable;
-import io.micronaut.data.model.Sort;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Body;
@@ -41,8 +38,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 class VoiceRoomController {
 
-    private static final Sort NEWEST_FIRST = Sort.of(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
-
     private final VoiceRoomService rooms;
 
     @Post
@@ -60,10 +55,7 @@ class VoiceRoomController {
                                                     @QueryValue(defaultValue = "20") @Min(1) @Max(100) int size,
                                                     @Nullable @QueryValue Instant afterCreatedAt,
                                                     @Nullable @QueryValue UUID afterId) {
-        CursoredPageable pageable = afterCreatedAt == null || afterId == null
-                ? CursoredPageable.from(size, NEWEST_FIRST)
-                : CursoredPageable.from(0, Pageable.Cursor.of(afterCreatedAt, afterId), Pageable.Mode.CURSOR_NEXT, size, NEWEST_FIRST, false);
-        return rooms.listActiveRooms(targetLanguage, pageable);
+        return rooms.listActiveRooms(targetLanguage, size, afterCreatedAt, afterId);
     }
 
     @Get("/{roomId}")

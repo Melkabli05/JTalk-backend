@@ -8,11 +8,11 @@ import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.data.model.CursoredPage;
-import io.micronaut.data.model.CursoredPageable;
 import io.micronaut.validation.Validated;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,7 +23,7 @@ public interface VoiceRoomService {
     /** Creates the room, seats the host on the stage and returns the host's session. */
     RoomSessionResponse createRoom(@NonNull UUID hostId, @Valid @NotNull CreateVoiceRoomRequest request);
 
-    CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable String targetLanguage, @NonNull CursoredPageable pageable);
+    CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt, @Nullable UUID afterId);
 
     VoiceRoomResponse getRoom(@NonNull UUID roomId);
 

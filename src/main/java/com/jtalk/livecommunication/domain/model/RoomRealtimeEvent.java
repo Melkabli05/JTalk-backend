@@ -8,11 +8,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A small notification pushed to everyone in the room over LiveKit's data channel. It carries no state: clients react by
- * refetching what changed (stage, participants).
+ * A small update pushed to everyone in the room over LiveKit's data channel. It carries the state it changed, so clients apply
+ * it in memory instead of refetching.
  *
  * @param targetUserId the user the event is about, if any
+ * @param stage        the stage after the change, for events that change it
+ * @param presence     who came and went, for {@code PRESENCE_CHANGED}
  */
 @Serdeable
-public record RoomRealtimeEvent(RoomEventType type, UUID roomId, @Nullable UUID targetUserId, Instant timestamp) {
+public record RoomRealtimeEvent(RoomEventType type, UUID roomId, @Nullable UUID targetUserId, Instant timestamp,
+                                @Nullable StageState stage, @Nullable PresenceChange presence) {
 }
