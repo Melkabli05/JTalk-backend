@@ -276,9 +276,14 @@ Not built, or not verified, and worth deciding on:
   still does and the hallways are not told; and a message sent while this instance's Redis connection is down and reconnecting is lost,
   so a hallway can be out of date until its stream reconnects (every connection starts from a fresh `SNAPSHOT`). Several instances share
   the feed, but that has been exercised only by publishing to the channel from a test, not with two running instances.
-- **Deleted accounts close their rooms, best effort.** The user service announces `USER_DELETED` on the Redis channel `user-events` (both services
-  share that Redis); every instance closes the open rooms the person hosts, the same way the host closing them would. Pub/sub keeps no
-  messages, so an announcement sent while this instance is disconnected is lost and the room stays open until it is ended some other way.
+- **What a deleted account does to rooms (best effort).** The user service announces `USER_DELETED` on the Redis channel `user-events` (both
+  services share that Redis); every instance then, in order: (1) for each open room the person hosts, **hands it to the person who has
+  been on its stage the longest** (the room carries on; everyone is told through a `ROOM_UPDATED` that now carries the new `hostId`), or
+  **closes it** when nobody else is on the stage (there is no moderator role yet: a stage speaker is the next best thing); (2) takes the
+  person out of every room they are in (presence, raised hand, stage seat, then their media connection is cut and tokens revoked);
+  (3) erases every room they ever hosted, closed ones included (titles and topics are their words), except rooms just handed over.
+  Closing is one conditional `UPDATE`, so two instances (or a double click on End) cannot both close the same room. Pub/sub keeps no
+  messages, so an announcement sent while an instance is disconnected is lost and the room stays as it was.
 - **Several instances are untested.** Each instance listens for lease expiry and a webhook goes to one of them; the
   seat rule is idempotent but this has not been exercised with more than one instance.
 - **No load test, no container image build and no HTTP/3 client test** have been run.

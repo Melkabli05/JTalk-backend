@@ -135,7 +135,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         VoiceRoom saved = rooms.update(room.withSettings(request.title(), request.topic(), request.maxStageSeats()));
         VoiceRoomResponse updated = toResponse(saved);
         feed.updated(updated);
-        events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats()));
+        events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
         return updated;
     }
 
@@ -151,20 +151,41 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     public void closeRoom(UUID roomId, UUID requesterId) {
         VoiceRoom room = loadForUpdate(roomId);
         access.requireHost(room, requesterId, "close this room");
-        rooms.update(room.close());
+        if (rooms.closeIfActive(roomId) == 0) {
+            throw ProblemType.VOICE_ROOM_NOT_FOUND.because("Voice room " + roomId + " does not exist or is closed");   // closed a moment ago by someone else
+        }
         closedEvents.publishEvent(new VoiceRoomClosed(roomId));
         log.info("Closed voice room {} by host {}", roomId, requesterId);
     }
 
     @Override
-    public void closeRoomsHostedBy(UUID hostId) {
-        for (VoiceRoom room : rooms.findByHostIdAndStatus(hostId, VoiceRoomStatus.ACTIVE)) {
-            try {
-                closeRoom(room.id(), hostId);
-            } catch (ThrowableProblem alreadyGone) {
-                log.debug("Room {} of deleted host {} was already closed", room.id(), hostId);
-            }
+    public List<UUID> activeRoomIdsHostedBy(UUID hostId) {
+        return rooms.findByHostIdAndStatus(hostId, VoiceRoomStatus.ACTIVE).stream().map(VoiceRoom::id).toList();
+    }
+
+    @Override
+    @CacheInvalidate(value = "room-metadata", parameters = "roomId")
+    @CacheInvalidate(value = FEED_CACHE, all = true)
+    public void handOverRoom(UUID roomId, UUID fromHostId, UUID toUserId) {
+        VoiceRoom room = loadForUpdate(roomId);
+        if (!room.isHost(fromHostId)) {
+            return;   // already handed over, by another instance hearing the same announcement
         }
+        VoiceRoom saved = rooms.update(room.withHost(toUserId));
+        feed.updated(toResponse(saved));
+        events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
+        log.info("Room {} handed from {} to {}", roomId, fromHostId, toUserId);
+    }
+
+    @Override
+    public List<UUID> openRoomIds() {
+        return rooms.findIdByStatus(VoiceRoomStatus.ACTIVE);
+    }
+
+    @Override
+    @CacheInvalidate(value = FEED_CACHE, all = true)
+    public void eraseRoomsHostedBy(UUID hostId) {
+        rooms.deleteByHostId(hostId);
     }
 
     /**

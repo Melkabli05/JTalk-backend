@@ -132,7 +132,7 @@ class VoiceRoomApiTest extends ApiTestBase {
 
         var told = gateway.events.stream().filter(e -> e.type() == com.jtalk.livecommunication.domain.enums.RoomEventType.ROOM_UPDATED).toList();
         assertEquals(1, told.size(), "told once, and not for an update that was refused");
-        assertEquals(new com.jtalk.livecommunication.domain.model.RoomSettings("New title", "Travel", 3), told.get(0).settings());
+        assertEquals(new com.jtalk.livecommunication.domain.model.RoomSettings("New title", "Travel", 3, id("host")), told.get(0).settings());
         assertEquals(uuid(roomId), told.get(0).roomId());
     }
 

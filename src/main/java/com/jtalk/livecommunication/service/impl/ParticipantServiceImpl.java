@@ -77,6 +77,24 @@ class ParticipantServiceImpl implements ParticipantService {
     }
 
     @Override
+    public void removeFromAllRooms(UUID userId) {
+        for (UUID roomId : rooms.openRoomIds()) {
+            RosterRepository.Departure left = rosterRepository.leave(roomId, userId);
+            if (!left.wasPresent() && !left.onStage()) {
+                continue;
+            }
+            if (left.wasPresent()) {
+                events.userLeft(roomId, userId);
+            }
+            if (left.onStage() && !isHost(roomId, userId)) {
+                stages.vacateSeat(roomId, userId);
+            }
+            gateway.removeParticipant(roomId, userId);
+            log.info("Removed deleted account {} from room {}", userId, roomId);
+        }
+    }
+
+    @Override
     public void kickParticipant(UUID roomId, UUID hostId, UUID targetUserId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         access.requireCanKick(room, hostId, targetUserId);

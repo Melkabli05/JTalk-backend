@@ -44,6 +44,11 @@ public record VoiceRoom(
                 status, createdAt, updatedAt);
     }
 
+    /** The same room under another host: for when the host's account is gone and someone on the stage takes over. */
+    public VoiceRoom withHost(UUID newHostId) {
+        return new VoiceRoom(id, title, topic, newHostId, targetLanguage, nativeLanguage, maxStageSeats, status, createdAt, updatedAt);
+    }
+
     public VoiceRoom close() {
         return new VoiceRoom(id, title, topic, hostId, targetLanguage, nativeLanguage, maxStageSeats,
                 VoiceRoomStatus.CLOSED, createdAt, updatedAt);

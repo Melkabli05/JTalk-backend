@@ -37,12 +37,20 @@ public interface VoiceRoomService {
     /** Host-only. Marks the room closed; Redis state and the LiveKit room are cleaned up after the commit. */
     void closeRoom(@NonNull UUID roomId, @NonNull UUID requesterId);
 
+    /** The ids of the open rooms the person hosts (a host runs one at a time, but a deletion must not rely on it). */
+    List<UUID> activeRoomIdsHostedBy(@NonNull UUID hostId);
+
     /**
-     * Closes every open room the person hosts, for when their account is gone: a room with no one to run it. Closing is the same as the
-     * host closing it (the stage, the roster and the media room are cleaned up after the commit). Rooms already closed are left alone, so
-     * hearing about the same deletion twice is harmless.
+     * Makes {@code toUserId} the host of the room, if {@code fromHostId} still is: for when the host's account is gone and someone who was
+     * on the stage takes over. Everyone is told who hosts it now. A room that has already been handed over, or closed, is left alone.
      */
-    void closeRoomsHostedBy(@NonNull UUID hostId);
+    void handOverRoom(@NonNull UUID roomId, @NonNull UUID fromHostId, @NonNull UUID toUserId);
+
+    /** The ids of the rooms that are open right now. */
+    List<UUID> openRoomIds();
+
+    /** Erases every room the person ever hosted, closed ones included: a deleted account leaves no titles or topics behind. */
+    void eraseRoomsHostedBy(@NonNull UUID hostId);
 
     /** The room if it exists and is open; for callers (webhooks) that must not fail on a room that was just closed. */
     Optional<VoiceRoom> findActiveRoom(@NonNull UUID roomId);

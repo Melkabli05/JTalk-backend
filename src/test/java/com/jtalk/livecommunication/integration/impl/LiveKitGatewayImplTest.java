@@ -222,11 +222,11 @@ class LiveKitGatewayImplTest {
     @Test
     void aRoomUpdateCarriesTheNewSettingsAndAMissingTopicAsNull() throws Exception {
         gateway().broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.ROOM_UPDATED, room, null, Instant.now(), null, null, null,
-                new com.jtalk.livecommunication.domain.model.RoomSettings("New title", null, 6)));
+                new com.jtalk.livecommunication.domain.model.RoomSettings("New title", null, 6, alice)));
 
         String json = LivekitRoom.SendDataRequest.parseFrom(onlyRequest().body()).getData().toStringUtf8();
         assertTrue(json.contains("\"type\":\"ROOM_UPDATED\""), json);
-        assertTrue(json.contains("\"settings\":{\"title\":\"New title\",\"topic\":null,\"maxStageSeats\":6}"), "what the client reads: " + json);
+        assertTrue(json.contains("\"settings\":{\"title\":\"New title\",\"topic\":null,\"maxStageSeats\":6,\"hostId\":\"" + alice + "\"}"), "what the client reads: " + json);
     }
 
     @Test

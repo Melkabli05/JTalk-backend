@@ -33,6 +33,13 @@ public interface ParticipantService {
     /** Webhook: the participant's media connection is up. They are present, and back within the lease if they had one. */
     void handleMediaConnected(@NonNull UUID roomId, @NonNull UUID userId);
 
+    /**
+     * Takes the person out of every open room they are in, for when their account is deleted: presence, raised hand and stage seat are
+     * dropped (the next hand-raiser is promoted), their media connection is cut and the tokens they hold are revoked. Rooms they are not
+     * in are not touched.
+     */
+    void removeFromAllRooms(@NonNull UUID userId);
+
     /** Who is in the room, with roles and whether they are inside a grace lease. */
     List<ParticipantResponse> listParticipants(@NonNull UUID roomId);
 }
