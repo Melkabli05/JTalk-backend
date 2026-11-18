@@ -1,5 +1,5 @@
 # The "cloud" profile: the hosted free-tier services this service runs on, hardcoded on purpose so the app starts with nothing but
-#   MICRONAUT_ENVIRONMENTS=cloud   (plus JWT_SECRET and the LiveKit variables, see application.yml)
+#   MICRONAUT_ENVIRONMENTS=cloud   (plus AUTH0_DOMAIN, AUTH0_AUDIENCE and the LiveKit variables, see application.yml)
 #
 #   PostgreSQL  Neon    (the app connects through Neon's pooler; Flyway migrates over the direct endpoint, because the
 #                        pooler runs PgBouncer in transaction mode, which breaks the advisory locks Flyway takes)
