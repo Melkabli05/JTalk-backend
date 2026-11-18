@@ -13,7 +13,7 @@ import java.util.UUID;
  */
 public interface RoomFeed {
 
-    /** What happens from the moment of subscribing, on any instance. A subscriber that falls too far behind is cut off and must reconnect. */
+    /** What happens from the moment of subscribing, on any instance. */
     Publisher<RoomFeedEvent> changes();
 
     void opened(VoiceRoomResponse room);

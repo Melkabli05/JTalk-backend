@@ -27,6 +27,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 
+import static com.jtalk.livecommunication.config.CommunicationConstants.MAX_PAGE_SIZE;
+
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
@@ -52,7 +54,7 @@ class VoiceRoomController {
      */
     @Get
     CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable @QueryValue String targetLanguage,
-                                                    @QueryValue(defaultValue = "20") @Min(1) @Max(100) int size,
+                                                    @QueryValue(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size,
                                                     @Nullable @QueryValue Instant afterCreatedAt,
                                                     @Nullable @QueryValue UUID afterId) {
         return rooms.listActiveRooms(targetLanguage, size, afterCreatedAt, afterId);

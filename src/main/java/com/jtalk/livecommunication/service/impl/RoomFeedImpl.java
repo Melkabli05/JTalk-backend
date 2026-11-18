@@ -10,7 +10,6 @@ import io.micronaut.configuration.lettuce.pubsub.annotation.RedisListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
-import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
@@ -26,9 +25,6 @@ class RoomFeedImpl implements RoomFeed {
 
     static final String CHANNEL = "voiceroom.feed";
 
-    /** How far behind a watcher may fall before it is cut off (it reconnects and gets the list again). */
-    private static final int MAX_BACKLOG = 256;
-
     private final RoomFeedBus bus;
     private final Sinks.Many<RoomFeedEvent> heard = Sinks.many().multicast().directBestEffort();
 
@@ -39,7 +35,7 @@ class RoomFeedImpl implements RoomFeed {
 
     @Override
     public Publisher<RoomFeedEvent> changes() {
-        return heard.asFlux().onBackpressureBuffer(MAX_BACKLOG, BufferOverflowStrategy.ERROR);
+        return heard.asFlux();
     }
 
     @Override

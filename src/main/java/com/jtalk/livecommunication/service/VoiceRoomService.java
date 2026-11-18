@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,6 +25,9 @@ public interface VoiceRoomService {
     RoomSessionResponse createRoom(@NonNull UUID hostId, @Valid @NotNull CreateVoiceRoomRequest request);
 
     CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt, @Nullable UUID afterId);
+
+    /** The newest open rooms (at most one discovery page), read fresh: for a feed's first message, which must not miss a room that just opened or closed. */
+    List<VoiceRoomResponse> openRooms();
 
     VoiceRoomResponse getRoom(@NonNull UUID roomId);
 

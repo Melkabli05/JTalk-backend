@@ -33,6 +33,8 @@ import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import static com.jtalk.livecommunication.config.CommunicationConstants.MAX_PAGE_SIZE;
+
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -109,6 +111,11 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
                 : rooms.findByStatusAndTargetLanguage(VoiceRoomStatus.ACTIVE, targetLanguage, pageable);
         Map<UUID, RoomLiveStats> live = liveStats.find(page.getContent().stream().map(VoiceRoom::id).toList());
         return page.map(room -> mapper.toResponse(room, live.get(room.id())));
+    }
+
+    @Override
+    public List<VoiceRoomResponse> openRooms() {
+        return loadFeed(null, MAX_PAGE_SIZE, null, null).getContent();
     }
 
     @Override

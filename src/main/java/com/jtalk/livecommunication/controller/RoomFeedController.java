@@ -11,6 +11,7 @@ import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
 import lombok.RequiredArgsConstructor;
 import reactor.core.Disposable;
+import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.ConnectableFlux;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -23,8 +24,8 @@ import java.time.Duration;
 @RequiredArgsConstructor
 class RoomFeedController {
 
-    private static final int SNAPSHOT_SIZE = 100;
-    private static final int MISSED_WHILE_READING = 256;
+    /** How far behind a hallway may fall before it is cut off: it reconnects and starts from a fresh list. */
+    private static final int MAX_BACKLOG = 256;
     /** Proxies close a stream that stays silent; a ping now and then keeps it open. */
     private static final Duration PING_EVERY = Duration.ofSeconds(20);
 
@@ -39,14 +40,14 @@ class RoomFeedController {
     Flux<Event<?>> watch() {
         Flux<RoomFeedEvent> listThenChanges = Flux.defer(() -> {
             // Listen before reading the list, so a room that opens in between is replayed after it instead of being lost.
-            ConnectableFlux<RoomFeedEvent> missed = Flux.from(feed.changes()).replay(MISSED_WHILE_READING);
+            ConnectableFlux<RoomFeedEvent> missed = Flux.from(feed.changes()).replay(MAX_BACKLOG);
             Disposable listening = missed.connect();
-            return Mono.fromCallable(() -> RoomFeedEvent.snapshot(rooms.listActiveRooms(null, SNAPSHOT_SIZE, null, null).getContent()))
+            return Mono.fromCallable(() -> RoomFeedEvent.snapshot(rooms.openRooms()))
                     .subscribeOn(Schedulers.boundedElastic())   // a database read must not block the event loop
                     .concatWith(missed)
                     .doFinally(signal -> listening.dispose());
         });
         Flux<Event<?>> pings = Flux.interval(PING_EVERY).map(tick -> Event.of("").name("ping"));
-        return Flux.merge(listThenChanges.map(Event::of), pings);
+        return Flux.merge(listThenChanges.map(Event::of), pings).onBackpressureBuffer(MAX_BACKLOG, BufferOverflowStrategy.ERROR);
     }
 }
