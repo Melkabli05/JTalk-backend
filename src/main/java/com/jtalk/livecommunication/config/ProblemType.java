@@ -23,6 +23,8 @@ public enum ProblemType {
     HOST_CANNOT_LEAVE_STAGE(HttpStatus.UNPROCESSABLE_ENTITY, "The host keeps their stage seat"),
     CANNOT_KICK_HOST(HttpStatus.UNPROCESSABLE_ENTITY, "The host cannot be kicked"),
     KICKED_FROM_ROOM(HttpStatus.FORBIDDEN, "Removed from this room"),
+    NOT_IN_ROOM(HttpStatus.FORBIDDEN, "Join the room first"),
+    REACTING_TOO_FAST(HttpStatus.TOO_MANY_REQUESTS, "Reacting too fast"),
     INVALID_WEBHOOK_SIGNATURE(HttpStatus.UNAUTHORIZED, "Invalid webhook signature"),
     MEDIA_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "Media server rejected the request"),
     MEDIA_SERVER_UNREACHABLE(HttpStatus.BAD_GATEWAY, "Media server unreachable");

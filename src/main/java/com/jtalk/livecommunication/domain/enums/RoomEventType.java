@@ -9,5 +9,7 @@ public enum RoomEventType {
     /** A speaker's media dropped; their seat is held for the grace lease. */
     SPEAKER_RECONNECTING,
     SPEAKER_RECONNECTED,
-    PRESENCE_CHANGED
+    PRESENCE_CHANGED,
+    /** Reactions people sent in the last moment, batched into one message. */
+    REACTIONS
 }

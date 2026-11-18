@@ -176,7 +176,7 @@ class LiveKitGatewayImplTest {
 
     @Test
     void broadcastRoomEventSendsOneDataMessageToTheWholeRoom() throws Exception {
-        gateway().broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.HAND_RAISED, room, bob, Instant.now(), new StageState(List.of(bob), List.of()), null));
+        gateway().broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.HAND_RAISED, room, bob, Instant.now(), new StageState(List.of(bob), List.of()), null, null));
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/SendData"), request.path());
@@ -201,7 +201,7 @@ class LiveKitGatewayImplTest {
     }
 
     private RoomRealtimeEvent stageUpdated() {
-        return new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, Instant.now(), null, null);
+        return new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, Instant.now(), null, null, null);
     }
 
     // ---- error handling ---------------------------------------------------------------------------

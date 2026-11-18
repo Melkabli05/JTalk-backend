@@ -5,6 +5,7 @@ import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -14,8 +15,10 @@ import java.util.UUID;
  * @param targetUserId the user the event is about, if any
  * @param stage        the stage after the change, for events that change it
  * @param presence     who came and went, for {@code PRESENCE_CHANGED}
+ * @param reactions    what people reacted with, for {@code REACTIONS}
  */
 @Serdeable
 public record RoomRealtimeEvent(RoomEventType type, UUID roomId, @Nullable UUID targetUserId, Instant timestamp,
-                                @Nullable StageState stage, @Nullable PresenceChange presence) {
+                                @Nullable StageState stage, @Nullable PresenceChange presence,
+                                @Nullable List<ReactionBurst> reactions) {
 }
