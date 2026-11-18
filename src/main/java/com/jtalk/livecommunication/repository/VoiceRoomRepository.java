@@ -8,6 +8,7 @@ import io.micronaut.data.model.CursoredPageable;
 import io.micronaut.data.model.query.builder.sql.Dialect;
 import io.micronaut.data.repository.CrudRepository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +16,9 @@ import java.util.UUID;
 public interface VoiceRoomRepository extends CrudRepository<VoiceRoom, UUID> {
 
     Optional<VoiceRoom> findFirstByHostIdAndStatus(UUID hostId, VoiceRoomStatus status);
+    /** Every room of the host in this state: a host runs one at a time, but a deletion must not rely on it. */
+    List<VoiceRoom> findByHostIdAndStatus(UUID hostId, VoiceRoomStatus status);
+
     Optional<VoiceRoom> findByIdAndStatus(UUID id, VoiceRoomStatus status);
 
     /**

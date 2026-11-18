@@ -31,6 +31,7 @@ import io.micronaut.data.model.Sort;
 import io.micronaut.transaction.annotation.Transactional;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
+import org.zalando.problem.ThrowableProblem;
 import lombok.extern.slf4j.Slf4j;
 
 import static com.jtalk.livecommunication.config.CommunicationConstants.MAX_PAGE_SIZE;
@@ -153,6 +154,17 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         rooms.update(room.close());
         closedEvents.publishEvent(new VoiceRoomClosed(roomId));
         log.info("Closed voice room {} by host {}", roomId, requesterId);
+    }
+
+    @Override
+    public void closeRoomsHostedBy(UUID hostId) {
+        for (VoiceRoom room : rooms.findByHostIdAndStatus(hostId, VoiceRoomStatus.ACTIVE)) {
+            try {
+                closeRoom(room.id(), hostId);
+            } catch (ThrowableProblem alreadyGone) {
+                log.debug("Room {} of deleted host {} was already closed", room.id(), hostId);
+            }
+        }
     }
 
     /**
