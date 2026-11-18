@@ -15,10 +15,6 @@ services:
     # Liveness only: it answers without a token and does not depend on the database, so a slow Neon wake-up never restarts the service.
     healthCheckPath: /health/liveness
     envVars:
-      # Temporary: Micronaut Security logs why it rejects a token (bad signature, issuer, audience, expiry, a missing user-id claim) at DEBUG.
-      # Remove this once sign-in works, so the log stays quiet.
-      - key: LOGGER_LEVELS_IO_MICRONAUT_SECURITY
-        value: DEBUG
       # Auth0: the same tenant and API as the user service, so one login works for both. This service only checks the access tokens
       # (signature, issuer, audience, expiry). Neither value is a secret.
       - key: AUTH0_DOMAIN
