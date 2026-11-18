@@ -121,6 +121,21 @@ class VoiceRoomApiTest extends ApiTestBase {
     }
 
     @Test
+    void whenTheHostChangesTheRoomTheOthersInItAreToldWhatChanged() {
+        String roomId = createRoom("host", "Old title", 4);
+        gateway.events.clear();
+
+        http.exchange(HttpRequest.PATCH(path(roomId, ""), Map.of("title", "New title", "topic", "Travel", "maxStageSeats", 3)).bearerAuth(token("host")));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> http.exchange(
+                HttpRequest.PATCH(path(roomId, ""), Map.of("title", "Hijack")).bearerAuth(token("alice"))));
+
+        var told = gateway.events.stream().filter(e -> e.type() == com.jtalk.livecommunication.domain.enums.RoomEventType.ROOM_UPDATED).toList();
+        assertEquals(1, told.size(), "told once, and not for an update that was refused");
+        assertEquals(new com.jtalk.livecommunication.domain.model.RoomSettings("New title", "Travel", 3), told.get(0).settings());
+        assertEquals(uuid(roomId), told.get(0).roomId());
+    }
+
+    @Test
     void hostCanUpdateRoomSettingsAndNobodyElse() {
         String roomId = createRoom("host", "Old title", 4);
 

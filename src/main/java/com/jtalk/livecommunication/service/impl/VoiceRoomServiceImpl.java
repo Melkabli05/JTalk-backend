@@ -10,6 +10,7 @@ import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.dto.ApiMapper;
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
+import com.jtalk.livecommunication.domain.model.RoomSettings;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
 import com.jtalk.livecommunication.repository.VoiceRoomRepository;
@@ -61,6 +62,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     private final RoomAccessValidator access;
     private final CacheManager<?> caches;
     private final RoomFeed feed;
+    private final RoomEvents events;
 
     @Override
     @CacheInvalidate(value = FEED_CACHE, all = true)
@@ -129,8 +131,10 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     public VoiceRoomResponse updateRoom(UUID roomId, UUID requesterId, UpdateVoiceRoomRequest request) {
         VoiceRoom room = loadForUpdate(roomId);
         access.requireHost(room, requesterId, "update room settings");
-        VoiceRoomResponse updated = toResponse(rooms.update(room.withSettings(request.title(), request.topic(), request.maxStageSeats())));
+        VoiceRoom saved = rooms.update(room.withSettings(request.title(), request.topic(), request.maxStageSeats()));
+        VoiceRoomResponse updated = toResponse(saved);
         feed.updated(updated);
+        events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats()));
         return updated;
     }
 

@@ -206,7 +206,7 @@ class LiveKitGatewayImplTest {
 
     @Test
     void broadcastRoomEventSendsOneDataMessageToTheWholeRoom() throws Exception {
-        gateway().broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.HAND_RAISED, room, bob, Instant.now(), new StageState(List.of(bob), List.of()), null, null));
+        gateway().broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.HAND_RAISED, room, bob, Instant.now(), new StageState(List.of(bob), List.of()), null, null, null));
 
         Received request = onlyRequest();
         assertTrue(request.path().endsWith("/SendData"), request.path());
@@ -217,6 +217,16 @@ class LiveKitGatewayImplTest {
         String json = body.getData().toStringUtf8();
         assertTrue(json.contains("\"type\":\"HAND_RAISED\"") && json.contains(bob.toString()), json);
         assertTrue(json.contains("\"stage\":{\"speakers\":[\"" + bob + "\"],\"handRaiseQueue\":[]}"), "the new state travels in the event: " + json);
+    }
+
+    @Test
+    void aRoomUpdateCarriesTheNewSettingsAndAMissingTopicAsNull() throws Exception {
+        gateway().broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.ROOM_UPDATED, room, null, Instant.now(), null, null, null,
+                new com.jtalk.livecommunication.domain.model.RoomSettings("New title", null, 6)));
+
+        String json = LivekitRoom.SendDataRequest.parseFrom(onlyRequest().body()).getData().toStringUtf8();
+        assertTrue(json.contains("\"type\":\"ROOM_UPDATED\""), json);
+        assertTrue(json.contains("\"settings\":{\"title\":\"New title\",\"topic\":null,\"maxStageSeats\":6}"), "what the client reads: " + json);
     }
 
     @Test
@@ -231,7 +241,7 @@ class LiveKitGatewayImplTest {
     }
 
     private RoomRealtimeEvent stageUpdated() {
-        return new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, Instant.now(), null, null, null);
+        return new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, room, null, Instant.now(), null, null, null, null);
     }
 
     // ---- error handling ---------------------------------------------------------------------------

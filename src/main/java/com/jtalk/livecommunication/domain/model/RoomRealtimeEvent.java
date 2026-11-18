@@ -16,9 +16,10 @@ import java.util.UUID;
  * @param stage        the stage after the change, for events that change it
  * @param presence     who came and went, for {@code PRESENCE_CHANGED}
  * @param reactions    what people reacted with, for {@code REACTIONS}
+ * @param settings     the room's title, topic and seats, for {@code ROOM_UPDATED}
  */
 @Serdeable
 public record RoomRealtimeEvent(RoomEventType type, UUID roomId, @Nullable UUID targetUserId, Instant timestamp,
                                 @Nullable StageState stage, @Nullable PresenceChange presence,
-                                @Nullable List<ReactionBurst> reactions) {
+                                @Nullable List<ReactionBurst> reactions, @Nullable RoomSettings settings) {
 }

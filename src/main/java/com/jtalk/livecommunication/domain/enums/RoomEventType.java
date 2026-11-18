@@ -10,6 +10,8 @@ public enum RoomEventType {
     SPEAKER_RECONNECTING,
     SPEAKER_RECONNECTED,
     PRESENCE_CHANGED,
+    /** The host changed the title, topic or seats. Carries the new settings. */
+    ROOM_UPDATED,
     /** Reactions people sent in the last moment, batched into one message. */
     REACTIONS
 }
