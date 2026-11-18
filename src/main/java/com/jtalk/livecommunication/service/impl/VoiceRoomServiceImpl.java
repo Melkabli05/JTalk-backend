@@ -116,7 +116,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @CacheInvalidate(value = "room-metadata", parameters = "roomId")
     @CacheInvalidate(value = FEED_CACHE, all = true)
     public VoiceRoomResponse updateRoom(UUID roomId, UUID requesterId, UpdateVoiceRoomRequest request) {
-        VoiceRoom room = loadRequiredActiveRoom(roomId);
+        VoiceRoom room = loadForUpdate(roomId);
         access.requireHost(room, requesterId, "update room settings");
         return toResponse(rooms.update(room.withSettings(request.title(), request.topic(), request.maxStageSeats())));
     }
@@ -131,7 +131,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @CacheInvalidate(value = "room-metadata", parameters = "roomId")
     @CacheInvalidate(value = FEED_CACHE, all = true)
     public void closeRoom(UUID roomId, UUID requesterId) {
-        VoiceRoom room = loadRequiredActiveRoom(roomId);
+        VoiceRoom room = loadForUpdate(roomId);
         access.requireHost(room, requesterId, "close this room");
         rooms.update(room.close());
         closedEvents.publishEvent(new VoiceRoomClosed(roomId));
@@ -148,20 +148,45 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         }
     }
 
+    /**
+     * The one cached lookup behind both {@link #findActiveRoom} and {@link #getRequiredActiveRoom}: a room is read from PostgreSQL at most
+     * once per cache lifetime, however many requests and LiveKit webhooks ask. "No such room" is cached too, because when a room closes
+     * LiveKit sends a webhook for every participant, and each would otherwise be a query for a row that is not there. Closing or editing a
+     * room evicts it ({@code @CacheInvalidate}), and a room that exists is always found: ids are never reused.
+     */
+    @Cacheable(value = "room-metadata", atomic = true)
+    RoomLookup lookupActiveRoom(UUID roomId) {
+        return new RoomLookup(rooms.findByIdAndStatus(roomId, VoiceRoomStatus.ACTIVE).orElse(null));
+    }
+
+    /**
+     * What the cache holds: the room, or nothing. A holder rather than an {@code Optional} because the cache never stores a null, and
+     * because it hands a cached {@code Optional} back wrapped in another one.
+     */
+    record RoomLookup(@Nullable VoiceRoom room) {
+
+        Optional<VoiceRoom> asOptional() {
+            return Optional.ofNullable(room);
+        }
+    }
+
     @Override
     public Optional<VoiceRoom> findActiveRoom(UUID roomId) {
-        return rooms.findByIdAndStatus(roomId, VoiceRoomStatus.ACTIVE);
+        return lookupActiveRoom(roomId).asOptional();
     }
 
     @Override
-    @Cacheable(value = "room-metadata", atomic = true)
     public VoiceRoom getRequiredActiveRoom(UUID roomId) {
-        return loadRequiredActiveRoom(roomId);
+        return required(lookupActiveRoom(roomId).asOptional(), roomId);
     }
 
-    private VoiceRoom loadRequiredActiveRoom(UUID roomId) {
-        return findActiveRoom(roomId)
-                .orElseThrow(() -> ProblemType.VOICE_ROOM_NOT_FOUND.because("Voice room " + roomId + " does not exist or is closed"));
+    /** For a write: straight from PostgreSQL, never the cache, because the whole row is written back and a stale copy would undo a change. */
+    private VoiceRoom loadForUpdate(UUID roomId) {
+        return required(rooms.findByIdAndStatus(roomId, VoiceRoomStatus.ACTIVE), roomId);
+    }
+
+    private static VoiceRoom required(Optional<VoiceRoom> room, UUID roomId) {
+        return room.orElseThrow(() -> ProblemType.VOICE_ROOM_NOT_FOUND.because("Voice room " + roomId + " does not exist or is closed"));
     }
 
     @Override

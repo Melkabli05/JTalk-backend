@@ -15,6 +15,8 @@ import io.livekit.server.RoomServiceClient;
 import io.livekit.server.ServerError;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.serde.ObjectMapper;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.Async;
 import jakarta.inject.Singleton;
 import livekit.LivekitModels.DataPacket;
 import livekit.LivekitModels.ParticipantPermission;
@@ -100,7 +102,13 @@ class LiveKitGatewayImpl implements LiveKitGateway {
         execute(roomService.removeParticipant(roomId.toString(), userId.toString(), clock.instant().getEpochSecond()), "remove participant");
     }
 
+    /**
+     * Runs on its own thread: a room event is a hint that is allowed to fail, so the person whose action caused it should not wait for a
+     * round trip to the media server (a stage change used to cost the request one more LiveKit call). Each event carries the state it
+     * announces and a timestamp, so clients keep the newest if two arrive out of order.
+     */
     @Override
+    @Async(TaskExecutors.VIRTUAL)
     public void broadcastRoomEvent(RoomRealtimeEvent event) {
         try {
             // SDK parameter order: destination SIDs, then destination identities; both empty means everyone in the room.

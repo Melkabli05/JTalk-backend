@@ -20,7 +20,10 @@ public record LiveKitConfig(
         /* A join token is used within seconds of being issued, so it is short-lived: a copy taken from the page is soon useless. */
         @Bindable(defaultValue = "PT5M") Duration tokenTtl,
         /* LiveKit closes a room this many seconds after the last participant leaves. */
-        @Bindable(defaultValue = "300") int emptyRoomTimeoutSeconds) {
+        @Bindable(defaultValue = "300") int emptyRoomTimeoutSeconds,
+        /* The longest one call to the media server may take. A slow or hung LiveKit then fails the request in this long (a 502) instead of
+           holding it open for OkHttp's default of 10 s each for connecting, writing and reading. */
+        @Bindable(defaultValue = "PT8S") Duration requestTimeout) {
 
     /** The Room Service API speaks http(s) on the same host as the websocket URL. */
     public String apiUrl() {

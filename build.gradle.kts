@@ -59,6 +59,7 @@ dependencies {
     runtimeOnly("ch.qos.logback:logback-classic")
     runtimeOnly("org.yaml:snakeyaml")
     testImplementation("io.micronaut:micronaut-http-client")
+    testImplementation("ch.qos.logback:logback-classic")   // SqlStatementCounter reads Micronaut Data's query log
     testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
     testImplementation("com.auth0:java-jwt:4.6.0")   // signs webhooks the way LiveKit does
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

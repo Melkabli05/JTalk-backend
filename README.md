@@ -150,6 +150,42 @@ Conventions the code follows (and `LiveKitGatewayImplTest` pins down):
 | **Webhooks** | `POST /webhooks/livekit`, signature verified with the LiveKit SDK. Events handled: `participant_left`, `participant_joined`; they also decide who is present (there is no heartbeat). LiveKit does not guarantee webhook delivery (it retries, then gives up). |
 | **Low-bandwidth mode** | `stage/network-mode`: `LOW_BANDWIDTH` unsubscribes the user from the secondary tracks they list and remembers them; `OPTIMAL` restores them (plus any the request lists). The client decides when it is struggling; nothing to prune means no call to LiveKit. |
 
+## Performance
+
+Measured, not guessed. The database was benchmarked with `EXPLAIN (ANALYZE, BUFFERS)` on 300k rooms, 1.5k of them live (`perf/` reproduces it), and
+every hot request is counted by `PerformanceBudgetTest`: Redis **round trips** (what a request waits on over a network; commands sent together share
+one) and SQL statements. A regression fails a test instead of showing up as latency under load.
+
+**The database was already fine**, and nothing was changed to "improve" it: the discovery feed is 0.03 ms (0.26 ms filtered by language, 0.03 ms for a
+deep page) on the `(status, created_at, id)` and `(status, target_language, created_at, id)` indexes, and a cache-miss room lookup is 0.24 ms. The one
+query that could grow into a problem is "does this host already have a live room?", run whenever a room is opened: 0.2 ms with a thousand live rooms but
+9 ms with a hundred thousand, because it walked every live room and filtered by host. `V5` adds a small partial index on live rooms by host (0.025 ms at
+any size). That is insurance for a bigger platform, not a win today.
+
+**Where the time was:**
+
+| Request | Redis round trips | SQL | Change |
+|---|---|---|---|
+| `GET /stage` | 2 -> 1 | 0 | the speakers and the queue are read together |
+| `GET /participants` | 5 -> 2 | 0 | stage and presence go out together (`RosterRepository`), then one `MGET` of the leases of exactly those people |
+| Raise a hand | 4 -> 2 | 0 | the stage snapshot that tells the room is one read |
+| Take a seat | 5 -> 3 | 0 | same |
+| LiveKit webhook (join / leave) | 3 -> 3 | 1 -> 0 | `findActiveRoom` used to query PostgreSQL every time; it now shares the room cache |
+| Burst of webhooks when a room closes | N queries | 1 query | "no such room" is cached too |
+| Presence batch (every 2 s) | 1 per changed room | | one pipelined read for all changed rooms |
+
+Join (4 round trips) and leave (3) are left alone on purpose: each step depends on the one before it (ban check, then stage membership, then the host's
+claim, then presence, then the room's numbers), so merging them would mean moving business rules into Lua for a small gain.
+
+**LiveKit** is the other cost. Broadcasting a room event used to be a synchronous HTTP call to the media server on the request of the person who
+caused it, even though a failed broadcast is only logged. It now runs on its own thread (`@Async`), so a stage change or a hand no longer waits for a round
+trip to LiveKit; each event carries the state it announces and a timestamp, so clients keep the newest if two arrive out of order. Every call also has a
+hard timeout (`livekit.request-timeout`, default 8 s) instead of OkHttp's 10 s each for connecting, writing and reading, so a slow media server fails a
+request with a 502 instead of holding it open. `LiveKitCallsTest` proves both against a media server that takes 2.5 s to answer.
+
+The image runs with `-XX:+UseCompactObjectHeaders`, which shrinks every object on a small instance.
+
+
 ## API
 
 **Secure by default.** Every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <Auth0 access token>`. Auth0 issues the token; this

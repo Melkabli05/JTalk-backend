@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -72,19 +73,26 @@ class RoomEvents {
 
     @Scheduled(fixedDelay = "${voice-room.presence-batch:2s}")
     void sendPresenceChanges() {
+        Map<UUID, Pending> changed = new LinkedHashMap<>();
         for (UUID roomId : List.copyOf(pending.keySet())) {
             Pending changes = pending.remove(roomId);
-            if (changes == null) {
-                continue;
+            if (changes != null) {
+                changed.put(roomId, changes);
             }
+        }
+        if (changed.isEmpty()) {
+            return;
+        }
+        // One pipelined read for every room that changed, not one round trip per room.
+        Map<UUID, RoomLiveStats> stats = liveStats.find(changed.keySet());
+        changed.forEach((roomId, changes) -> {
             try {
-                RoomLiveStats now = liveStats.find(List.of(roomId)).get(roomId);
                 gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.PRESENCE_CHANGED, roomId, null, clock.instant(), null,
-                        new PresenceChange(now.participantCount(), new ArrayList<>(changes.joined), new ArrayList<>(changes.left)), null));
+                        new PresenceChange(stats.get(roomId).participantCount(), new ArrayList<>(changes.joined), new ArrayList<>(changes.left)), null));
             } catch (RuntimeException e) {
                 log.warn("Could not announce who came and went in room {}", roomId, e);
             }
-        }
+        });
     }
 
     void reacted(UUID roomId, UUID userId, Reaction reaction) {

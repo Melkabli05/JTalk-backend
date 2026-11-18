@@ -1,8 +1,6 @@
 package com.jtalk.livecommunication.repository;
 
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
-import io.lettuce.core.LettuceFutures;
-import io.lettuce.core.Range;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.ZAddArgs;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -13,7 +11,6 @@ import jakarta.inject.Singleton;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -24,7 +21,6 @@ import java.util.UUID;
 @Singleton
 public class PresenceRepository extends RedisRepository {
 
-    private static final Duration TIMEOUT = Duration.ofSeconds(2);
     private static final double CONNECTED = Long.MAX_VALUE;
 
     private final Clock clock;
@@ -40,15 +36,14 @@ public class PresenceRepository extends RedisRepository {
 
     public void enter(UUID roomId, UUID userId) {
         RedisAsyncCommands<String, String> redis = connection.async();
-        LettuceFutures.awaitAll(TIMEOUT,
-                redis.zadd(key(roomId), ZAddArgs.Builder.gt(), clock.millis(), userId.toString()),
+        await(redis.zadd(key(roomId), ZAddArgs.Builder.gt(), clock.millis(), userId.toString()),
                 redis.expire(key(roomId), ttlSeconds));
     }
 
     public boolean connected(UUID roomId, UUID userId) {
         RedisAsyncCommands<String, String> redis = connection.async();
         RedisFuture<Long> added = redis.zadd(key(roomId), CONNECTED, userId.toString());
-        LettuceFutures.awaitAll(TIMEOUT, added, redis.expire(key(roomId), ttlSeconds));
+        await(added, redis.expire(key(roomId), ttlSeconds));
         return added.toCompletableFuture().join() > 0;
     }
 
@@ -59,13 +54,6 @@ public class PresenceRepository extends RedisRepository {
     public boolean isPresent(UUID roomId, UUID userId) {
         Double lastSeen = connection.sync().zscore(key(roomId), userId.toString());
         return lastSeen != null && lastSeen >= freshnessCutoff().toEpochMilli();
-    }
-
-    /** Users whose connection is confirmed or who joined recently; stale entries are trimmed first. */
-    public List<UUID> findPresent(UUID roomId) {
-        RedisCommands<String, String> redis = connection.sync();
-        redis.zremrangebyscore(key(roomId), Range.create(Double.NEGATIVE_INFINITY, (double) freshnessCutoff().toEpochMilli() - 1));
-        return redis.zrange(key(roomId), 0, -1).stream().map(UUID::fromString).toList();
     }
 
     /** Bars a kicked user from joining this room again. */

@@ -77,7 +77,7 @@ class LiveKitGatewayImplTest {
 
     private LiveKitGatewayImpl gateway() {
         String host = "http://localhost:" + server.getAddress().getPort();
-        var properties = new LiveKitConfig("ws://localhost:" + server.getAddress().getPort(), API_KEY, API_SECRET, Duration.ofHours(1), 300);
+        var properties = new LiveKitConfig("ws://localhost:" + server.getAddress().getPort(), API_KEY, API_SECRET, Duration.ofHours(1), 300, Duration.ofSeconds(8));
         return new LiveKitGatewayImpl(properties, RoomServiceClient.createClient(host, API_KEY, API_SECRET), Clock.fixed(NOW, ZoneOffset.UTC),
                 io.micronaut.serde.ObjectMapper.getDefault());
     }

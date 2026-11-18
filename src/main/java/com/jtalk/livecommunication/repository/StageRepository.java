@@ -2,13 +2,16 @@ package com.jtalk.livecommunication.repository;
 
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
 import com.jtalk.livecommunication.domain.model.StageState;
+import io.lettuce.core.RedisFuture;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.micronaut.core.io.ResourceResolver;
 import jakarta.inject.Singleton;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -78,11 +81,15 @@ public class StageRepository extends RedisRepository {
         return redis().zscore(stageKey(roomId), userId.toString()) != null;
     }
 
+    /** The seated speakers and the hand-raise queue: two commands, one round trip. */
     public StageState snapshot(UUID roomId) {
-        RedisCommands<String, String> redis = redis();
+        RedisAsyncCommands<String, String> redis = connection.async();
+        RedisFuture<List<String>> speakers = redis.zrange(stageKey(roomId), 0, -1);
+        RedisFuture<List<String>> queue = redis.zrange(queueKey(roomId), 0, -1);
+        await(speakers, queue);
         return new StageState(
-                redis.zrange(stageKey(roomId), 0, -1).stream().map(UUID::fromString).toList(),
-                redis.zrange(queueKey(roomId), 0, -1).stream().map(UUID::fromString).toList());
+                speakers.toCompletableFuture().join().stream().map(UUID::fromString).toList(),
+                queue.toCompletableFuture().join().stream().map(UUID::fromString).toList());
     }
 
     public void clear(UUID roomId) {

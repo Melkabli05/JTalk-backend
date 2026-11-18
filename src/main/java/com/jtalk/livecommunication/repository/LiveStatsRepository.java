@@ -1,7 +1,6 @@
 package com.jtalk.livecommunication.repository;
 
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
-import io.lettuce.core.LettuceFutures;
 import io.lettuce.core.Range;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -9,7 +8,6 @@ import io.lettuce.core.api.async.RedisAsyncCommands;
 import jakarta.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 
-import java.time.Duration;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,8 +23,6 @@ import java.util.concurrent.TimeUnit;
 @Singleton
 @Slf4j
 public class LiveStatsRepository extends RedisRepository {
-
-    private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     private record Pending(RedisFuture<List<String>> speakers, RedisFuture<Long> handRaises, RedisFuture<Long> present) {
     }
@@ -53,7 +49,7 @@ public class LiveStatsRepository extends RedisRepository {
                     redis.zcard(StageRepository.queueKey(roomId)),
                     redis.zcount(PresenceRepository.key(roomId), recent)));
         }
-        LettuceFutures.awaitAll(TIMEOUT, pending.values().stream()
+        await(pending.values().stream()
                 .flatMap(p -> java.util.stream.Stream.of(p.speakers, p.handRaises, p.present))
                 .toArray(RedisFuture[]::new));
 
