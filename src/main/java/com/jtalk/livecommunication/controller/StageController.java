@@ -65,6 +65,13 @@ class StageController {
         stage.promoteToStage(roomId, userId, targetUserId);
     }
 
+    /** Host mutes a speaker's microphone. */
+    @Post("/mute/{targetUserId}")
+    @Status(HttpStatus.NO_CONTENT)
+    void muteSpeaker(UUID roomId, UUID targetUserId, @CurrentUser UUID userId) {
+        stage.muteSpeaker(roomId, userId, targetUserId);
+    }
+
     /** Host steps a speaker down to the audience. */
     @Post("/demote/{targetUserId}")
     @Status(HttpStatus.NO_CONTENT)

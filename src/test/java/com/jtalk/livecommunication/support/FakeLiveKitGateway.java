@@ -32,6 +32,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     public final List<UUID> closedRooms = new CopyOnWriteArrayList<>();
     public final List<PermissionChange> permissionChanges = new CopyOnWriteArrayList<>();
     public final List<SubscriptionChange> subscriptionChanges = new CopyOnWriteArrayList<>();
+    public final List<Removal> mutes = new CopyOnWriteArrayList<>();
     public final List<Removal> removals = new CopyOnWriteArrayList<>();
 
     public void reset() {
@@ -43,6 +44,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
         permissionChanges.clear();
         subscriptionChanges.clear();
         removals.clear();
+        mutes.clear();
     }
 
     @Override
@@ -81,6 +83,11 @@ public class FakeLiveKitGateway implements LiveKitGateway {
         if (!trackSids.isEmpty()) {
             subscriptionChanges.add(new SubscriptionChange(roomId, userId, List.copyOf(trackSids), subscribe));
         }
+    }
+
+    @Override
+    public void muteMicrophone(UUID roomId, UUID userId) {
+        mutes.add(new Removal(roomId, userId));
     }
 
     @Override

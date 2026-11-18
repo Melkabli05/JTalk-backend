@@ -158,6 +158,36 @@ class LiveKitGatewayImplTest {
     }
 
     @Test
+    void muteMicrophoneLooksUpTheirTracksAndMutesOnlyTheMicrophone() throws Exception {
+        responseBody = livekit.LivekitModels.ParticipantInfo.newBuilder()
+                .setIdentity(bob.toString())
+                .addTracks(livekit.LivekitModels.TrackInfo.newBuilder().setSid("TR_mic").setSource(livekit.LivekitModels.TrackSource.MICROPHONE))
+                .addTracks(livekit.LivekitModels.TrackInfo.newBuilder().setSid("TR_cam").setSource(livekit.LivekitModels.TrackSource.CAMERA))
+                .addTracks(livekit.LivekitModels.TrackInfo.newBuilder().setSid("TR_old").setSource(livekit.LivekitModels.TrackSource.MICROPHONE).setMuted(true))
+                .build().toByteArray();
+
+        gateway().muteMicrophone(room, bob);
+
+        assertEquals(2, requests.size(), "one lookup and one mute: the camera and an already-muted microphone are left alone");
+        assertTrue(requests.get(0).path().endsWith("/GetParticipant"), requests.get(0).path());
+        assertTrue(requests.get(1).path().endsWith("/MutePublishedTrack"), requests.get(1).path());
+        var body = LivekitRoom.MuteRoomTrackRequest.parseFrom(requests.get(1).body());
+        assertEquals(room.toString(), body.getRoom());
+        assertEquals(bob.toString(), body.getIdentity());
+        assertEquals("TR_mic", body.getTrackSid());
+        assertTrue(body.getMuted());
+    }
+
+    @Test
+    void muteMicrophoneDoesNothingWhenTheyAreNotConnected() {
+        status = 404;
+
+        assertDoesNotThrow(() -> gateway().muteMicrophone(room, bob));
+
+        assertEquals(1, requests.size(), "only the lookup: there is nothing to mute");
+    }
+
+    @Test
     void updateSubscriptionsSendsTheTracksAndSkipsEmptyLists() throws Exception {
         LiveKitGatewayImpl gateway = gateway();
         gateway.updateSubscriptions(room, bob, List.of(), true);

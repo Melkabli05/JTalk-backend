@@ -101,6 +101,14 @@ class StageServiceImpl implements StageService {
     }
 
     @Override
+    public void muteSpeaker(UUID roomId, UUID hostId, UUID targetUserId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        access.requireHost(room, hostId, "mute speakers");
+        gateway.muteMicrophone(roomId, targetUserId);
+        log.info("Host {} muted speaker {} in room {}", hostId, targetUserId, roomId);
+    }
+
+    @Override
     public void demoteToListener(UUID roomId, UUID hostId, UUID targetUserId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         access.requireHost(room, hostId, "demote speakers");

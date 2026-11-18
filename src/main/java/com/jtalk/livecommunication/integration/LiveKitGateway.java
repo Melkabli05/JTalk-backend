@@ -25,6 +25,12 @@ public interface LiveKitGateway {
     /** Grants or revokes publish rights of a participant that is already connected. Idempotent. */
     void setPublishPermission(@NonNull UUID roomId, @NonNull UUID userId, boolean canPublish);
 
+    /**
+     * Mutes the participant's published microphone on the media server, so it stops reaching everyone at once. They can unmute
+     * themselves again. Does nothing if they are not connected or publish no microphone.
+     */
+    void muteMicrophone(@NonNull UUID roomId, @NonNull UUID userId);
+
     /** (Un)subscribes one participant from the given tracks. An empty list does nothing. */
     void updateSubscriptions(@NonNull UUID roomId, @NonNull UUID userId, @NonNull List<String> trackSids, boolean subscribe);
 

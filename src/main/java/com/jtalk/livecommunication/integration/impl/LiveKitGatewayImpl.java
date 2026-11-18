@@ -20,6 +20,7 @@ import io.micronaut.scheduling.annotation.Async;
 import jakarta.inject.Singleton;
 import livekit.LivekitModels.DataPacket;
 import livekit.LivekitModels.ParticipantPermission;
+import livekit.LivekitModels.TrackInfo;
 import livekit.LivekitModels.TrackSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -86,6 +87,20 @@ class LiveKitGatewayImpl implements LiveKitGateway {
         // 404 = participant not connected right now; the permission then applies via the token issued on join.
         execute(roomService.updateParticipant(roomId.toString(), userId.toString(), null, null, permission),
                 "update participant permission");
+    }
+
+    @Override
+    public void muteMicrophone(UUID roomId, UUID userId) {
+        // 404 = not connected right now: there is no microphone to mute.
+        var participant = execute(roomService.getParticipant(roomId.toString(), userId.toString()), "get participant");
+        if (participant.body() == null) {
+            return;
+        }
+        for (TrackInfo track : participant.body().getTracksList()) {
+            if (track.getSource() == TrackSource.MICROPHONE && !track.getMuted()) {
+                execute(roomService.mutePublishedTrack(roomId.toString(), userId.toString(), track.getSid(), true), "mute microphone");
+            }
+        }
     }
 
     @Override

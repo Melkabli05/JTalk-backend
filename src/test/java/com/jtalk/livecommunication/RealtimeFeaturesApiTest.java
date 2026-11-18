@@ -315,6 +315,19 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     }
 
     @Test
+    void hostMutesASpeakerAndNobodyElseCan() {
+        String roomId = createRoom("host", "Quiet please", 3);
+        join(roomId, "host");
+        seatSpeaker(roomId, "alice");
+
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> postEmpty(roomId, "/stage/mute/" + id("alice"), "alice"));
+        assertTrue(gateway.mutes.isEmpty(), "a refused request must not reach the media server");
+
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/mute/" + id("alice"), "host").status());
+        assertEquals(List.of(new Removal(uuid(roomId), id("alice"))), gateway.mutes);
+    }
+
+    @Test
     void aFullStagePromotionIsRefusedAndAHandCanBeLowered() {
         String roomId = createRoom("host", "Full", 2);
         join(roomId, "host");

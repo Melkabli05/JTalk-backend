@@ -34,6 +34,9 @@ public interface StageService {
     /** Host-only: puts a user on the stage (taking them off the queue). */
     void promoteToStage(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
 
+    /** Host-only: mutes a speaker's microphone. They can unmute themselves. */
+    void muteSpeaker(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
+
     /** Host-only: steps a speaker down to the audience. */
     void demoteToListener(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
 
