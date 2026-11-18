@@ -308,6 +308,8 @@ class LiveKitGatewayImplTest {
         assertEquals(List.of("microphone"), speaker.get("canPublishSources"), "a speaker publishes a microphone, not video or a screen");
         assertEquals(false, speaker.get("canPublishData"), "nobody writes to the data channel, so nobody can fake a room event");
         assertEquals(false, listener.get("canPublishData"));
+        assertEquals(false, speaker.get("canUpdateOwnMetadata"), "nobody can rewrite their own name or metadata in the room");
+        assertEquals(false, listener.get("canUpdateOwnMetadata"));
         assertEquals(false, listener.get("canPublish"), "a listener who unmutes in a custom client is dropped by the media server");
     }
 

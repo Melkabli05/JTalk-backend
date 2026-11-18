@@ -9,6 +9,7 @@ import io.livekit.server.CanPublish;
 import io.livekit.server.CanPublishData;
 import io.livekit.server.CanPublishSources;
 import io.livekit.server.CanSubscribe;
+import io.livekit.server.CanUpdateOwnMetadata;
 import io.livekit.server.RoomJoin;
 import io.livekit.server.RoomName;
 import io.livekit.server.RoomServiceClient;
@@ -147,14 +148,16 @@ class LiveKitGatewayImpl implements LiveKitGateway {
         token.setIdentity(userId.toString());
         token.setExpiration(Date.from(clock.instant().plus(properties.tokenTtl())));
         // Enforced by the media server whatever a modified client does with the token: listeners cannot publish at all, speakers only a
-        // microphone, and no one can write to the data channel (room events are sent by this service alone, so a client cannot fake one).
+        // microphone, no one can write to the data channel (room events are sent by this service alone, so a client cannot fake one), and
+        // no one can change their own metadata (LiveKit's default too, stated so that it stays true if that default ever changes).
         token.addGrants(
                 new RoomJoin(true),
                 new RoomName(roomName),
                 new CanSubscribe(canSubscribe),
                 new CanPublish(canPublish),
                 new CanPublishSources(canPublish ? List.of(MICROPHONE_SOURCE) : List.of()),
-                new CanPublishData(false));
+                new CanPublishData(false),
+                new CanUpdateOwnMetadata(false));
         return token.toJwt();
     }
 
