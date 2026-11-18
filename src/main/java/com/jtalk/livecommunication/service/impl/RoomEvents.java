@@ -45,7 +45,7 @@ class RoomEvents {
     private final RoomFeed feed;
     private final Map<UUID, Pending> pending = new ConcurrentHashMap<>();
     private final Map<UUID, List<ReactionBurst>> reactions = new ConcurrentHashMap<>();
-    /** Rooms whose stage or head count moved since the hallway was last told; filled only while someone watches the hallway. */
+    /** Rooms whose stage or head count moved since the hallway was last told. */
     private final Set<UUID> numbersMoved = ConcurrentHashMap.newKeySet();
 
     void announce(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
@@ -59,9 +59,7 @@ class RoomEvents {
     }
 
     private void numbersMoved(UUID roomId) {
-        if (feed.hasWatchers()) {
-            numbersMoved.add(roomId);
-        }
+        numbersMoved.add(roomId);
     }
 
     /** The hallway's cards show who is on stage and how many are in the room: tell it, in one batch, for the rooms that changed. */
@@ -77,6 +75,9 @@ class RoomEvents {
             }
         }
         try {
+            if (!feed.anyoneWatching()) {
+                return;   // nobody to tell: skip reading the numbers
+            }
             liveStats.find(moved).forEach(feed::stats);
         } catch (RuntimeException e) {
             log.warn("Could not tell the hallway about {} rooms", moved.size(), e);

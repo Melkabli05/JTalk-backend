@@ -197,7 +197,7 @@ service documents the one-time Auth0 setup. Errors are RFC 9457 `application/pro
 |---|---|---|
 | `POST /` | any | Create a room (`title`, `topic`, `targetLanguage`, `nativeLanguage`, `maxStageSeats`); the caller becomes host, is seated, and gets a session with a LiveKit token. A host who already has an active room gets that room back (re-join) instead of a second one |
 | `GET /?targetLanguage=&size=&afterCreatedAt=&afterId=` | any | Active rooms, newest first, keyset-paginated: for the next page pass the last room's `createdAt` and `id`. Each room carries live `speakers`, `participantCount`, `handRaiseCount` (one batched Redis round trip) |
-| `GET /feed` | any | The hallway's live view (server-sent events, `text/event-stream`): `READY` first, then `ROOM_OPENED` / `ROOM_UPDATED` (with the room), `ROOM_CLOSED` (with the id) and `ROOM_STATS` (speakers, head count, raised hands, at most every 2 s per room). A client opens it, loads the list once when `READY` arrives, and applies the rest, so it never polls. A ping every 20 s keeps proxies from closing it |
+| `GET /feed` | any | The hallway's live view (server-sent events, `text/event-stream`): `READY` first, then `ROOM_OPENED` / `ROOM_UPDATED` (with the room), `ROOM_CLOSED` (with the id) and `ROOM_STATS` (speakers, head count, raised hands, at most every 2 s per room). A client opens it, loads the list once when `READY` arrives, and applies the rest, so it never polls. Events travel over Redis pub/sub (`voiceroom:feed`), so a hallway hears about rooms handled by any instance; an instance subscribes only while it has a hallway to tell. A ping every 20 s keeps proxies from closing it |
 | `GET /{roomId}` / `PATCH /{roomId}` / `DELETE /{roomId}` | any / host / host | Read (with live numbers) / update `title`, `topic`, `maxStageSeats` / close |
 | `POST /{roomId}/participants/join` | any | Join: returns the room, a LiveKit token, the role and whether the user may publish |
 | `POST .../participants/leave` | member | Leave |
@@ -271,8 +271,10 @@ Not built, or not verified, and worth deciding on:
 - **No rate limiting, CORS or metrics/tracing** are configured. Browser clients on another origin need CORS.
 - **One active room per host is not a database constraint**, so two simultaneous creates by one host can open two
   rooms (every lookup tolerates it).
-- **The room feed is in memory.** A client hears only about rooms opened, closed or changed on the instance it is connected to, so with
-  more than one instance the feed needs a shared channel (Redis pub/sub). Until then, run one instance or have clients reload the list.
+- **The room feed is best effort.** It travels over Redis pub/sub, which does not keep messages: if Redis cannot be reached when a room
+  opens or closes, the room still does and the hallways are not told; when the connection comes back every hallway is sent `READY`
+  and loads the list again. Several instances share the feed, but that has been exercised only by publishing to the channel from the
+  test, not with two running instances.
 - **Several instances are untested.** Each instance listens for lease expiry and a webhook goes to one of them; the
   seat rule is idempotent but this has not been exercised with more than one instance.
 - **No load test, no container image build and no HTTP/3 client test** have been run.

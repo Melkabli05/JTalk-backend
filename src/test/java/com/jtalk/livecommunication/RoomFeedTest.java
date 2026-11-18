@@ -8,6 +8,7 @@ import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.http.sse.Event;
 import io.micronaut.http.client.sse.SseClient;
 import io.micronaut.http.client.annotation.Client;
+import io.lettuce.core.api.StatefulRedisConnection;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import reactor.core.Disposable;
@@ -28,6 +29,14 @@ class RoomFeedTest extends ApiTestBase {
     @Inject
     @Client("/")
     SseClient sse;
+
+    @Inject
+    StatefulRedisConnection<String, String> redis;
+
+    @Inject
+    com.jtalk.livecommunication.support.RedisCommandRecorder recorder;
+
+    private static final String CHANNEL = "voiceroom:feed";
 
     /** Opens the feed as this user; what arrives is collected in the returned list. Dispose to disconnect. */
     private Watch watch(String userName) {
@@ -120,6 +129,82 @@ class RoomFeedTest extends ApiTestBase {
         } finally {
             watch.subscription().dispose();
         }
+    }
+
+    @Test
+    void whatAnotherInstanceSaysReachesTheWatchersOfThisOne() {
+        Watch watch = watch("carol");
+        try {
+            await("READY", 5_000, () -> !watch.of("READY").isEmpty());
+
+            // Another instance publishes to the same channel; this one has no part in it but to forward it.
+            String roomId = java.util.UUID.randomUUID().toString();
+            long receivers = redis.sync().publish(CHANNEL, "{\"type\":\"ROOM_CLOSED\",\"roomId\":\"" + roomId + "\"}");
+
+            assertEquals(1, receivers, "this instance is subscribed while a hallway watches");
+            await("ROOM_CLOSED", 5_000, () -> !watch.of("ROOM_CLOSED").isEmpty());
+            assertEquals(roomId, watch.of("ROOM_CLOSED").get(0).get("roomId"));
+        } finally {
+            watch.subscription().dispose();
+        }
+    }
+
+    @Test
+    void aMessageThatCannotBeReadIsIgnoredAndTheFeedCarriesOn() {
+        Watch watch = watch("carol");
+        try {
+            await("READY", 5_000, () -> !watch.of("READY").isEmpty());
+
+            redis.sync().publish(CHANNEL, "not json");
+            redis.sync().publish(CHANNEL, "{\"type\":\"ROOM_CLOSED\",\"roomId\":\"" + id("x") + "\"}");
+
+            await("ROOM_CLOSED", 5_000, () -> !watch.of("ROOM_CLOSED").isEmpty());
+        } finally {
+            watch.subscription().dispose();
+        }
+    }
+
+    @Test
+    void anInstanceListensOnlyWhileAHallwayIsWatching() {
+        assertEquals(0, redis.sync().publish(CHANNEL, "{}"), "nobody watching: not subscribed, nothing is delivered here");
+
+        Watch watch = watch("carol");
+        await("READY", 5_000, () -> !watch.of("READY").isEmpty());
+        assertEquals(1, redis.sync().publish(CHANNEL, "{}"));
+
+        watch.subscription().dispose();
+        await("unsubscribed", 5_000, () -> redis.sync().publish(CHANNEL, "{}") == 0);
+    }
+
+    @Test
+    void theNumbersOnTheCardsAreOnlyReadWhileSomeoneWatches() {
+        String roomId = createRoom("host", "Quiet", 3);
+        await("earlier tests' hallways gone", 10_000, () -> redis.sync().zcard("voiceroom:feed:watchers") == 0);
+
+        long withoutWatchers = stageReads(() -> join(roomId, "alice"));
+
+        Watch watch = watch("carol");
+        try {
+            await("READY", 5_000, () -> !watch.of("READY").isEmpty());
+            long withWatchers = stageReads(() -> join(roomId, "bob"));
+
+            assertTrue(withWatchers > withoutWatchers, "a watched hallway is told the numbers (" + withWatchers + " vs " + withoutWatchers + " reads)");
+        } finally {
+            watch.subscription().dispose();
+        }
+    }
+
+    /** How many stage reads (ZRANGE) Redis saw while the action ran and a batch of the numbers had time to be sent. */
+    private long stageReads(Runnable action) {
+        return recorder.during(() -> {
+            action.run();
+            try {
+                Thread.sleep(2_500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        }).stream().filter("ZRANGE"::equals).count();
     }
 
     @Test

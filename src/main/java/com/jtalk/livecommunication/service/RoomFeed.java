@@ -9,18 +9,19 @@ import java.util.UUID;
 
 /**
  * What happens to the list of open rooms, pushed to every hallway that is watching, so a client loads the list once and then only
- * applies changes. Held in memory: it reaches the clients connected to this instance.
+ * applies changes. It travels over Redis pub/sub, so a hallway hears about rooms handled by any instance.
  */
 public interface RoomFeed {
 
     /**
-     * Subscribing starts the flow of what happens from then on. {@code READY} comes first, after the subscription is in place, so a
-     * list fetched once it arrives misses nothing. A subscriber that falls too far behind is cut off and must reconnect.
+     * Subscribing starts the flow of what happens from then on. {@code READY} comes first, once the instance is listening for everything,
+     * so a list fetched after it misses nothing. {@code READY} also comes again if the connection to Redis was lost and came back: what
+     * happened in between is gone, so the client loads the list again. A subscriber that falls too far behind is cut off and must reconnect.
      */
     Publisher<RoomFeedEvent> subscribe();
 
-    /** Whether anyone is watching; callers skip work that only the feed needs when nobody is. */
-    boolean hasWatchers();
+    /** Whether a hallway is watching on any instance; callers skip work that only the feed needs when none is. */
+    boolean anyoneWatching();
 
     void opened(VoiceRoomResponse room);
 

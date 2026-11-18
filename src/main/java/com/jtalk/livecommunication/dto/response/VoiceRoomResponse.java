@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /** Room metadata (PostgreSQL) merged with its real-time numbers (Redis). Empty lists stay in the payload. */
 @JsonInclude(JsonInclude.Include.ALWAYS)
-@Serdeable.Serializable
+@Serdeable
 public record VoiceRoomResponse(
         UUID id,
         String title,
