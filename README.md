@@ -28,14 +28,14 @@ src/main/resources/  application.yml (+ cloud, quic), db/migration/, lua/
 ## Running locally
 
 `./gradlew run` starts the service with the default configuration; Micronaut Test Resources starts PostgreSQL and Redis in Docker for it. It needs the
-secret that verifies tokens and a LiveKit project:
+Auth0 tenant that issues the tokens and a LiveKit project:
 
 ```bash
-export JWT_SECRET=...           # 32+ characters; only checked when security is on
+export AUTH0_DOMAIN=your-tenant.eu.auth0.com      # your Auth0 tenant, without https://
+export AUTH0_AUDIENCE=https://api.jtalk.example   # the identifier of the API created in Auth0 (the same one the user service uses)
 export LIVEKIT_URL=wss://...    # your LiveKit Cloud project (or a self-hosted server)
 export LIVEKIT_API_KEY=...
 export LIVEKIT_API_SECRET=...
-export MICRONAUT_SECURITY_ENABLED=false   # optional, local work only: no token, the caller is named by the X-User-Id header
 ./gradlew run
 ```
 
@@ -46,7 +46,7 @@ export MICRONAUT_SECURITY_ENABLED=false   # optional, local work only: no token,
 Security stays on, so it also needs the JWT secret and the LiveKit project:
 
 ```bash
-export MICRONAUT_ENVIRONMENTS=cloud JWT_SECRET=... LIVEKIT_URL=wss://... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=...
+export MICRONAUT_ENVIRONMENTS=cloud AUTH0_DOMAIN=... AUTH0_AUDIENCE=... LIVEKIT_URL=wss://... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=...
 ./gradlew run
 ```
 
@@ -65,16 +65,11 @@ The `Dockerfile` is what Render builds ([Render: Docker](https://render.com/docs
 `MICRONAUT_ENVIRONMENTS=cloud` (Micronaut reads it, or `-Dmicronaut.environments=...`), and the service binds the port Render gives it in `PORT`
 (10000 by default, on all interfaces: [Render: web services](https://render.com/docs/web-services)); locally it is 8080.
 
-- **With the Blueprint** (`render.yaml`): in Render, New > Blueprint and pick this repository. Render asks for the three secrets (`JWT_SECRET`,
-  `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`); `LIVEKIT_URL` and the health check (`/health/liveness`) are set for you.
-- **By hand:** New > Web Service, language **Docker**, then set those four environment variables and the health check path `/health/liveness`.
+- **With the Blueprint** (`render.yaml`): in Render, New > Blueprint and pick this repository. Render asks for the two LiveKit secrets
+  (`LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`); the Auth0 tenant and audience, `LIVEKIT_URL` and the health check (`/health/liveness`) are set for you.
+- **By hand:** New > Web Service, language **Docker**, then set `AUTH0_DOMAIN`, `AUTH0_AUDIENCE` and the three LiveKit variables and the health check path `/health/liveness`.
 
 On the free plan the service sleeps when idle and takes a moment to wake.
-
-**Open testing mode.** `render.yaml` sets `MICRONAUT_SECURITY_ENABLED=false`, which switches security off: the caller is whoever the `X-User-Id` header
-says. That lets the frontend work before a user service exists, and it means anyone who finds the URL can act as anyone, so keep it to testing. To turn
-security back on, delete that variable in Render (Environment) and send `Authorization: Bearer` tokens signed with `JWT_SECRET`. An existing service
-needs the variable changed by hand in Render; the Blueprint only applies it when it creates or syncs the service.
 
 **CORS.** A frontend on another origin may call the API (preflights carry no token and are answered). Any origin is allowed until
 `CORS_ALLOWED_ORIGINS` (a regular expression, e.g. `https://app\.example\.com|http://localhost:4200`) narrows it.
@@ -157,9 +152,10 @@ Conventions the code follows (and `LiveKitGatewayImplTest` pins down):
 
 ## API
 
-**Secure by default.** Every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <JWT>`; the token's `sub` must be the user's UUID (anything else is a 401). Only the `dev` profile (below) switches this off: there, no token is needed and the caller is the UUID in the `X-User-Id` header, which anyone can set.
-Tokens are issued upstream (gateway / identity provider) and verified here with the shared HS256 secret in
-`JWT_SECRET` (32+ characters), or with a JWKS endpoint via `micronaut.security.token.jwt.signatures.jwks`. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
+**Secure by default.** Every endpoint (except the LiveKit webhook) needs `Authorization: Bearer <Auth0 access token>`. Auth0 issues the token; this
+service checks its RS256 signature against the tenant's JWKS, its issuer, its audience and its expiry (all Micronaut Security configuration), and names
+the caller by the token's custom user-id claim (`https://jtalk.app/user_id`, a UUID set by an Auth0 post-login Action; anything else is a 401). The user
+service documents the one-time Auth0 setup. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
 
 | Method & path (under `/api/v1/voice-rooms`) | Who | Purpose |
 |---|---|---|
@@ -173,7 +169,7 @@ Tokens are issued upstream (gateway / identity provider) and verified here with 
 | `GET .../stage` | any | Speakers (host included) and hand-raise queue |
 | `POST .../stage/join` / `POST .../stage/leave` | member | Take a free seat / step down (the host keeps theirs) |
 | `POST .../stage/raise-hand` / `DELETE .../stage/raise-hand` | member | Raise (202) / lower hand |
-| `POST .../reactions` `{"reaction": "HEART"}` | joined member | Show the room a reaction (`HEART`, `CLAP`, `THUMBS_UP`, `SMILE`, `SPARKLES`): 202; 403 `not-in-room` unless joined; 429 `reacting-too-fast` within `voice-room.reaction-interval` (500ms) of your last one |
+| `POST .../reactions` `{"reaction": "HEART"}` | joined member | Show the room a reaction (`HEART`, `CLAP`, `THUMBS_UP`, `SMILE`, `SPARKLES`, `FIRE`, `PARTY`, `LAUGH`, `WOW`, `THANKS`): 202; 403 `not-in-room` unless joined; 429 `reacting-too-fast` within `voice-room.reaction-interval` (500ms) of your last one |
 | `POST .../stage/promote/{userId}` / `POST .../stage/demote/{userId}` | host | Put a user on the stage / step a speaker down |
 | `POST .../stage/network-mode` `{mode, secondaryTrackSidsToDrop, primaryTrackSidsToKeep}` | member | Prune / restore secondary tracks (low-bandwidth mode) |
 | `POST /webhooks/livekit` | LiveKit | Signed webhook |
@@ -188,7 +184,6 @@ Needs JDK 25 and Docker. PostgreSQL and Redis are started automatically by Micro
 
 ```bash
 ./gradlew run                                      # local containers, security on
-MICRONAUT_SECURITY_ENABLED=false ./gradlew run     # no token; the X-User-Id header names the caller
 MICRONAUT_ENVIRONMENTS=quic ./gradlew run          # HTTP/3
 ```
 
@@ -199,7 +194,7 @@ OS keychain instead of editing `cacerts`: `export JAVA_TOOL_OPTIONS="-Djavax.net
 **Deployed** - the default profile, security on:
 
 ```bash
-export JWT_SECRET=<HS256 secret shared with whatever issues your user tokens, 32+ chars>
+export AUTH0_DOMAIN=<tenant>.auth0.com AUTH0_AUDIENCE=<API identifier>
 export LIVEKIT_URL=wss://<your-livekit-host> LIVEKIT_API_KEY=<key> LIVEKIT_API_SECRET=<secret>
 ```
 
@@ -249,8 +244,8 @@ Not built, or not verified, and worth deciding on:
 - **There is no whispering.** The private two-person whisper rooms were removed on request (V4 drops `voice_rooms.allow_whisper`;
   V3, which added it, is kept because migrations are history).
 
-- **Tokens are verified, not issued, here.** This service does not mint user JWTs; it trusts whatever signs them with
-  `JWT_SECRET`, and a token whose subject is not a UUID is rejected with 401 (a Micronaut Security claims validator). A kicked user is barred from rejoining that room only.
+- **Tokens are verified, not issued, here.** This service does not mint user JWTs; it trusts what Auth0 signs for its API, and a token without a UUID
+  user-id claim is rejected with 401 (a Micronaut Security claims validator). A kicked user is barred from rejoining that room only.
 - **Anyone can take a free seat.** Seats are first come, first served; the hand-raise queue only matters once the stage is
   full, and the host can always promote or demote.
 - **Live stats are batched per room, not per request.** The discovery feed reads Postgres once and Redis as one

@@ -15,17 +15,15 @@ services:
     # Liveness only: it answers without a token and does not depend on the database, so a slow Neon wake-up never restarts the service.
     healthCheckPath: /health/liveness
     envVars:
-      # TEMPORARY open testing mode: with security off the caller is whoever the X-User-Id header says, which is what lets the frontend
-      # work before a user service exists. Anyone who finds the URL can act as anyone, so use it only while the app is being tried out.
-      # Delete this variable (security is on by default) once a user service issues tokens that JWT_SECRET verifies.
-      - key: MICRONAUT_SECURITY_ENABLED
-        value: "false"
+      # Auth0: the same tenant and API as the user service, so one login works for both. This service only checks the access tokens
+      # (signature, issuer, audience, expiry). Neither value is a secret.
+      - key: AUTH0_DOMAIN
+        value: dev-fffl5f080xabhazz.us.auth0.com
+      - key: AUTH0_AUDIENCE
+        value: https://api.jtalk.app
       # Optional: restrict which frontend may call this API (a regular expression). Any origin until set, e.g.
       # https://app\.example\.com|http://localhost:4200
       - key: CORS_ALLOWED_ORIGINS
-        sync: false
-      # HS256 secret shared with whatever issues the user tokens (32+ characters). Render asks for it when the Blueprint is created.
-      - key: JWT_SECRET
         sync: false
       - key: LIVEKIT_URL
         value: wss://jtalk-eimd2bul.livekit.cloud

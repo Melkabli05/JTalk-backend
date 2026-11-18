@@ -2,6 +2,7 @@ package com.jtalk.livecommunication;
 
 import com.jtalk.livecommunication.config.ProblemType;
 import com.jtalk.livecommunication.support.ApiTestBase;
+import com.jtalk.livecommunication.support.FakeAuth0;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway;
 import com.jtalk.livecommunication.support.FakeLiveKitGateway.PermissionChange;
 import io.micronaut.http.HttpRequest;
@@ -194,18 +195,36 @@ class VoiceRoomApiTest extends ApiTestBase {
         var missing = assertThrows(HttpClientResponseException.class, () -> http.exchange(HttpRequest.POST("/api/v1/voice-rooms", body)));
         assertEquals(HttpStatus.UNAUTHORIZED, missing.getStatus());
         var forged = assertThrows(HttpClientResponseException.class, () -> http.exchange(
-                HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(token("host", "another-secret-another-secret-another-secret"))));
-        assertEquals(HttpStatus.UNAUTHORIZED, forged.getStatus());
+                HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(FakeAuth0.signWithAnotherKey(userToken("host")))));
+        assertEquals(HttpStatus.UNAUTHORIZED, forged.getStatus(), "signed with a key that is not in the tenant's JWKS");
+        var otherApi = assertThrows(HttpClientResponseException.class, () -> http.exchange(
+                HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(FakeAuth0.sign(userToken("host").withAudience("https://some-other-api")))));
+        assertEquals(HttpStatus.UNAUTHORIZED, otherApi.getStatus(), "issued for another API");
+    }
+
+    private static com.auth0.jwt.JWTCreator.Builder userToken(String name) {
+        return FakeAuth0.baseToken("auth0|" + id(name)).withClaim(FakeAuth0.USER_ID_CLAIM, id(name).toString());
     }
 
     @Test
-    void aSignedTokenWhoseSubjectIsNotAUuidIsRejected() {
-        var body = Map.of("title", "Odd subject", "targetLanguage", "en", "nativeLanguage", "ar");
-        for (String subject : List.of("alice", "")) {
+    void aSignedTokenWithoutAUuidUserIdClaimIsRejected() {
+        var body = Map.of("title", "Odd user", "targetLanguage", "en", "nativeLanguage", "ar");
+        var tokens = List.of(
+                FakeAuth0.sign(FakeAuth0.baseToken("auth0|x")),                                                   // no user-id claim
+                FakeAuth0.sign(FakeAuth0.baseToken("auth0|x").withClaim(FakeAuth0.USER_ID_CLAIM, "alice")),       // not a UUID
+                FakeAuth0.sign(FakeAuth0.baseToken("auth0|x").withClaim(FakeAuth0.USER_ID_CLAIM, "")));
+        for (String token : tokens) {
             var ex = assertThrows(HttpClientResponseException.class, () -> http.exchange(
-                    HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(tokenWithSubject(subject, "test-jwt-secret-test-jwt-secret-0123456789"))));
-            assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatus(), "subject '" + subject + "'");
+                    HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(token)));
+            assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatus());
         }
+    }
+
+    @Test
+    void theCallerIsTheUserIdClaimNotTheSubject() {
+        var body = Map.of("title", "Auth0 host", "targetLanguage", "en", "nativeLanguage", "ar");
+        var created = http.retrieve(HttpRequest.POST("/api/v1/voice-rooms", body).bearerAuth(FakeAuth0.sign(userToken("auth0host"))), MAP);
+        assertEquals(id("auth0host").toString(), ((Map<?, ?>) created.get("room")).get("hostId"), "the subject was auth0|<uuid>");
     }
 
     @Test

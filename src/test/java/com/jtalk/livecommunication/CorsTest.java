@@ -21,12 +21,12 @@ class CorsTest extends ApiTestBase {
         HttpResponse<?> preflight = http.exchange(HttpRequest.OPTIONS("/api/v1/voice-rooms")
                 .header("Origin", ORIGIN)
                 .header("Access-Control-Request-Method", "GET")
-                .header("Access-Control-Request-Headers", "x-user-id,authorization"));
+                .header("Access-Control-Request-Headers", "authorization"));
 
         assertEquals(HttpStatus.OK, preflight.status());
         assertNotNull(preflight.getHeaders().get("Access-Control-Allow-Origin"));
         String allowed = String.join(",", preflight.getHeaders().getAll("Access-Control-Allow-Headers")).toLowerCase();
-        assertTrue(allowed.contains("x-user-id") && allowed.contains("authorization"), allowed);
+        assertTrue(allowed.contains("authorization"), allowed);
     }
 
     @Test

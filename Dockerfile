@@ -8,13 +8,14 @@
 #   docker run --rm -p 8080:8080 --env-file .env live-communication-service
 #
 # The image runs with the "cloud" profile (src/main/resources/application-cloud.yml: hosted PostgreSQL on Neon and Redis on
-# Upstash, hardcoded), so it only needs JWT_SECRET and the LiveKit variables below. Override MICRONAUT_ENVIRONMENTS to point it
+# Upstash, hardcoded), so it only needs the Auth0 and LiveKit variables below. Override MICRONAUT_ENVIRONMENTS to point it
 # elsewhere, and set the variables below instead.
 #
 # On Render (render.yaml) the same image works unchanged: the service binds the port in PORT (application-cloud.yml), 10000 there, 8080 elsewhere.
 #
 # Configuration comes from the environment (see src/main/resources/application.yml):
-#   JWT_SECRET                                         HS256 secret, 32+ characters
+#   AUTH0_DOMAIN, AUTH0_AUDIENCE                       the Auth0 tenant (e.g. your-tenant.eu.auth0.com) and this API's identifier
+#   AUTH0_USER_ID_CLAIM                                optional: the access-token claim holding the user's UUID (default https://jtalk.app/user_id)
 #   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET   the LiveKit project
 #   DATASOURCES_DEFAULT_URL / _USERNAME / _PASSWORD    PostgreSQL
 #   REDIS_URI                                          Redis

@@ -6,5 +6,10 @@ public enum Reaction {
     CLAP,
     THUMBS_UP,
     SMILE,
-    SPARKLES
+    SPARKLES,
+    FIRE,
+    PARTY,
+    LAUGH,
+    WOW,
+    THANKS
 }

@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Reactions: told to the whole room in one batched message, only by someone who has joined, and not too often. */
 class ReactionApiTest extends ApiTestBase {
 
-    private List<ReactionBurst> reactionsTold() {
+    private List<ReactionBurst> reactionsTold(String roomId) {
         return gateway.events.stream()
-                .filter(event -> event.type() == RoomEventType.REACTIONS)
+                .filter(event -> event.type() == RoomEventType.REACTIONS && event.roomId().equals(uuid(roomId)))
                 .map(RoomRealtimeEvent::reactions)
                 .flatMap(List::stream)
                 .toList();
@@ -40,9 +40,9 @@ class ReactionApiTest extends ApiTestBase {
 
         assertEquals(HttpStatus.ACCEPTED, react(roomId, "alice", "HEART"));
 
-        await("the room is told about the reaction", 5_000, () -> !reactionsTold().isEmpty());
-        assertEquals(List.of(new ReactionBurst(id("alice"), Reaction.HEART)), reactionsTold());
-        RoomRealtimeEvent event = gateway.events.stream().filter(e -> e.type() == RoomEventType.REACTIONS).findFirst().orElseThrow();
+        await("the room is told about the reaction", 5_000, () -> !reactionsTold(roomId).isEmpty());
+        assertEquals(List.of(new ReactionBurst(id("alice"), Reaction.HEART)), reactionsTold(roomId));
+        RoomRealtimeEvent event = gateway.events.stream().filter(e -> e.type() == RoomEventType.REACTIONS && e.roomId().equals(uuid(roomId))).findFirst().orElseThrow();
         assertEquals(uuid(roomId), event.roomId());
     }
 
@@ -56,9 +56,23 @@ class ReactionApiTest extends ApiTestBase {
         react(roomId, "alice", "SMILE");
         react(roomId, "bob", "CLAP");
 
-        await("both reactions are told", 5_000, () -> reactionsTold().size() == 2);
-        assertTrue(reactionsTold().contains(new ReactionBurst(id("alice"), Reaction.SMILE)));
-        assertTrue(reactionsTold().contains(new ReactionBurst(id("bob"), Reaction.CLAP)));
+        await("both reactions are told", 5_000, () -> reactionsTold(roomId).size() == 2);
+        assertTrue(reactionsTold(roomId).contains(new ReactionBurst(id("alice"), Reaction.SMILE)));
+        assertTrue(reactionsTold(roomId).contains(new ReactionBurst(id("bob"), Reaction.CLAP)));
+    }
+
+    @Test
+    void everyReactionTheEnumKnowsIsAcceptedAndToldToTheRoom() {
+        String roomId = createRoom("host", "All reactions", 2);
+        join(roomId, "host");
+        for (Reaction reaction : Reaction.values()) {
+            String user = "user-" + reaction.name();
+            join(roomId, user);
+            assertEquals(HttpStatus.ACCEPTED, react(roomId, user, reaction.name()));
+        }
+
+        await("every reaction is told", 5_000, () -> reactionsTold(roomId).size() == Reaction.values().length);
+        assertEquals(List.of(Reaction.values()), reactionsTold(roomId).stream().map(ReactionBurst::reaction).sorted().toList());
     }
 
     @Test
@@ -67,7 +81,7 @@ class ReactionApiTest extends ApiTestBase {
         join(roomId, "host");
 
         assertProblem(HttpStatus.FORBIDDEN, "not-in-room", () -> react(roomId, "stranger", "HEART"));
-        assertTrue(reactionsTold().isEmpty());
+        assertTrue(reactionsTold(roomId).isEmpty());
     }
 
     @Test
