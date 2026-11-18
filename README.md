@@ -208,6 +208,7 @@ service documents the one-time Auth0 setup. Errors are RFC 9457 `application/pro
 | `POST .../stage/raise-hand` / `DELETE .../stage/raise-hand` | member | Raise (202) / lower hand |
 | `POST .../reactions` `{"reaction": "HEART"}` | joined member | Show the room a reaction (`HEART`, `CLAP`, `THUMBS_UP`, `SMILE`, `SPARKLES`, `FIRE`, `PARTY`, `LAUGH`, `WOW`, `THANKS`): 202; 403 `not-in-room` unless joined; 429 `reacting-too-fast` within `voice-room.reaction-interval` (500ms) of your last one |
 | `POST .../stage/promote/{userId}` / `POST .../stage/demote/{userId}` | host | Put a user on the stage / step a speaker down |
+| `POST .../stage/mute/{userId}` | host | Mute a speaker's microphone (they can unmute themselves) |
 | `POST .../stage/network-mode` `{mode, secondaryTrackSidsToDrop, primaryTrackSidsToKeep}` | member | Prune / restore secondary tracks (low-bandwidth mode) |
 | `POST /webhooks/livekit` | LiveKit | Signed webhook |
 
