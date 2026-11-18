@@ -9,6 +9,7 @@ import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
+import com.jtalk.livecommunication.service.RoomFeed;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.scheduling.annotation.Scheduled;
 import jakarta.inject.Singleton;
@@ -41,8 +42,11 @@ class RoomEvents {
     private final StageRepository stage;
     private final LiveStatsRepository liveStats;
     private final Clock clock;
+    private final RoomFeed feed;
     private final Map<UUID, Pending> pending = new ConcurrentHashMap<>();
     private final Map<UUID, List<ReactionBurst>> reactions = new ConcurrentHashMap<>();
+    /** Rooms whose stage or head count moved since the hallway was last told; filled only while someone watches the hallway. */
+    private final Set<UUID> numbersMoved = ConcurrentHashMap.newKeySet();
 
     void announce(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
         gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant(), null, null, null));
@@ -51,6 +55,32 @@ class RoomEvents {
     void announceStage(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
         var at = clock.instant();
         gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, at, stage.snapshot(roomId), null, null));
+        numbersMoved(roomId);
+    }
+
+    private void numbersMoved(UUID roomId) {
+        if (feed.hasWatchers()) {
+            numbersMoved.add(roomId);
+        }
+    }
+
+    /** The hallway's cards show who is on stage and how many are in the room: tell it, in one batch, for the rooms that changed. */
+    @Scheduled(fixedDelay = "${voice-room.feed-batch:2s}")
+    void sendNumbersToHallway() {
+        if (numbersMoved.isEmpty()) {
+            return;
+        }
+        List<UUID> moved = new ArrayList<>();
+        for (UUID roomId : List.copyOf(numbersMoved)) {
+            if (numbersMoved.remove(roomId)) {
+                moved.add(roomId);
+            }
+        }
+        try {
+            liveStats.find(moved).forEach(feed::stats);
+        } catch (RuntimeException e) {
+            log.warn("Could not tell the hallway about {} rooms", moved.size(), e);
+        }
     }
 
     void userJoined(UUID roomId, UUID userId) {
@@ -60,6 +90,7 @@ class RoomEvents {
             next.joined.add(userId);
             return next;
         });
+        numbersMoved(roomId);
     }
 
     void userLeft(UUID roomId, UUID userId) {
@@ -69,6 +100,7 @@ class RoomEvents {
             next.left.add(userId);
             return next;
         });
+        numbersMoved(roomId);
     }
 
     @Scheduled(fixedDelay = "${voice-room.presence-batch:2s}")

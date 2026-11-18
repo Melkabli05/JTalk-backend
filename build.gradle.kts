@@ -47,6 +47,9 @@ dependencies {
 
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
+    // The room feed: server-sent events to the hallway
+    implementation("io.micronaut.reactor:micronaut-reactor")
+
     // LiveKit: real-time audio (not managed by the Micronaut BOM)
     implementation("io.livekit:livekit-server:0.17.0")
 

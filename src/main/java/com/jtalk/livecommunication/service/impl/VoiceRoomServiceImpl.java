@@ -13,6 +13,7 @@ import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
 import com.jtalk.livecommunication.repository.VoiceRoomRepository;
+import com.jtalk.livecommunication.service.RoomFeed;
 import com.jtalk.livecommunication.service.VoiceRoomService;
 import com.jtalk.livecommunication.service.RoomAccessValidator;
 import com.jtalk.livecommunication.config.ProblemType;
@@ -57,6 +58,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     private final ApiMapper mapper;
     private final RoomAccessValidator access;
     private final CacheManager<?> caches;
+    private final RoomFeed feed;
 
     @Override
     @CacheInvalidate(value = FEED_CACHE, all = true)
@@ -85,7 +87,9 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         String token = gateway.generateToken(saved.id(), hostId, true);
         log.info("Created voice room {} hosted by {}", saved.id(), hostId);
 
-        return new RoomSessionResponse(toResponse(saved), gateway.serverUrl(), token, ParticipantRole.HOST, true);
+        VoiceRoomResponse opened = toResponse(saved);
+        feed.opened(opened);
+        return new RoomSessionResponse(opened, gateway.serverUrl(), token, ParticipantRole.HOST, true);
     }
 
     @Override
@@ -118,7 +122,9 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     public VoiceRoomResponse updateRoom(UUID roomId, UUID requesterId, UpdateVoiceRoomRequest request) {
         VoiceRoom room = loadForUpdate(roomId);
         access.requireHost(room, requesterId, "update room settings");
-        return toResponse(rooms.update(room.withSettings(request.title(), request.topic(), request.maxStageSeats())));
+        VoiceRoomResponse updated = toResponse(rooms.update(room.withSettings(request.title(), request.topic(), request.maxStageSeats())));
+        feed.updated(updated);
+        return updated;
     }
 
     /**
@@ -140,6 +146,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     @TransactionalEventListener
     void onRoomClosed(VoiceRoomClosed event) {
+        feed.closed(event.roomId());
         try {
             gateway.deleteRoom(event.roomId());
         } catch (RuntimeException e) {
