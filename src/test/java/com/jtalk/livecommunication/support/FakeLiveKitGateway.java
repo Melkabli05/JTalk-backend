@@ -26,6 +26,8 @@ public class FakeLiveKitGateway implements LiveKitGateway {
 
     /** When set, {@link #createRoom} fails with it, to test what happens if the media server is down. */
     public volatile RuntimeException createRoomFailure;
+    /** While set, deleting a room waits for it to be counted down: a media server that is slow to answer. */
+    public volatile java.util.concurrent.CountDownLatch deleteRoomGate;
     public final List<RoomRealtimeEvent> events = new CopyOnWriteArrayList<>();
     public final List<RoomRealtimeEvent> presenceEvents = new CopyOnWriteArrayList<>();
     public final List<UUID> createdRooms = new CopyOnWriteArrayList<>();
@@ -38,6 +40,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     public void reset() {
         createRoomFailure = null;
         events.clear();
+        deleteRoomGate = null;
         presenceEvents.clear();
         createdRooms.clear();
         closedRooms.clear();
@@ -57,6 +60,14 @@ public class FakeLiveKitGateway implements LiveKitGateway {
 
     @Override
     public void deleteRoom(UUID roomId) {
+        java.util.concurrent.CountDownLatch gate = deleteRoomGate;
+        if (gate != null) {
+            try {
+                gate.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         closedRooms.add(roomId);
     }
 

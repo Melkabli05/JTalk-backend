@@ -1,7 +1,6 @@
 package com.jtalk.livecommunication.service;
 
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
-import com.jtalk.livecommunication.repository.PresenceRepository;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
@@ -21,9 +20,6 @@ class RoomAccessValidatorTest {
 
     @Inject
     RoomAccessValidator access;
-
-    @Inject
-    PresenceRepository presence;
 
     @Test
     void onlyTheHostPassesTheHostCheckAndTheMessageNamesTheAction() {
@@ -51,16 +47,5 @@ class RoomAccessValidatorTest {
         assertDoesNotThrow(() -> access.requireCanLeaveStage(room, guest));
 
         assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "host-cannot-leave-stage", "keeps their stage seat", () -> access.requireCanLeaveStage(room, host));
-    }
-
-    @Test
-    void aBannedUserCannotComeBackButAnyoneElseCan() {
-        UUID roomId = UUID.randomUUID();
-        assertDoesNotThrow(() -> access.requireNotBanned(roomId, guest));
-
-        presence.ban(roomId, guest);
-
-        assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", guest.toString(), () -> access.requireNotBanned(roomId, guest));
-        assertDoesNotThrow(() -> access.requireNotBanned(roomId, host));
     }
 }

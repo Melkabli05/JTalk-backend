@@ -6,9 +6,9 @@ import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.enums.PresenceStatus;
 import com.jtalk.livecommunication.domain.event.LeaseExpired;
-import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.dto.ApiMapper;
 import com.jtalk.livecommunication.domain.model.Participant;
+import com.jtalk.livecommunication.config.ProblemType;
 import com.jtalk.livecommunication.repository.LeaseRepository;
 import com.jtalk.livecommunication.repository.PresenceRepository;
 import com.jtalk.livecommunication.repository.RosterRepository;
@@ -19,7 +19,6 @@ import com.jtalk.livecommunication.service.RoomAccessValidator;
 import com.jtalk.livecommunication.service.VoiceRoomService;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.micronaut.runtime.event.annotation.EventListener;
-import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,15 +48,17 @@ class ParticipantServiceImpl implements ParticipantService {
     @Override
     public RoomSessionResponse joinRoom(UUID roomId, UUID userId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
-        access.requireNotBanned(roomId, userId);
-        boolean onStage = stage.isOnStage(roomId, userId);
+        PresenceRepository.Entry entry = presence.enter(roomId, userId);   // one round trip: refused if removed, marked present, seat looked up
+        if (entry == PresenceRepository.Entry.REMOVED) {
+            throw ProblemType.KICKED_FROM_ROOM.because(userId + " was removed from this room by the host");
+        }
+        boolean onStage = entry != PresenceRepository.Entry.LISTENER;
         if (!onStage && room.isHost(userId)) {
             onStage = stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats());   // the host's seat is permanent
         }
-        if (onStage && leases.delete(roomId, userId)) {   // reconnecting within the grace lease restores the seat
+        if (entry == PresenceRepository.Entry.ON_STAGE_AGAIN) {   // reconnecting within the grace lease restored the seat
             events.announce(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
         }
-        presence.enter(roomId, userId);
         events.userJoined(roomId, userId);
         return new RoomSessionResponse(rooms.toResponse(room), gateway.serverUrl(), gateway.generateToken(roomId, userId, onStage),
                 room.roleOf(userId, onStage), onStage);
@@ -65,9 +66,11 @@ class ParticipantServiceImpl implements ParticipantService {
 
     @Override
     public void leaveRoom(UUID roomId, UUID userId) {
-        dropPresence(roomId, userId);
-        stage.removeHandRaise(roomId, userId);
-        if (!stage.isOnStage(roomId, userId) || isHost(roomId, userId)) {
+        RosterRepository.Departure left = rosterRepository.leave(roomId, userId);   // presence and hand dropped, seat looked up: one round trip
+        if (left.wasPresent()) {
+            events.userLeft(roomId, userId);
+        }
+        if (!left.onStage() || isHost(roomId, userId)) {
             return;   // a listener leaving changes nothing on the stage; the host keeps their seat
         }
         stages.vacateSeat(roomId, userId);
@@ -135,11 +138,6 @@ class ParticipantServiceImpl implements ParticipantService {
                 .map(userId -> new Participant(userId, room.roleOf(userId, speakers.contains(userId)),
                         roster.reconnecting().contains(userId) ? PresenceStatus.RECONNECTING : PresenceStatus.ACTIVE))
                 .toList());
-    }
-
-    @TransactionalEventListener
-    void onRoomClosed(VoiceRoomClosed event) {
-        presence.clear(event.roomId());
     }
 
     private void dropPresence(UUID roomId, UUID userId) {

@@ -29,7 +29,6 @@ import io.micronaut.data.model.CursoredPageable;
 import io.micronaut.data.model.Pageable;
 import io.micronaut.data.model.Sort;
 import io.micronaut.transaction.annotation.Transactional;
-import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -91,7 +90,8 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         String token = gateway.generateToken(saved.id(), hostId, true);
         log.info("Created voice room {} hosted by {}", saved.id(), hostId);
 
-        VoiceRoomResponse opened = toResponse(saved);
+        // A new room has nobody in it but the host on the stage, so there is nothing to read from Redis.
+        VoiceRoomResponse opened = mapper.toResponse(saved, new RoomLiveStats(List.of(hostId), 0, 0));
         feed.opened(opened);
         return new RoomSessionResponse(opened, gateway.serverUrl(), token, ParticipantRole.HOST, true);
     }
@@ -139,9 +139,9 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     }
 
     /**
-     * The transaction covers only the database write. Everything else (clearing Redis state, deleting the LiveKit room)
-     * happens in {@code @TransactionalEventListener}s after the commit, so no network call ever holds a database
-     * connection, and nothing runs if the write rolls back.
+     * The transaction covers only the database write. Everything else (clearing Redis state, deleting the LiveKit room) is {@link RoomClosure},
+     * after the commit and off the request: no network call holds a database connection, nothing runs if the write rolls back, and the
+     * host's answer waits for none of it.
      */
     @Override
     @Transactional
@@ -153,17 +153,6 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         rooms.update(room.close());
         closedEvents.publishEvent(new VoiceRoomClosed(roomId));
         log.info("Closed voice room {} by host {}", roomId, requesterId);
-    }
-
-    @TransactionalEventListener
-    void onRoomClosed(VoiceRoomClosed event) {
-        feed.closed(event.roomId());
-        try {
-            gateway.deleteRoom(event.roomId());
-        } catch (RuntimeException e) {
-            // The room is already closed in our source of truth; LiveKit empties idle rooms by itself.
-            log.warn("Room {} closed but media server cleanup failed", event.roomId(), e);
-        }
     }
 
     /**

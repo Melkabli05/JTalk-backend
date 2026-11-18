@@ -21,7 +21,4 @@ public interface RoomAccessValidator {
 
     /** The host keeps their stage seat for the whole life of the room: 422 {@code host-cannot-leave-stage}. */
     void requireCanLeaveStage(VoiceRoom room, UUID userId);
-
-    /** A user the host has removed may not come back: 403 {@code kicked-from-room}. */
-    void requireNotBanned(UUID roomId, UUID userId);
 }

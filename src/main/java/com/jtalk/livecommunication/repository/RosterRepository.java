@@ -28,6 +28,10 @@ public class RosterRepository extends RedisRepository {
     public record Roster(List<UUID> speakers, List<UUID> present, Set<UUID> reconnecting) {
     }
 
+    /** What leaving a room found: whether the person was listed as present, and whether they hold a stage seat. */
+    public record Departure(boolean wasPresent, boolean onStage) {
+    }
+
     private final PresenceRepository presence;
 
     public RosterRepository(StatefulRedisConnection<String, String> connection, PresenceRepository presence) {
@@ -47,6 +51,17 @@ public class RosterRepository extends RedisRepository {
         List<UUID> people = present.toCompletableFuture().join().stream().map(UUID::fromString).toList();
         return new Roster(speakers.toCompletableFuture().join().stream().map(UUID::fromString).toList(), people,
                 leaseHolders(roomId, people));
+    }
+
+    /** Drops the person from the room and its hand-raise queue, and looks up their seat: three commands, one round trip. */
+    public Departure leave(UUID roomId, UUID userId) {
+        RedisAsyncCommands<String, String> redis = connection.async();
+        String id = userId.toString();
+        RedisFuture<Long> present = redis.zrem(PresenceRepository.key(roomId), id);
+        RedisFuture<Long> queued = redis.zrem(StageRepository.queueKey(roomId), id);
+        RedisFuture<Double> seat = redis.zscore(StageRepository.stageKey(roomId), id);
+        await(present, queued, seat);
+        return new Departure(present.toCompletableFuture().join() > 0, seat.toCompletableFuture().join() != null);
     }
 
     /** Which of the users currently hold a lease: one MGET for all of them. */

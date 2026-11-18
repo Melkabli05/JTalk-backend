@@ -44,9 +44,8 @@ public class StageRepository extends RedisRepository {
     }
 
     public void initializeStage(UUID roomId, UUID hostId) {
-        RedisCommands<String, String> redis = redis();
-        redis.zadd(stageKey(roomId), clock.millis(), hostId.toString());
-        redis.expire(stageKey(roomId), Long.parseLong(ttlSeconds));
+        RedisAsyncCommands<String, String> redis = connection.async();
+        await(redis.zadd(stageKey(roomId), clock.millis(), hostId.toString()), redis.expire(stageKey(roomId), Long.parseLong(ttlSeconds)));
     }
 
     /** Adds the user to the queue if not already queued. Returns the new 1-based position, 0 if already queued, or -1 if already on stage. */

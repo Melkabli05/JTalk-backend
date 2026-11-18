@@ -1,19 +1,14 @@
 package com.jtalk.livecommunication.service.impl;
 
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
-import com.jtalk.livecommunication.repository.PresenceRepository;
 import com.jtalk.livecommunication.service.RoomAccessValidator;
 import com.jtalk.livecommunication.config.ProblemType;
 import jakarta.inject.Singleton;
-import lombok.RequiredArgsConstructor;
 
 import java.util.UUID;
 
 @Singleton
-@RequiredArgsConstructor
 class RoomAccessValidatorImpl implements RoomAccessValidator {
-
-    private final PresenceRepository presence;
 
     @Override
     public void requireHost(VoiceRoom room, UUID userId, String action) {
@@ -37,10 +32,4 @@ class RoomAccessValidatorImpl implements RoomAccessValidator {
         }
     }
 
-    @Override
-    public void requireNotBanned(UUID roomId, UUID userId) {
-        if (presence.isBanned(roomId, userId)) {
-            throw ProblemType.KICKED_FROM_ROOM.because(userId + " was removed from this room by the host");
-        }
-    }
 }

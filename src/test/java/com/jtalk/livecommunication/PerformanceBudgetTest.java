@@ -106,6 +106,64 @@ class PerformanceBudgetTest extends ApiTestBase {
     }
 
     @Test
+    void joiningARoomIsTwoRoundTripsAndNoQuery() {
+        String room = roomWithListeners(3);
+
+        Cost listener = cost(() -> join(room, "newcomer"));
+        Cost host = cost(() -> join(room, "host"));
+
+        assertEquals(2, listener.redis().roundTrips(), "one script (removed? seated? present), then the room's numbers: " + listener.redis());
+        assertEquals(2, host.redis().roundTrips(), host.redis().toString());
+        assertEquals(0, listener.sql() + host.sql());
+    }
+
+    @Test
+    void leavingARoomIsOneRoundTrip() {
+        String room = roomWithListeners(3);
+
+        Cost leave = cost(() -> postEmpty(room, "/participants/leave", "listener-0"));
+
+        assertEquals(1, leave.redis().roundTrips(), "presence, hand and seat in one go: " + leave.redis());
+        assertEquals(0, leave.sql());
+    }
+
+    @Test
+    void openingARoomReadsNothingBackFromRedis() {
+        Cost open = cost(() -> createRoom("fresh-host", "Fresh", 4));
+
+        assertEquals(2, open.sql(), "look for the host's open room, then save: " + open);
+        assertTrue(open.redis().roundTrips() <= 2, "the stage is set up in one round trip (the rest is the hallways being told): " + open.redis());
+    }
+
+    @Test
+    void networkModeAndKickingShareTheirRedisCommandsInRoundTrips() {
+        String room = roomWithListeners(3);
+
+        Cost network = cost(() -> postJson(room, "/stage/network-mode", "listener-0", Map.of("mode", "LOW_BANDWIDTH",
+                "secondaryTrackSidsToDrop", java.util.List.of("TR_a"), "primaryTrackSidsToKeep", java.util.List.of("TR_b"))));
+        Cost kick = cost(() -> delete(room, "/participants/" + id("listener-1"), "host"));
+
+        assertEquals(1, network.redis().roundTrips(), network.redis().toString());
+        assertTrue(kick.redis().roundTrips() <= 4, "ban in one, leaving in one, then telling the room: " + kick.redis());
+    }
+
+    @Test
+    void closingARoomDoesNotMakeTheHostWaitForTheMediaServer() throws Exception {
+        String room = roomWithListeners(2);
+        java.util.concurrent.CountDownLatch gate = new java.util.concurrent.CountDownLatch(1);
+        gateway.deleteRoomGate = gate;
+
+        long started = System.nanoTime();
+        assertEquals(HttpStatus.NO_CONTENT, delete(room, "", "host").status());
+        long tookMillis = (System.nanoTime() - started) / 1_000_000;
+
+        assertTrue(gateway.closedRooms.isEmpty(), "the media server has not answered yet, and the host already has their answer");
+        assertTrue(tookMillis < 2_000, "the answer waited " + tookMillis + " ms");
+        gate.countDown();
+        await("the media room is deleted afterwards", 5_000, () -> gateway.closedRooms.contains(uuid(room)));
+    }
+
+    @Test
     void liveKitWebhooksNeverTouchTheDatabaseOnceTheRoomIsKnown() {
         String room = roomWithListeners(2);
 

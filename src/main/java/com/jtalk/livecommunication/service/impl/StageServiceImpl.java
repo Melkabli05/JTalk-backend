@@ -6,7 +6,6 @@ import com.jtalk.livecommunication.dto.response.StageResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.NetworkMode;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
-import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.dto.ApiMapper;
 import com.jtalk.livecommunication.repository.PrunedTrackRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
@@ -15,7 +14,6 @@ import com.jtalk.livecommunication.service.VoiceRoomService;
 import com.jtalk.livecommunication.service.RoomAccessValidator;
 import com.jtalk.livecommunication.config.ProblemType;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
-import io.micronaut.transaction.annotation.TransactionalEventListener;
 import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -136,9 +134,4 @@ class StageServiceImpl implements StageService {
         return mapper.toResponse(stage.snapshot(roomId));
     }
 
-    @TransactionalEventListener
-    void onRoomClosed(VoiceRoomClosed event) {
-        stage.clear(event.roomId());
-        prunedTracks.clear(event.roomId());
-    }
 }

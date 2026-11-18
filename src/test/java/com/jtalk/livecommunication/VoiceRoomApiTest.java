@@ -72,8 +72,9 @@ class VoiceRoomApiTest extends ApiTestBase {
         // Closing: only the host; then the room is gone from discovery and cannot be joined
         assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> delete(roomId, "", "alice"));
         assertEquals(HttpStatus.NO_CONTENT, delete(roomId, "", "host").status());
-        assertEquals(List.of(uuid(roomId)), gateway.closedRooms);
         assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found", () -> join(roomId, "alice"));
+        await("the media room is deleted after the answer, off the request", 5_000, () -> gateway.closedRooms.contains(uuid(roomId)));
+        assertEquals(List.of(uuid(roomId)), gateway.closedRooms);
         assertFalse(listRooms("?size=100&targetLanguage=es").stream().anyMatch(r -> roomId.equals(r.get("id"))));
     }
 
