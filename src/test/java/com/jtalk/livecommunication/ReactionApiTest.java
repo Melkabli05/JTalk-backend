@@ -54,11 +54,11 @@ class ReactionApiTest extends ApiTestBase {
         join(roomId, "bob");
 
         react(roomId, "alice", "SMILE");
-        react(roomId, "bob", "SPARKLES");
+        react(roomId, "bob", "CLAP");
 
         await("both reactions are told", 5_000, () -> reactionsTold().size() == 2);
         assertTrue(reactionsTold().contains(new ReactionBurst(id("alice"), Reaction.SMILE)));
-        assertTrue(reactionsTold().contains(new ReactionBurst(id("bob"), Reaction.SPARKLES)));
+        assertTrue(reactionsTold().contains(new ReactionBurst(id("bob"), Reaction.CLAP)));
     }
 
     @Test

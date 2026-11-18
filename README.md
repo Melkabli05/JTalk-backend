@@ -173,7 +173,7 @@ Tokens are issued upstream (gateway / identity provider) and verified here with 
 | `GET .../stage` | any | Speakers (host included) and hand-raise queue |
 | `POST .../stage/join` / `POST .../stage/leave` | member | Take a free seat / step down (the host keeps theirs) |
 | `POST .../stage/raise-hand` / `DELETE .../stage/raise-hand` | member | Raise (202) / lower hand |
-| `POST .../reactions` `{"reaction": "HEART"}` | joined member | Show the room a reaction (`HEART`, `THUMBS_UP`, `SMILE`, `SPARKLES`): 202; 403 `not-in-room` unless joined; 429 `reacting-too-fast` within `voice-room.reaction-interval` (500ms) of your last one |
+| `POST .../reactions` `{"reaction": "HEART"}` | joined member | Show the room a reaction (`HEART`, `CLAP`, `THUMBS_UP`, `SMILE`, `SPARKLES`): 202; 403 `not-in-room` unless joined; 429 `reacting-too-fast` within `voice-room.reaction-interval` (500ms) of your last one |
 | `POST .../stage/promote/{userId}` / `POST .../stage/demote/{userId}` | host | Put a user on the stage / step a speaker down |
 | `POST .../stage/network-mode` `{mode, secondaryTrackSidsToDrop, primaryTrackSidsToKeep}` | member | Prune / restore secondary tracks (low-bandwidth mode) |
 | `POST /webhooks/livekit` | LiveKit | Signed webhook |
