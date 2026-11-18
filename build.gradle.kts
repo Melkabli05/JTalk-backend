@@ -47,8 +47,9 @@ dependencies {
 
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
-    // The room feed: server-sent events to the hallway
+    // The room feed: server-sent events to the hallways, carried between instances by Redis pub/sub
     implementation("io.micronaut.reactor:micronaut-reactor")
+    implementation("io.micronaut.redis:micronaut-redis-lettuce-pubsub")
 
     // LiveKit: real-time audio (not managed by the Micronaut BOM)
     implementation("io.livekit:livekit-server:0.17.0")

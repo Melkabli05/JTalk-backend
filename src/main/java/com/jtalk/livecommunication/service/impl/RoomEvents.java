@@ -45,8 +45,6 @@ class RoomEvents {
     private final RoomFeed feed;
     private final Map<UUID, Pending> pending = new ConcurrentHashMap<>();
     private final Map<UUID, List<ReactionBurst>> reactions = new ConcurrentHashMap<>();
-    /** Rooms whose stage or head count moved since the hallway was last told. */
-    private final Set<UUID> numbersMoved = ConcurrentHashMap.newKeySet();
 
     void announce(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
         gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant(), null, null, null));
@@ -55,33 +53,7 @@ class RoomEvents {
     void announceStage(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
         var at = clock.instant();
         gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, at, stage.snapshot(roomId), null, null));
-        numbersMoved(roomId);
-    }
-
-    private void numbersMoved(UUID roomId) {
-        numbersMoved.add(roomId);
-    }
-
-    /** The hallway's cards show who is on stage and how many are in the room: tell it, in one batch, for the rooms that changed. */
-    @Scheduled(fixedDelay = "${voice-room.feed-batch:2s}")
-    void sendNumbersToHallway() {
-        if (numbersMoved.isEmpty()) {
-            return;
-        }
-        List<UUID> moved = new ArrayList<>();
-        for (UUID roomId : List.copyOf(numbersMoved)) {
-            if (numbersMoved.remove(roomId)) {
-                moved.add(roomId);
-            }
-        }
-        try {
-            if (!feed.anyoneWatching()) {
-                return;   // nobody to tell: skip reading the numbers
-            }
-            liveStats.find(moved).forEach(feed::stats);
-        } catch (RuntimeException e) {
-            log.warn("Could not tell the hallway about {} rooms", moved.size(), e);
-        }
+        pending.computeIfAbsent(roomId, id -> new Pending());   // the hallway's card shows who is on stage: tell it with the next batch
     }
 
     void userJoined(UUID roomId, UUID userId) {
@@ -91,7 +63,6 @@ class RoomEvents {
             next.joined.add(userId);
             return next;
         });
-        numbersMoved(roomId);
     }
 
     void userLeft(UUID roomId, UUID userId) {
@@ -101,7 +72,6 @@ class RoomEvents {
             next.left.add(userId);
             return next;
         });
-        numbersMoved(roomId);
     }
 
     @Scheduled(fixedDelay = "${voice-room.presence-batch:2s}")
@@ -119,6 +89,10 @@ class RoomEvents {
         // One pipelined read for every room that changed, not one round trip per room.
         Map<UUID, RoomLiveStats> stats = liveStats.find(changed.keySet());
         changed.forEach((roomId, changes) -> {
+            feed.stats(roomId, stats.get(roomId));
+            if (changes.joined.isEmpty() && changes.left.isEmpty()) {
+                return;   // only the stage moved: the room already heard that
+            }
             try {
                 gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.PRESENCE_CHANGED, roomId, null, clock.instant(), null,
                         new PresenceChange(stats.get(roomId).participantCount(), new ArrayList<>(changes.joined), new ArrayList<>(changes.left)), null));
