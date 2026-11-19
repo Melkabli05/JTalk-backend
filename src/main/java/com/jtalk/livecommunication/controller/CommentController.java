@@ -4,6 +4,7 @@ import com.jtalk.livecommunication.domain.model.ChatState;
 import com.jtalk.livecommunication.domain.model.RoomComment;
 import com.jtalk.livecommunication.dto.request.PinTopicRequest;
 import com.jtalk.livecommunication.dto.request.PostCommentRequest;
+import com.jtalk.livecommunication.dto.request.ReactionRequest;
 import com.jtalk.livecommunication.service.CommentService;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Body;
@@ -42,6 +43,19 @@ class CommentController {
     @Status(HttpStatus.CREATED)
     RoomComment post(UUID roomId, @CurrentUser UUID userId, @Body @Valid PostCommentRequest request) {
         return comments.post(roomId, userId, request.type(), request.content(), request.correctedContent(), request.replyTo());
+    }
+
+    /** Reacts to a comment, with the one reaction a person has to it: a different one replaces theirs. */
+    @Put("/{commentId}/reaction")
+    @Status(HttpStatus.NO_CONTENT)
+    void react(UUID roomId, UUID commentId, @CurrentUser UUID userId, @Body @Valid ReactionRequest request) {
+        comments.react(roomId, userId, commentId, request.reaction());
+    }
+
+    @Delete("/{commentId}/reaction")
+    @Status(HttpStatus.NO_CONTENT)
+    void unreact(UUID roomId, UUID commentId, @CurrentUser UUID userId) {
+        comments.unreact(roomId, userId, commentId);
     }
 
     @Delete("/{commentId}")

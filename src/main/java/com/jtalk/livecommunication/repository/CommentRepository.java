@@ -1,12 +1,15 @@
 package com.jtalk.livecommunication.repository;
 
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
+import com.jtalk.livecommunication.domain.enums.Reaction;
 import com.jtalk.livecommunication.domain.model.ChatState;
+import com.jtalk.livecommunication.domain.model.CommentReactions;
 import com.jtalk.livecommunication.domain.model.RoomComment;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.core.io.ResourceResolver;
 import io.micronaut.serde.ObjectMapper;
 import jakarta.inject.Singleton;
@@ -15,7 +18,11 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -27,6 +34,8 @@ import java.util.UUID;
  *   <li>{@code voiceroom:{id}:topic} - the pinned topic</li>
  *   <li>{@code voiceroom:{id}:chat-muted} - SET of the people the host muted</li>
  *   <li>{@code voiceroom:{id}:chat-rate:{userId}} - how many comments a person made in the current window</li>
+ *   <li>{@code voiceroom:{id}:reaction-counts} - HASH of {@code commentId|REACTION} to how many people chose it</li>
+ *   <li>{@code voiceroom:{id}:reactions-by:{userId}} - HASH of comment to the reaction this person chose (it is what they are told is theirs)</li>
  * </ul>
  */
 @Singleton
@@ -38,11 +47,20 @@ public class CommentRepository extends RedisRepository {
         KEPT, NOT_IN_ROOM, MUTED, TOO_FAST
     }
 
+    /** What reacting came to: {@code previous} is what the person reacted with before, when it changed. */
+    public record Reacted(Outcome outcome, @Nullable Reaction previous) {
+
+        public enum Outcome {
+            CHANGED, UNCHANGED, NOT_IN_ROOM, MUTED, NO_SUCH_COMMENT
+        }
+    }
+
     static final int KEPT = 50;
 
     private final PresenceRepository presence;
     private final ObjectMapper json;
     private final LuaScript postScript;
+    private final LuaScript reactScript;
     private final long ttlSeconds;
     private final int perWindow;
     private final long windowSeconds;
@@ -53,6 +71,7 @@ public class CommentRepository extends RedisRepository {
         this.presence = presence;
         this.json = json;
         this.postScript = LuaScript.load(resources, "lua/post_comment.lua");
+        this.reactScript = LuaScript.load(resources, "lua/react_comment.lua");
         this.ttlSeconds = properties.stateTtl().toSeconds();
         this.perWindow = properties.commentsPerWindow();
         this.windowSeconds = Math.max(1, properties.commentWindow().toSeconds());
@@ -76,6 +95,24 @@ public class CommentRepository extends RedisRepository {
     }
 
     /**
+     * Sets, changes or (with no reaction) takes back the person's reaction to a comment, again in one script call: in the room, not muted and
+     * the comment still there, or nothing changes.
+     */
+    public Reacted react(UUID roomId, UUID userId, UUID commentId, @Nullable Reaction reaction) {
+        List<Object> result = reactScript.execute(connection.sync(), ScriptOutputType.MULTI,
+                new String[]{PresenceRepository.key(roomId), mutedKey(roomId), commentsKey(roomId), reactionCountsKey(roomId), reactionsByKey(roomId, userId)},
+                userId.toString(), commentId.toString(), reaction == null ? "" : reaction.name(), Long.toString(ttlSeconds),
+                Long.toString(presence.freshnessCutoff().toEpochMilli()));
+        return switch (((Long) result.get(0)).intValue()) {
+            case -3 -> new Reacted(Reacted.Outcome.NOT_IN_ROOM, null);
+            case -1 -> new Reacted(Reacted.Outcome.MUTED, null);
+            case -4 -> new Reacted(Reacted.Outcome.NO_SUCH_COMMENT, null);
+            case 0 -> new Reacted(Reacted.Outcome.UNCHANGED, null);
+            default -> new Reacted(Reacted.Outcome.CHANGED, reactionOf((String) result.get(1)));
+        };
+    }
+
+    /**
      * What a person in the room sees on opening the chat: comments (oldest first), the topic and whether they are muted, in one round trip,
      * with the check that they are in the room travelling in it. The host also gets everyone muted, one more command in the same trip.
      * Empty for someone who is not in the room.
@@ -87,7 +124,10 @@ public class CommentRepository extends RedisRepository {
         RedisFuture<String> topic = redis.get(topicKey(roomId));
         RedisFuture<Boolean> muted = redis.sismember(mutedKey(roomId), userId.toString());
         RedisFuture<Set<String>> everyoneMuted = host ? redis.smembers(mutedKey(roomId)) : null;
-        await(host ? new RedisFuture<?>[]{joined, comments, topic, muted, everyoneMuted} : new RedisFuture<?>[]{joined, comments, topic, muted});
+        RedisFuture<Map<String, String>> counts = redis.hgetall(reactionCountsKey(roomId));
+        RedisFuture<Map<String, String>> mine = redis.hgetall(reactionsByKey(roomId, userId));
+        await(host ? new RedisFuture<?>[]{joined, comments, topic, muted, counts, mine, everyoneMuted}
+                : new RedisFuture<?>[]{joined, comments, topic, muted, counts, mine});
 
         Double lastSeen = joined.toCompletableFuture().join();
         if (lastSeen == null || lastSeen < presence.freshnessCutoff().toEpochMilli()) {
@@ -100,13 +140,32 @@ public class CommentRepository extends RedisRepository {
             read(roomId, newestFirst.get(i)).ifPresent(oldestFirst::add);
         }
         List<UUID> mutedUsers = host ? everyoneMuted.toCompletableFuture().join().stream().map(UUID::fromString).toList() : List.of();
-        return Optional.of(new ChatState(oldestFirst, topic.toCompletableFuture().join(), muted.toCompletableFuture().join(), mutedUsers));
+        return Optional.of(new ChatState(oldestFirst, topic.toCompletableFuture().join(), muted.toCompletableFuture().join(), mutedUsers,
+                reactionsTo(oldestFirst, counts.toCompletableFuture().join(), mine.toCompletableFuture().join())));
+    }
+
+    /** What each of these comments was reacted to with, as this person sees it. Comments nobody reacted to have no entry. */
+    private static List<CommentReactions> reactionsTo(List<RoomComment> shown, Map<String, String> counts, Map<String, String> mine) {
+        Map<UUID, Map<Reaction, Integer>> byComment = new HashMap<>();
+        counts.forEach((field, people) -> {
+            int split = field.indexOf('|');
+            Reaction reaction = split < 0 ? null : reactionOf(field.substring(split + 1));
+            if (reaction != null) {
+                byComment.computeIfAbsent(UUID.fromString(field.substring(0, split)), id -> new EnumMap<>(Reaction.class))
+                        .put(reaction, Integer.parseInt(people));
+            }
+        });
+        return shown.stream()
+                .filter(comment -> byComment.containsKey(comment.id()))
+                .map(comment -> new CommentReactions(comment.id(), byComment.get(comment.id()), reactionOf(mine.get(comment.id().toString()))))
+                .toList();
     }
 
     /** Removes the comment; false if there was none with that id. Matched by its id, not by text that may appear in a reply to it. */
     public boolean delete(UUID roomId, UUID commentId) {
         for (String raw : connection.sync().lrange(commentsKey(roomId), 0, -1)) {
             if (read(roomId, raw).filter(comment -> comment.id().equals(commentId)).isPresent()) {
+                connection.sync().hdel(reactionCountsKey(roomId), Arrays.stream(Reaction.values()).map(reaction -> commentId + "|" + reaction).toArray(String[]::new));
                 return connection.sync().lrem(commentsKey(roomId), 1, raw) > 0;
             }
         }
@@ -130,9 +189,9 @@ public class CommentRepository extends RedisRepository {
         connection.sync().del(topicKey(roomId));
     }
 
-    /** The chat of a room that has closed. (The per-person counters expire with their window.) */
+    /** The chat of a room that has closed. (The per-person counters and what each person reacted with expire on their own.) */
     public void clear(UUID roomId) {
-        connection.sync().del(commentsKey(roomId), topicKey(roomId), mutedKey(roomId));
+        connection.sync().del(commentsKey(roomId), topicKey(roomId), mutedKey(roomId), reactionCountsKey(roomId));
     }
 
     private String write(RoomComment comment) {
@@ -162,6 +221,23 @@ public class CommentRepository extends RedisRepository {
 
     private static String mutedKey(UUID roomId) {
         return roomKey(roomId, "chat-muted");
+    }
+
+    private static String reactionCountsKey(UUID roomId) {
+        return roomKey(roomId, "reaction-counts");
+    }
+
+    private static String reactionsByKey(UUID roomId, UUID userId) {
+        return roomKey(roomId, "reactions-by:" + userId);
+    }
+
+    /** The reaction a stored name stands for; none for an empty or unknown one (a name this version no longer has). */
+    private static @Nullable Reaction reactionOf(@Nullable String name) {
+        try {
+            return name == null || name.isEmpty() ? null : Reaction.valueOf(name);
+        } catch (IllegalArgumentException unknown) {
+            return null;
+        }
     }
 
     private static String rateKey(UUID roomId, UUID userId) {

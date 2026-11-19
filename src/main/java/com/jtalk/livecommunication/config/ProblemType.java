@@ -28,6 +28,7 @@ public enum ProblemType {
     INVALID_COMMENT(HttpStatus.BAD_REQUEST, "Not a comment the room can take"),
     CHAT_MUTED(HttpStatus.FORBIDDEN, "Muted in the chat"),
     COMMENTING_TOO_FAST(HttpStatus.TOO_MANY_REQUESTS, "Commenting too fast"),
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "Comment not found"),
     CANNOT_MUTE_HOST(HttpStatus.UNPROCESSABLE_ENTITY, "The host cannot be muted in their own chat"),
     INVALID_WEBHOOK_SIGNATURE(HttpStatus.UNAUTHORIZED, "Invalid webhook signature"),
     MEDIA_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "Media server rejected the request"),

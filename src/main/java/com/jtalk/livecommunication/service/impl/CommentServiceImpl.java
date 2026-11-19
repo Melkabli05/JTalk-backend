@@ -3,6 +3,7 @@ package com.jtalk.livecommunication.service.impl;
 import com.jtalk.livecommunication.config.ProblemType;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.CommentType;
+import com.jtalk.livecommunication.domain.enums.Reaction;
 import com.jtalk.livecommunication.domain.model.ChatEvent;
 import com.jtalk.livecommunication.domain.model.ChatState;
 import com.jtalk.livecommunication.domain.model.RoomComment;
@@ -34,6 +35,7 @@ class CommentServiceImpl implements CommentService {
     private final CommentRepository comments;
     private final RoomAccessValidator access;
     private final LiveKitGateway gateway;
+    private final ReactionThrottle throttle;
     private final Clock clock;
 
     @Override
@@ -68,6 +70,31 @@ class CommentServiceImpl implements CommentService {
             case KEPT -> gateway.broadcastChatEvent(ChatEvent.posted(roomId, comment.createdAt(), comment));
         }
         return comment;
+    }
+
+    @Override
+    public void react(UUID roomId, UUID userId, UUID commentId, Reaction reaction) {
+        change(roomId, userId, commentId, reaction);
+    }
+
+    @Override
+    public void unreact(UUID roomId, UUID userId, UUID commentId) {
+        change(roomId, userId, commentId, null);
+    }
+
+    private void change(UUID roomId, UUID userId, UUID commentId, @Nullable Reaction reaction) {
+        rooms.getRequiredActiveRoom(roomId);
+        if (!throttle.allow(roomId, userId)) {
+            throw ProblemType.REACTING_TOO_FAST.because("Wait a moment before reacting again");
+        }
+        CommentRepository.Reacted reacted = comments.react(roomId, userId, commentId, reaction);
+        switch (reacted.outcome()) {
+            case NOT_IN_ROOM -> throw notInRoom(roomId, userId);
+            case MUTED -> throw ProblemType.CHAT_MUTED.because("The host has muted you in this room's chat");
+            case NO_SUCH_COMMENT -> throw ProblemType.COMMENT_NOT_FOUND.because("Comment " + commentId + " is not in this room's chat");
+            case UNCHANGED -> { }
+            case CHANGED -> gateway.broadcastChatEvent(ChatEvent.reacted(roomId, clock.instant(), commentId, userId, reaction, reacted.previous()));
+        }
     }
 
     @Override

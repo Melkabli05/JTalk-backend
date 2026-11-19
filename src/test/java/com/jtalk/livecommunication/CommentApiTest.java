@@ -1,6 +1,7 @@
 package com.jtalk.livecommunication;
 
 import com.jtalk.livecommunication.domain.enums.ChatEventType;
+import com.jtalk.livecommunication.domain.enums.Reaction;
 import com.jtalk.livecommunication.domain.model.ChatEvent;
 import com.jtalk.livecommunication.support.ApiTestBase;
 import io.micronaut.http.HttpRequest;
@@ -27,6 +28,7 @@ class CommentApiTest extends ApiTestBase {
     public Map<String, String> getProperties() {
         Map<String, String> properties = new HashMap<>(super.getProperties());
         properties.put("voice-room.comments-per-window", "1000");   // the rate limit is not what these test
+        properties.put("voice-room.reaction-interval", "0s");   // the throttle is the room reactions' own, not what these test
         return properties;
     }
 
@@ -256,10 +258,11 @@ class CommentApiTest extends ApiTestBase {
         comment(room, "alice", text("goodbye"));
         topic(room, "host", "Last topic");
         postEmpty(room, "/comments/mute/" + id("bob"), "host");
+        react(room, comment(room, "alice", text("Reacted to")).get("id"), "alice", "CLAP");
 
         delete(room, "", "host");
 
-        String[] keys = {"comments", "topic", "chat-muted"};
+        String[] keys = {"comments", "topic", "chat-muted", "reaction-counts"};
         await("the chat is cleared after the answer, off the request", 5_000, () -> {
             for (String key : keys) {
                 if (redis.sync().exists("voiceroom:{" + room + "}:" + key) > 0) {
@@ -281,5 +284,99 @@ class CommentApiTest extends ApiTestBase {
 
     private io.micronaut.http.HttpResponse<?> topic(String room, String user, String text) {
         return http.exchange(HttpRequest.PUT(path(room, "/comments/topic"), Map.of("text", text)).bearerAuth(token(user)));
+    }
+
+    private HttpStatus react(String room, Object commentId, String user, String reaction) {
+        return http.exchange(HttpRequest.PUT(path(room, "/comments/" + commentId + "/reaction"), Map.of("reaction", reaction)).bearerAuth(token(user)))
+                .status();
+    }
+
+    private HttpStatus unreact(String room, Object commentId, String user) {
+        return http.exchange(HttpRequest.DELETE(path(room, "/comments/" + commentId + "/reaction")).bearerAuth(token(user))).status();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> reactionsTo(String room, String user, Object commentId) {
+        return ((List<Map<String, Object>>) chat(room, user).get("reactions")).stream()
+                .filter(entry -> commentId.equals(entry.get("commentId"))).findFirst().orElse(null);
+    }
+
+    @Test
+    void peopleReactToAComment_oneEach_theRoomIsToldAndTheCountsAreWhatTheyOpenTheChatTo() {
+        String room = roomWithPeople();
+        Object id = comment(room, "alice", text("Love this")).get("id");
+
+        assertEquals(HttpStatus.NO_CONTENT, react(room, id, "bob", "CLAP"));
+        assertEquals(HttpStatus.NO_CONTENT, react(room, id, "host", "CLAP"));
+        assertEquals(HttpStatus.NO_CONTENT, react(room, id, "alice", "FIRE"));
+
+        var told = events(ChatEventType.COMMENT_REACTED);
+        assertEquals(3, told.size());
+        assertEquals(id("bob"), told.get(0).targetUserId());
+        assertEquals(Reaction.CLAP, told.get(0).reaction());
+        assertNull(told.get(0).previous());
+
+        Map<String, Object> asBob = reactionsTo(room, "bob", id);
+        assertEquals(Map.of("CLAP", 2, "FIRE", 1), asBob.get("counts"));
+        assertEquals("CLAP", asBob.get("mine"), "each person is told which one is theirs");
+        assertEquals("FIRE", reactionsTo(room, "alice", id).get("mine"));
+        assertNull(reactionsTo(room, "bob", comment(room, "bob", text("Nobody reacted")).get("id")), "a comment nobody reacted to has no entry");
+    }
+
+    @Test
+    void aNewReactionReplacesThePersonsOldOne_andTakingItBackRemovesIt() {
+        String room = roomWithPeople();
+        Object id = comment(room, "alice", text("Hola")).get("id");
+
+        react(room, id, "bob", "CLAP");
+        react(room, id, "bob", "HEART");
+        assertEquals(Map.of("HEART", 1), reactionsTo(room, "bob", id).get("counts"));
+        var changed = events(ChatEventType.COMMENT_REACTED).get(1);
+        assertEquals(Reaction.HEART, changed.reaction());
+        assertEquals(Reaction.CLAP, changed.previous(), "the event says what it replaced, so a client can move the count");
+
+        assertEquals(HttpStatus.NO_CONTENT, unreact(room, id, "bob"));
+        assertNull(reactionsTo(room, "bob", id));
+        var removed = events(ChatEventType.COMMENT_REACTED).get(2);
+        assertNull(removed.reaction());
+        assertEquals(Reaction.HEART, removed.previous());
+    }
+
+    @Test
+    void reactingTheSameWayAgainOrTakingBackNothingChangesNothingAndTellsNoOne() {
+        String room = roomWithPeople();
+        Object id = comment(room, "alice", text("Hola")).get("id");
+
+        react(room, id, "bob", "CLAP");
+        assertEquals(HttpStatus.NO_CONTENT, react(room, id, "bob", "CLAP"));
+        assertEquals(HttpStatus.NO_CONTENT, unreact(room, id, "alice"));
+
+        assertEquals(1, events(ChatEventType.COMMENT_REACTED).size());
+        assertEquals(Map.of("CLAP", 1), reactionsTo(room, "bob", id).get("counts"));
+    }
+
+    @Test
+    void onlyAPersonInTheRoom_whoIsNotMuted_reactsToAComment_thatIsStillThere() {
+        String room = roomWithPeople();
+        Object id = comment(room, "alice", text("Hola")).get("id");
+
+        assertProblem(HttpStatus.FORBIDDEN, "not-in-room", () -> react(room, id, "stranger", "CLAP"));
+        assertProblem(HttpStatus.NOT_FOUND, "comment-not-found", () -> react(room, UUID.randomUUID(), "bob", "CLAP"));
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> react(room, id, "bob", "NOT_A_REACTION"));
+        postEmpty(room, "/comments/mute/" + id("bob"), "host");
+        assertProblem(HttpStatus.FORBIDDEN, "chat-muted", () -> react(room, id, "bob", "CLAP"));
+        assertEquals(List.of(), events(ChatEventType.COMMENT_REACTED));
+    }
+
+    @Test
+    void aDeletedCommentTakesItsReactionsWithIt() {
+        String room = roomWithPeople();
+        Object id = comment(room, "alice", text("Oops")).get("id");
+        react(room, id, "bob", "CLAP");
+
+        delete(room, "/comments/" + id, "host");
+
+        assertEquals(List.of(), redis.sync().hkeys("voiceroom:{" + room + "}:reaction-counts"), "its counts go with it");
+        assertProblem(HttpStatus.NOT_FOUND, "comment-not-found", () -> react(room, id, "bob", "CLAP"));
     }
 }

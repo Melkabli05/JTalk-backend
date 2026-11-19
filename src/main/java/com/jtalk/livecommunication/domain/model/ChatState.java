@@ -9,9 +9,11 @@ import java.util.UUID;
 
 /**
  * A room's chat as one person sees it when they open it: the last comments, oldest first, the pinned topic if there is one, whether the
- * host has muted them, and, for the host only, everyone they have muted (the rest are told as it happens, and see only their own).
+ * host has muted them, and, for the host only, everyone they have muted (the rest are told as it happens, and see only their own). Comments
+ * that nobody reacted to have no entry in {@code reactions}.
  */
 @JsonInclude(JsonInclude.Include.ALWAYS)
 @Serdeable
-public record ChatState(List<RoomComment> comments, @Nullable String topic, boolean muted, List<UUID> mutedUsers) {
+public record ChatState(List<RoomComment> comments, @Nullable String topic, boolean muted, List<UUID> mutedUsers,
+                        List<CommentReactions> reactions) {
 }

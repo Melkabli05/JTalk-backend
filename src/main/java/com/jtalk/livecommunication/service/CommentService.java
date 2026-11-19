@@ -1,6 +1,7 @@
 package com.jtalk.livecommunication.service;
 
 import com.jtalk.livecommunication.domain.enums.CommentType;
+import com.jtalk.livecommunication.domain.enums.Reaction;
 import com.jtalk.livecommunication.domain.model.ChatState;
 import com.jtalk.livecommunication.domain.model.RoomComment;
 import io.micronaut.core.annotation.NonNull;
@@ -20,6 +21,16 @@ public interface CommentService {
      */
     RoomComment post(@NonNull UUID roomId, @NonNull UUID userId, @NonNull CommentType type, @NonNull String content,
                      @Nullable String correctedContent, @Nullable UUID replyTo);
+
+    /**
+     * Makes {@code reaction} this person's reaction to the comment, replacing the one they had (a person has one per comment); the room is told
+     * with the change. Nothing happens, and nothing is told, if it already is their reaction. 404 {@code comment-not-found} when the comment is
+     * gone, 403 {@code not-in-room}, 403 {@code chat-muted}, 429 {@code reacting-too-fast}.
+     */
+    void react(@NonNull UUID roomId, @NonNull UUID userId, @NonNull UUID commentId, @NonNull Reaction reaction);
+
+    /** Takes back the person's reaction to the comment, on the same terms; nothing happens if they had none. */
+    void unreact(@NonNull UUID roomId, @NonNull UUID userId, @NonNull UUID commentId);
 
     /** Host-only. Removes the comment for everyone; nothing happens if it is already gone. */
     void delete(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID commentId);
