@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: '25'
       # Caches Gradle's downloads and wrapper between runs.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       # The end-to-end tests start PostgreSQL and Redis through Micronaut Test Resources, which needs the Docker the runner has.
       - run: ./gradlew test --console=plain
 
