@@ -48,3 +48,6 @@ application-local*.yml
 
 # Local Docker overrides
 docker-compose.override.yml
+
+# Local MCP configuration holds API keys
+.mcp.json
