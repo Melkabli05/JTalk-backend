@@ -1,5 +1,6 @@
 package com.jtalk.livecommunication.integration;
 
+import com.jtalk.livecommunication.domain.model.ChatEvent;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import io.micronaut.core.annotation.NonNull;
 
@@ -42,4 +43,7 @@ public interface LiveKitGateway {
      * polling. Best effort: a failure is logged and never fails the request that caused the event.
      */
     void broadcastRoomEvent(@NonNull RoomRealtimeEvent event);
+
+    /** The same for a change to the room's chat, on a topic of its own so a burst of comments never queues behind a stage change. */
+    void broadcastChatEvent(@NonNull ChatEvent event);
 }

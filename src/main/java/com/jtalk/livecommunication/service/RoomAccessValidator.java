@@ -19,6 +19,12 @@ public interface RoomAccessValidator {
     /** The host may remove anyone but themselves: 403 {@code not-room-host}, or 422 {@code cannot-kick-host}. */
     void requireCanKick(VoiceRoom room, UUID requesterId, UUID targetId);
 
+    /**
+     * Only people in the room act in it: a user who has not joined, whose join LiveKit never confirmed, or whom the host removed (which
+     * takes them out of the room and bars them from joining again) is refused. 403 {@code not-in-room}.
+     */
+    void requireInRoom(UUID roomId, UUID userId);
+
     /** The host keeps their stage seat for the whole life of the room: 422 {@code host-cannot-leave-stage}. */
     void requireCanLeaveStage(VoiceRoom room, UUID userId);
 }

@@ -40,6 +40,7 @@ class StageServiceImpl implements StageService {
     @Override
     public RoomSessionResponse claimStageSeat(UUID roomId, UUID userId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        access.requireInRoom(roomId, userId);
         if (!stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats())) {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
@@ -69,6 +70,7 @@ class StageServiceImpl implements StageService {
     @Override
     public void raiseHand(UUID roomId, UUID userId) {
         rooms.getRequiredActiveRoom(roomId);
+        access.requireInRoom(roomId, userId);
         int position = stage.raiseHand(roomId, userId);
         if (position < 0) {
             throw ProblemType.ALREADY_ON_STAGE.because(userId + " is already on stage");
@@ -117,6 +119,7 @@ class StageServiceImpl implements StageService {
     @Override
     public void updateNetworkMode(UUID roomId, UUID userId, NetworkModeRequest request) {
         rooms.getRequiredActiveRoom(roomId);
+        access.requireInRoom(roomId, userId);
         if (request.mode() == NetworkMode.LOW_BANDWIDTH) {
             prunedTracks.add(roomId, userId, request.secondaryTrackSidsToDrop());
             gateway.updateSubscriptions(roomId, userId, request.secondaryTrackSidsToDrop(), false);

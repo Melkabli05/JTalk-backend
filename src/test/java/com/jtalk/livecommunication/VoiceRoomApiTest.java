@@ -52,7 +52,7 @@ class VoiceRoomApiTest extends ApiTestBase {
         // Bob raises a hand while a seat is still free; then Carol takes the last seat, so the stage is full
         assertEquals(HttpStatus.ACCEPTED, postEmpty(roomId, "/stage/raise-hand", "bob").status());
         post(roomId, "/stage/join", "carol");
-        assertProblem(HttpStatus.CONFLICT, "stage-full", () -> post(roomId, "/stage/join", "dave"));
+        assertProblem(HttpStatus.CONFLICT, "stage-full", () -> post(roomId, "/stage/join", "bob"));
         Map<String, Object> stage = getStage(roomId);
         assertEquals(new HashSet<>(ids("host", "alice", "carol")), new HashSet<>((List<?>) stage.get("speakers")));
         assertEquals(ids("bob"), stage.get("handRaiseQueue"));
@@ -198,6 +198,12 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertEquals(List.of("page-3", "page-2"), first.stream().map(r -> r.get("title")).toList(), "newest first");
         assertEquals(List.of("page-1"), second.stream().map(r -> r.get("title")).toList(), "the next page continues after the last room");
         assertTrue(first.stream().allMatch(r -> "kp".equals(r.get("targetLanguage"))), "the language filter applies");
+    }
+
+    @Test
+    void theLanguageFilterIsBoundedLikeTheLanguageItFilters() {
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> listRooms("?targetLanguage=" + "x".repeat(11)));
+        assertEquals(List.of(), listRooms("?targetLanguage=" + "x".repeat(10)));
     }
 
     @Test

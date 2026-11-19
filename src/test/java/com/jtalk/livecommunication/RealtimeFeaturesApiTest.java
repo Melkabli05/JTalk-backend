@@ -214,8 +214,9 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         postEmpty(roomId, "/participants/leave", "guest-0");
         await("the departure to be announced", 5000, () -> gateway.presenceEvents.stream().anyMatch(e -> e.presence().left().contains(id("guest-0"))));
 
-        assertTrue(gateway.presenceEvents.size() < 6, "six arrivals must not mean six events: " + gateway.presenceEvents);
-        var last = gateway.presenceEvents.getLast().presence();
+        var thisRoom = gateway.presenceEvents.stream().filter(e -> e.roomId().equals(uuid(roomId))).toList();
+        assertTrue(thisRoom.size() < 6, "six arrivals must not mean six events: " + thisRoom);
+        var last = thisRoom.getLast().presence();
         assertEquals(5, last.participantCount());
         assertEquals(List.of(), gateway.events, "people coming and going never touch the stage events");
     }
@@ -399,6 +400,51 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         gateway.subscriptionChanges.clear();
         postJson(roomId, "/stage/network-mode", "bob", Map.of("mode", "OPTIMAL"));
         assertEquals(List.of(), gateway.subscriptionChanges, "nothing left to restore");
+    }
+
+    @Test
+    void theTrackListsOfLowBandwidthModeAreBoundedSoNobodyCanFillRedisWithThem() {
+        String roomId = createRoom("host", "Bounded", 3);
+        join(roomId, "bob");
+        List<String> tooMany = java.util.stream.IntStream.range(0, 21).mapToObj(i -> "TR_" + i).toList();
+
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> postJson(roomId, "/stage/network-mode", "bob",
+                Map.of("mode", "LOW_BANDWIDTH", "secondaryTrackSidsToDrop", tooMany)));
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> postJson(roomId, "/stage/network-mode", "bob",
+                Map.of("mode", "LOW_BANDWIDTH", "secondaryTrackSidsToDrop", List.of("T".repeat(65)))));
+        assertProblem(HttpStatus.BAD_REQUEST, null, () -> postJson(roomId, "/stage/network-mode", "bob",
+                Map.of("mode", "LOW_BANDWIDTH", "primaryTrackSidsToKeep", List.of(""))));
+        assertEquals(List.of(), gateway.subscriptionChanges, "a refused request changes nothing");
+        assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/stage/network-mode", "bob",
+                Map.of("mode", "LOW_BANDWIDTH", "secondaryTrackSidsToDrop", tooMany.subList(0, 20))).status());
+    }
+
+    // ---- access control: only people in the room act in it ---------------------------------------------
+
+    @Test
+    void aPersonTheHostRemovedCannotGetBackOnTheStageEitherNorRaiseAHand() {
+        String roomId = createRoom("host", "Removed", 4);
+        join(roomId, "host");
+        join(roomId, "mallory");
+        assertEquals(HttpStatus.NO_CONTENT, delete(roomId, "/participants/" + id("mallory"), "host").status());
+
+        assertProblem(HttpStatus.FORBIDDEN, null, () -> post(roomId, "/stage/join", "mallory"));
+        assertProblem(HttpStatus.FORBIDDEN, null, () -> postEmpty(roomId, "/stage/raise-hand", "mallory"));
+        assertProblem(HttpStatus.FORBIDDEN, "kicked-from-room", () -> join(roomId, "mallory"));
+        assertFalse(speakers(roomId).contains(id("mallory").toString()), "no seat, and so no token to speak with");
+        assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
+    }
+
+    @Test
+    void someoneWhoNeverJoinedTheRoomCannotTakeASeatRaiseAHandOrChangeNetworkMode() {
+        String roomId = createRoom("host", "Members only", 4);
+        join(roomId, "host");
+
+        assertProblem(HttpStatus.FORBIDDEN, "not-in-room", () -> post(roomId, "/stage/join", "stranger"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-in-room", () -> postEmpty(roomId, "/stage/raise-hand", "stranger"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-in-room", () -> postJson(roomId, "/stage/network-mode", "stranger", Map.of("mode", "OPTIMAL")));
+        assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
+        assertEquals(List.of(), gateway.permissionChanges, "no permission was handed out");
     }
 
     // ---- helpers ----------------------------------------------------------------------------------

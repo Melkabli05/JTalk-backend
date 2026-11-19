@@ -30,6 +30,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     public volatile java.util.concurrent.CountDownLatch deleteRoomGate;
     public final List<RoomRealtimeEvent> events = new CopyOnWriteArrayList<>();
     public final List<RoomRealtimeEvent> presenceEvents = new CopyOnWriteArrayList<>();
+    public final List<com.jtalk.livecommunication.domain.model.ChatEvent> chatEvents = new CopyOnWriteArrayList<>();
     public final List<UUID> createdRooms = new CopyOnWriteArrayList<>();
     public final List<UUID> closedRooms = new CopyOnWriteArrayList<>();
     public final List<PermissionChange> permissionChanges = new CopyOnWriteArrayList<>();
@@ -42,6 +43,7 @@ public class FakeLiveKitGateway implements LiveKitGateway {
         events.clear();
         deleteRoomGate = null;
         presenceEvents.clear();
+        chatEvents.clear();
         createdRooms.clear();
         closedRooms.clear();
         permissionChanges.clear();
@@ -104,6 +106,11 @@ public class FakeLiveKitGateway implements LiveKitGateway {
     @Override
     public void removeParticipant(UUID roomId, UUID userId) {
         removals.add(new Removal(roomId, userId));
+    }
+
+    @Override
+    public void broadcastChatEvent(com.jtalk.livecommunication.domain.model.ChatEvent event) {
+        chatEvents.add(event);
     }
 
     @Override

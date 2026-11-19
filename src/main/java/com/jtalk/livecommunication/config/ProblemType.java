@@ -25,6 +25,10 @@ public enum ProblemType {
     KICKED_FROM_ROOM(HttpStatus.FORBIDDEN, "Removed from this room"),
     NOT_IN_ROOM(HttpStatus.FORBIDDEN, "Join the room first"),
     REACTING_TOO_FAST(HttpStatus.TOO_MANY_REQUESTS, "Reacting too fast"),
+    INVALID_COMMENT(HttpStatus.BAD_REQUEST, "Not a comment the room can take"),
+    CHAT_MUTED(HttpStatus.FORBIDDEN, "Muted in the chat"),
+    COMMENTING_TOO_FAST(HttpStatus.TOO_MANY_REQUESTS, "Commenting too fast"),
+    CANNOT_MUTE_HOST(HttpStatus.UNPROCESSABLE_ENTITY, "The host cannot be muted in their own chat"),
     INVALID_WEBHOOK_SIGNATURE(HttpStatus.UNAUTHORIZED, "Invalid webhook signature"),
     MEDIA_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "Media server rejected the request"),
     MEDIA_SERVER_UNREACHABLE(HttpStatus.BAD_GATEWAY, "Media server unreachable");

@@ -25,6 +25,7 @@ import io.micronaut.validation.Validated;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 
 import static com.jtalk.livecommunication.config.CommunicationConstants.MAX_PAGE_SIZE;
@@ -53,7 +54,7 @@ class VoiceRoomController {
      * {@code id} as {@code afterCreatedAt} and {@code afterId}. Micronaut binds the values, no cursor token needed.
      */
     @Get
-    CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable @QueryValue String targetLanguage,
+    CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable @QueryValue @Size(max = 10) String targetLanguage,
                                                     @QueryValue(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size,
                                                     @Nullable @QueryValue Instant afterCreatedAt,
                                                     @Nullable @QueryValue UUID afterId) {

@@ -146,7 +146,7 @@ Conventions the code follows (and `LiveKitGatewayImplTest` pins down):
 |---|---|
 | **Stage** | The host is seated when the room is created (seats include the host, 2-12). Anyone can take a free seat (`stage/join`), or raise a hand and wait; the host can promote or demote. Atomic Lua scripts claim a seat and release-and-promote (one call frees a seat and seats the next hand-raiser); they run by SHA and fall back to sending the source after a Redis restart. |
 | **30 s grace lease** | LiveKit `participant_left` for a seated speaker creates a Redis key with a TTL instead of freeing the seat. Rejoining (or `participant_joined`) cancels it. When it expires, Redis emits a keyspace event; `LeaseExpirationListener` calls `ParticipantService.handleDisconnectLeaseExpired`, which frees the seat and promotes the next hand-raiser. The host's seat is never reclaimed. The participant list shows `RECONNECTING` meanwhile. |
-| **Real-time room events** | Clients do not have to poll. When something changes, the server broadcasts a small JSON event to everyone in the room over LiveKit's reliable data channel (topic `room-events`), carrying the state it changed so clients apply it instead of refetching: `STAGE_UPDATED`, `HAND_RAISED` and `HAND_LOWERED` (with the new stage and the user), `PRESENCE_CHANGED` (the head count and who joined and left, batched every `voice-room.presence-batch` (2 s)), `ROOM_UPDATED` (the host's new title, topic and seats), `SPEAKER_RECONNECTING` / `SPEAKER_RECONNECTED` (a speaker's media dropped / came back within the grace lease), and `REACTIONS` (what people reacted with in the last `voice-room.reaction-batch` (300 ms), as a list of `{userId, reaction}`; reactions are never stored, and the throttle is in memory so a refused reaction costs no Redis command). A client reads the room, `stage` and `participants` once after its data channel is up (so nothing after is missed), and again only when that link comes back after a break. Delivery is best effort: a failed broadcast is logged and never fails the request that caused it. |
+| **Real-time room events** | Clients do not have to poll. When something changes, the server broadcasts a small JSON event to everyone in the room over LiveKit's reliable data channel (topic `room-events`), carrying the state it changed so clients apply it instead of refetching: `STAGE_UPDATED`, `HAND_RAISED` and `HAND_LOWERED` (with the new stage and the user), `PRESENCE_CHANGED` (the head count and who joined and left, batched every `voice-room.presence-batch` (2 s)), `ROOM_UPDATED` (the host's new title, topic and seats), `SPEAKER_RECONNECTING` / `SPEAKER_RECONNECTED` (a speaker's media dropped / came back within the grace lease), and `REACTIONS` (what people reacted with in the last `voice-room.reaction-batch` (300 ms), as a list of `{userId, reaction}`; reactions are never stored, and the throttle is in memory so a refused reaction costs no Redis command). The room's chat has a topic of its own, `room-chat`, so a burst of comments never queues behind a stage change: `COMMENT_POSTED` (carrying the comment), `COMMENT_DELETED`, `CHAT_MUTED` / `CHAT_UNMUTED` (with the person) and `TOPIC_CHANGED` (with the topic, or none when it was cleared). A client reads the room, `stage` and `participants` once after its data channel is up (so nothing after is missed), and again only when that link comes back after a break. Delivery is best effort: a failed broadcast is logged and never fails the request that caused it. |
 | **Webhooks** | `POST /webhooks/livekit`, signature verified with the LiveKit SDK. Events handled: `participant_left`, `participant_joined`; they also decide who is present (there is no heartbeat). LiveKit does not guarantee webhook delivery (it retries, then gives up). |
 | **Low-bandwidth mode** | `stage/network-mode`: `LOW_BANDWIDTH` unsubscribes the user from the secondary tracks they list and remembers them; `OPTIMAL` restores them (plus any the request lists). The client decides when it is struggling; nothing to prune means no call to LiveKit. |
 
@@ -193,6 +193,24 @@ service checks its RS256 signature against the tenant's JWKS, its issuer, its au
 the caller by the token's custom user-id claim (`https://jtalk.app/user_id`, a UUID set by an Auth0 post-login Action; anything else is a 401). The user
 service documents the one-time Auth0 setup. Errors are RFC 9457 `application/problem+json` with a stable `type` such as `urn:jtalk:live-communication:problem:stage-full`. LiveKit failures surface as 502 `media-server-error` with LiveKit's own error code in the detail.
 
+**Access control.** Four rules, each enforced in one place and covered by a test:
+
+1. *Signed in.* Every route is `@Secured(IS_AUTHENTICATED)`; only the signed LiveKit webhook and the `/health` probes answer without a token. A route
+   with no rule is refused, not allowed.
+2. *In the room.* Acting in a room (taking a seat, raising a hand, changing network mode, reacting, commenting, reading the chat) needs the caller to be in
+   it: `RoomAccessValidator.requireInRoom`, which is `PresenceRepository.isPresent` (the comment script applies the same rule inside Redis, so a comment
+   still costs one round trip). A person the host removed is never present, because joining refuses them and takes them out of the room, so they cannot
+   get back through the stage either (taking a seat returns a LiveKit token with publish rights). 403 `not-in-room`.
+3. *Host only.* Edit or close the room, remove, invite, move or mute a speaker, delete a comment, mute someone in the chat, pin a topic:
+   `RoomAccessValidator.requireHost`, against the host in the database (the cache is evicted when the host changes).
+4. *Yourself only.* Who the caller is comes from the verified token (`@CurrentUser`), never from a path or body, so nobody acts as someone else.
+
+The framework's management endpoints (`/beans`, `/routes`, `/env`, `/loggers`, `/refresh`, `/threaddump`, `/flyway`, ...) are switched off
+(`endpoints.all.enabled: false`): with only a login they reached their handlers for any signed-in user. Request bodies are capped at 64 KB
+(`micronaut.server.max-request-size`), lists in a body and the language filter are bounded by Bean Validation, and what a person writes in the chat is
+stripped of control characters and text-direction overrides and must contain something visible. Reading discovery data (the room list, a room, its
+stage and who is in it) needs only a login: rooms are public, and anyone may join one as a listener.
+
 | Method & path (under `/api/v1/voice-rooms`) | Who | Purpose |
 |---|---|---|
 | `POST /` | any | Create a room (`title`, `topic`, `targetLanguage`, `nativeLanguage`, `maxStageSeats`); the caller becomes host, is seated, and gets a session with a LiveKit token. A host who already has an active room gets that room back (re-join) instead of a second one |
@@ -207,6 +225,11 @@ service documents the one-time Auth0 setup. Errors are RFC 9457 `application/pro
 | `POST .../stage/join` / `POST .../stage/leave` | member | Take a free seat / step down (the host keeps theirs) |
 | `POST .../stage/raise-hand` / `DELETE .../stage/raise-hand` | member | Raise (202) / lower hand |
 | `POST .../reactions` `{"reaction": "HEART"}` | joined member | Show the room a reaction (`HEART`, `CLAP`, `THUMBS_UP`, `SMILE`, `SPARKLES`, `FIRE`, `PARTY`, `LAUGH`, `WOW`, `THANKS`): 202; 403 `not-in-room` unless joined; 429 `reacting-too-fast` within `voice-room.reaction-interval` (500ms) of your last one |
+| `GET .../comments` | any | The room's chat as the caller opens it: `{comments, topic, muted}`, the last 50 comments oldest first, the pinned topic, and whether the host has muted the caller. Read once after the live link is up; after that `room-chat` events keep it current |
+| `POST .../comments` `{"type": "TEXT", "content": "...", "correctedContent": "...", "replyTo": "<comment id>"}` | joined member | Comment (up to 500 characters) or, with `type: CORRECTION`, correct what someone said: `content` is what they said and `correctedContent` what it should be (required for a correction, refused on text). 201 with the comment, which also reaches everyone in the room as `COMMENT_POSTED`; 400 `invalid-comment` (empty once control characters and text-direction overrides are removed; any script and any emoji stay), 403 `not-in-room`, 403 `chat-muted`, 429 `commenting-too-fast` (`voice-room.comments-per-window` per `voice-room.comment-window`, 3 per 5 s by default, per person per room). The author is the caller; a comment carries their id, not their name or picture |
+| `DELETE .../comments/{commentId}` | host | Remove a comment for everyone (matched by its id, so a reply that names it stays): 204, also when it is already gone |
+| `POST .../comments/mute/{userId}` / `DELETE .../comments/mute/{userId}` | host | Mute or unmute someone in the chat only: they stay in the room, on the stage and heard. 204; 422 `cannot-mute-host` |
+| `PUT .../comments/topic` `{"text": "..."}` / `DELETE .../comments/topic` | host | Pin a topic (up to 200 characters) at the top of the chat, a question to answer or a word to use, or clear it. 204 |
 | `POST .../stage/promote/{userId}` / `POST .../stage/demote/{userId}` | host | Put a user on the stage / step a speaker down |
 | `POST .../stage/mute/{userId}` | host | Mute a speaker's microphone (they can unmute themselves) |
 | `POST .../stage/network-mode` `{mode, secondaryTrackSidsToDrop, primaryTrackSidsToKeep}` | member | Prune / restore secondary tracks (low-bandwidth mode) |
@@ -291,6 +314,10 @@ Not built, or not verified, and worth deciding on:
 
 ## Deliberate decisions and known limits
 
+- **The chat lives in Redis only.** The last 50 comments, the topic and the mutes are kept there (with the room's 24 hour safety expiry) and are
+  cleared when the room closes: there is no chat history to keep, so it costs PostgreSQL nothing. A person who joins late gets those 50, not more.
+  The comment limit is a fixed window (the counter starts with a person's first comment and expires with the window), so a burst straddling two
+  windows can briefly pass the limit.
 - **There is no whispering.** The private two-person whisper rooms were removed on request (V4 drops `voice_rooms.allow_whisper`;
   V3, which added it, is kept because migrations are history).
 

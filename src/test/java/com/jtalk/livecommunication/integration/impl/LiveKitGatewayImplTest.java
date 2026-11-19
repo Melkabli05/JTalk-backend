@@ -230,6 +230,23 @@ class LiveKitGatewayImplTest {
     }
 
     @Test
+    void aChatEventGoesOutOnItsOwnTopicCarryingTheCommentAndNoPersonalDetails() throws Exception {
+        var comment = new com.jtalk.livecommunication.domain.model.RoomComment(java.util.UUID.fromString("00000000-0000-0000-0000-0000000000c1"), bob,
+                com.jtalk.livecommunication.domain.enums.CommentType.CORRECTION, "I goed home", "I went home", null, Instant.parse("2026-11-19T10:00:00Z"));
+
+        gateway().broadcastChatEvent(com.jtalk.livecommunication.domain.model.ChatEvent.posted(room, Instant.parse("2026-11-19T10:00:00Z"), comment));
+
+        var body = LivekitRoom.SendDataRequest.parseFrom(onlyRequest().body());
+        assertEquals("room-chat", body.getTopic(), "apart from the room's state events, so a burst of comments never queues behind a stage change");
+        assertEquals(List.of(), body.getDestinationIdentitiesList(), "everyone in the room");
+        String json = body.getData().toStringUtf8();
+        assertTrue(json.contains("\"type\":\"COMMENT_POSTED\""), json);
+        assertTrue(json.contains("\"authorId\":\"" + bob + "\""), json);
+        assertTrue(json.contains("\"correctedContent\":\"I went home\""), json);
+        assertFalse(json.contains("replyTo"), "what is not there is not sent: " + json);
+    }
+
+    @Test
     void aFailedBroadcastNeverBreaksTheRequestThatCausedIt() {
         status = 400;
         contentType = "application/json";

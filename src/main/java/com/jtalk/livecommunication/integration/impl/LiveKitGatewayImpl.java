@@ -1,6 +1,7 @@
 package com.jtalk.livecommunication.integration.impl;
 
 import com.jtalk.livecommunication.config.LiveKitConfig;
+import com.jtalk.livecommunication.domain.model.ChatEvent;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.config.ProblemType;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
@@ -45,6 +46,7 @@ import java.util.UUID;
 class LiveKitGatewayImpl implements LiveKitGateway {
 
     private static final String ROOM_EVENTS_TOPIC = "room-events";
+    private static final String CHAT_TOPIC = "room-chat";
     /** The name of the microphone source in a join token's canPublishSources grant. */
     private static final String MICROPHONE_SOURCE = "microphone";
 
@@ -126,12 +128,22 @@ class LiveKitGatewayImpl implements LiveKitGateway {
     @Override
     @Async(TaskExecutors.VIRTUAL)
     public void broadcastRoomEvent(RoomRealtimeEvent event) {
+        broadcast(event.roomId(), ROOM_EVENTS_TOPIC, event, event.type());
+    }
+
+    @Override
+    @Async(TaskExecutors.VIRTUAL)
+    public void broadcastChatEvent(ChatEvent event) {
+        broadcast(event.roomId(), CHAT_TOPIC, event, event.type());
+    }
+
+    private void broadcast(UUID roomId, String topic, Object event, Object type) {
         try {
             // SDK parameter order: destination SIDs, then destination identities; both empty means everyone in the room.
-            execute(roomService.sendData(event.roomId().toString(), toJson(event), DataPacket.Kind.RELIABLE, List.of(), List.of(), ROOM_EVENTS_TOPIC),
+            execute(roomService.sendData(roomId.toString(), toJson(event), DataPacket.Kind.RELIABLE, List.of(), List.of(), topic),
                     "send data message");
         } catch (RuntimeException e) {
-            log.warn("Could not broadcast {} to room {}", event.type(), event.roomId(), e);
+            log.warn("Could not broadcast {} to room {}", type, roomId, e);
         }
     }
 

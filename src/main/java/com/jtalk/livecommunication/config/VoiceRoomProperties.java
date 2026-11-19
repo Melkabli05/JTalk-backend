@@ -13,5 +13,9 @@ public record VoiceRoomProperties(
         /* Safety net: ephemeral Redis keys of abandoned rooms expire after this long. */
         @Bindable(defaultValue = "PT24H") Duration stateTtl,
         /* How long a disconnected speaker keeps their seat before it is reclaimed. */
-        @Bindable(defaultValue = "PT30S") Duration leaseTtl) {
+        @Bindable(defaultValue = "PT30S") Duration leaseTtl,
+        /* How many comments one person may post in a room per window. */
+        @Bindable(defaultValue = "3") int commentsPerWindow,
+        /* The window the comment limit counts in. */
+        @Bindable(defaultValue = "PT5S") Duration commentWindow) {
 }

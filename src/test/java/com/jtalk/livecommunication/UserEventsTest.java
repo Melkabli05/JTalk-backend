@@ -9,7 +9,6 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,6 +94,7 @@ class UserEventsTest extends ApiTestBase {
         deleted(id("alice"));
         deleted(id("alice"));
         await("the room closes", 10_000, () -> !openRoomIds().contains(roomId));
+        await("its media room is removed, after the room closed and off the request", 10_000, () -> gateway.closedRooms.contains(uuid(roomId)));
 
         assertEquals(1, gateway.closedRooms.stream().filter(uuid(roomId)::equals).count(), "the media room is removed once");
     }

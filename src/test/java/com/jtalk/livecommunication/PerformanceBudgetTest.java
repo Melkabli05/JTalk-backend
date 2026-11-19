@@ -99,8 +99,8 @@ class PerformanceBudgetTest extends ApiTestBase {
         Cost takeSeat = cost(() -> post(room, "/stage/join", "listener-3"));
         Cost leaveSeat = cost(() -> postEmpty(room, "/stage/leave", "listener-3"));
 
-        assertEquals(2, raiseHand.redis().roundTrips(), "the hand goes up, then the stage is read once to tell the room: " + raiseHand.redis());
-        assertEquals(3, takeSeat.redis().roundTrips(), "claim the seat, read the stage to tell the room, read the room's numbers: " + takeSeat.redis());
+        assertEquals(3, raiseHand.redis().roundTrips(), "are they in the room, the hand goes up, then the stage is read once to tell the room: " + raiseHand.redis());
+        assertEquals(4, takeSeat.redis().roundTrips(), "are they in the room, claim the seat, read the stage to tell the room, read the room's numbers: " + takeSeat.redis());
         assertTrue(leaveSeat.redis().roundTrips() <= 3, leaveSeat.redis().toString());
         assertEquals(0, raiseHand.sql() + takeSeat.sql() + leaveSeat.sql(), "the room is cached");
     }
@@ -143,7 +143,7 @@ class PerformanceBudgetTest extends ApiTestBase {
                 "secondaryTrackSidsToDrop", java.util.List.of("TR_a"), "primaryTrackSidsToKeep", java.util.List.of("TR_b"))));
         Cost kick = cost(() -> delete(room, "/participants/" + id("listener-1"), "host"));
 
-        assertEquals(1, network.redis().roundTrips(), network.redis().toString());
+        assertEquals(2, network.redis().roundTrips(), "are they in the room, then the four commands together: " + network.redis());
         assertTrue(kick.redis().roundTrips() <= 4, "ban in one, leaving in one, then telling the room: " + kick.redis());
     }
 
@@ -161,6 +161,20 @@ class PerformanceBudgetTest extends ApiTestBase {
         assertTrue(tookMillis < 2_000, "the answer waited " + tookMillis + " ms");
         gate.countDown();
         await("the media room is deleted afterwards", 5_000, () -> gateway.closedRooms.contains(uuid(room)));
+    }
+
+    @Test
+    void commentingAndReadingTheChatAreOneRoundTripEach() {
+        String room = roomWithListeners(2);
+        postJson(room, "/comments", "listener-0", Map.of("type", "TEXT", "content", "warm up the script"));   // the first call also sends the script
+
+        Cost post = cost(() -> postJson(room, "/comments", "listener-1", Map.of("type", "TEXT", "content", "hello")));
+        Cost read = cost(() -> http.retrieve(HttpRequest.GET("/api/v1/voice-rooms/" + room + "/comments").bearerAuth(token("listener-1")), MAP));
+
+        assertEquals(1, post.redis().roundTrips(), "one script: in the room? muted? too fast? then keep it: " + post.redis());
+        assertEquals(1, post.redis().commands().size());
+        assertEquals(1, read.redis().roundTrips(), "in the room, the comments, the topic and whether they are muted, together: " + read.redis());
+        assertEquals(0, post.sql() + read.sql(), "chat never touches the database");
     }
 
     @Test
