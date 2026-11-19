@@ -46,7 +46,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
       # A pull request only proves the image builds; a push to main also publishes it to GitHub Packages.
       - if: github.event_name == 'push'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
