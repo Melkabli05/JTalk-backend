@@ -2,6 +2,7 @@ package com.jtalk.livecommunication.service.impl;
 
 import com.jtalk.livecommunication.domain.enums.Reaction;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
+import com.jtalk.livecommunication.domain.model.ParticipantProfileUpdate;
 import com.jtalk.livecommunication.domain.model.PresenceChange;
 import com.jtalk.livecommunication.domain.model.ReactionBurst;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
@@ -48,17 +49,22 @@ class RoomEvents {
     private final Map<UUID, List<ReactionBurst>> reactions = new ConcurrentHashMap<>();
 
     void announce(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
-        gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant(), null, null, null, null));
+        gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, clock.instant(), null, null, null, null, null));
     }
 
     void announceStage(UUID roomId, RoomEventType type, @Nullable UUID targetUserId) {
         var at = clock.instant();
-        gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, at, stage.snapshot(roomId), null, null, null));
+        gateway.broadcastRoomEvent(new RoomRealtimeEvent(type, roomId, targetUserId, at, stage.snapshot(roomId), null, null, null, null));
         pending.computeIfAbsent(roomId, id -> new Pending());   // the hallway's card shows who is on stage: tell it with the next batch
     }
 
     void announceSettings(UUID roomId, RoomSettings settings) {
-        gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.ROOM_UPDATED, roomId, null, clock.instant(), null, null, null, settings));
+        gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.ROOM_UPDATED, roomId, null, clock.instant(), null, null, null, settings, null));
+    }
+
+    void announceParticipantProfileUpdate(UUID roomId, UUID userId, String avatarUrl) {
+        gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.PARTICIPANT_PROFILE_UPDATED, roomId, userId, clock.instant(), null, null, null, null, 
+                new ParticipantProfileUpdate(userId, avatarUrl)));
     }
 
     void userJoined(UUID roomId, UUID userId) {
@@ -100,7 +106,7 @@ class RoomEvents {
             }
             try {
                 gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.PRESENCE_CHANGED, roomId, null, clock.instant(), null,
-                        new PresenceChange(stats.get(roomId).participantCount(), new ArrayList<>(changes.joined), new ArrayList<>(changes.left)), null, null));
+                        new PresenceChange(stats.get(roomId).participantCount(), new ArrayList<>(changes.joined), new ArrayList<>(changes.left)), null, null, null));
             } catch (RuntimeException e) {
                 log.warn("Could not announce who came and went in room {}", roomId, e);
             }
@@ -125,7 +131,7 @@ class RoomEvents {
                 continue;
             }
             try {
-                gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.REACTIONS, roomId, null, clock.instant(), null, null, bursts, null));
+                gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.REACTIONS, roomId, null, clock.instant(), null, null, bursts, null, null));
             } catch (RuntimeException e) {
                 log.warn("Could not announce reactions in room {}", roomId, e);
             }

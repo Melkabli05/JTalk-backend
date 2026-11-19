@@ -13,5 +13,7 @@ public enum RoomEventType {
     /** The host changed the title, topic or seats. Carries the new settings. */
     ROOM_UPDATED,
     /** Reactions people sent in the last moment, batched into one message. */
-    REACTIONS
+    REACTIONS,
+    /** A participant updated their profile (picture). Carries the participant profile update. */
+    PARTICIPANT_PROFILE_UPDATED
 }
