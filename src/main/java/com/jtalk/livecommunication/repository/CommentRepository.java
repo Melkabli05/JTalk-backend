@@ -189,6 +189,36 @@ public class CommentRepository extends RedisRepository {
         connection.sync().del(topicKey(roomId));
     }
 
+    public boolean pinComment(UUID roomId, UUID commentId) {
+        List<String> allComments = connection.sync().lrange(commentsKey(roomId), 0, -1);
+        for (String raw : allComments) {
+            Optional<RoomComment> maybe = read(roomId, raw);
+            if (maybe.isPresent() && maybe.get().id().equals(commentId)) {
+                RoomComment comment = maybe.get();
+                RoomComment pinned = new RoomComment(comment.id(), comment.authorId(), comment.type(), comment.content(),
+                        comment.correctedContent(), comment.replyTo(), comment.createdAt(), java.time.Instant.now());
+                String newRaw = write(pinned);
+                return connection.sync().lset(commentsKey(roomId), allComments.indexOf(raw), newRaw) != null;
+            }
+        }
+        return false;
+    }
+
+    public boolean unpinComment(UUID roomId, UUID commentId) {
+        List<String> allComments = connection.sync().lrange(commentsKey(roomId), 0, -1);
+        for (String raw : allComments) {
+            Optional<RoomComment> maybe = read(roomId, raw);
+            if (maybe.isPresent() && maybe.get().id().equals(commentId)) {
+                RoomComment comment = maybe.get();
+                RoomComment unpinned = new RoomComment(comment.id(), comment.authorId(), comment.type(), comment.content(),
+                        comment.correctedContent(), comment.replyTo(), comment.createdAt(), null);
+                String newRaw = write(unpinned);
+                return connection.sync().lset(commentsKey(roomId), allComments.indexOf(raw), newRaw) != null;
+            }
+        }
+        return false;
+    }
+
     /** The chat of a room that has closed. (The per-person counters and what each person reacted with expire on their own.) */
     public void clear(UUID roomId) {
         connection.sync().del(commentsKey(roomId), topicKey(roomId), mutedKey(roomId), reactionCountsKey(roomId));

@@ -15,5 +15,5 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Serdeable
 public record RoomComment(UUID id, UUID authorId, CommentType type, String content, @Nullable String correctedContent,
-                          @Nullable UUID replyTo, Instant createdAt) {
+                          @Nullable UUID replyTo, Instant createdAt, @Nullable Instant pinnedAt) {
 }

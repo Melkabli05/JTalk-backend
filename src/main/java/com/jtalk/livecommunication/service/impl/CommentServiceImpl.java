@@ -62,7 +62,7 @@ class CommentServiceImpl implements CommentService {
             throw ProblemType.INVALID_COMMENT.because("Only a correction has a corrected phrase");
         }
 
-        RoomComment comment = new RoomComment(UUID.randomUUID(), userId, type, said, corrected, replyTo, clock.instant());
+        RoomComment comment = new RoomComment(UUID.randomUUID(), userId, type, said, corrected, replyTo, clock.instant(), null);
         switch (comments.post(roomId, userId, comment)) {
             case NOT_IN_ROOM -> throw notInRoom(roomId, userId);
             case MUTED -> throw ProblemType.CHAT_MUTED.because("The host has muted you in this room's chat");
@@ -138,6 +138,26 @@ class CommentServiceImpl implements CommentService {
         requireHost(roomId, hostId, "clear the topic");
         comments.clearTopic(roomId);
         gateway.broadcastChatEvent(ChatEvent.topic(roomId, clock.instant(), null));
+    }
+
+    @Override
+    public void pinComment(UUID roomId, UUID hostId, UUID commentId) {
+        requireHost(roomId, hostId, "pin comments");
+        if (comments.pinComment(roomId, commentId)) {
+            gateway.broadcastChatEvent(ChatEvent.pinned(roomId, clock.instant(), commentId));
+        } else {
+            throw ProblemType.COMMENT_NOT_FOUND.because("Comment " + commentId + " is not in this room's chat");
+        }
+    }
+
+    @Override
+    public void unpinComment(UUID roomId, UUID hostId, UUID commentId) {
+        requireHost(roomId, hostId, "unpin comments");
+        if (comments.unpinComment(roomId, commentId)) {
+            gateway.broadcastChatEvent(ChatEvent.unpinned(roomId, clock.instant(), commentId));
+        } else {
+            throw ProblemType.COMMENT_NOT_FOUND.because("Comment " + commentId + " is not in this room's chat");
+        }
     }
 
     private static ThrowableProblem notInRoom(UUID roomId, UUID userId) {

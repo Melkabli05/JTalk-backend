@@ -18,10 +18,11 @@ import java.util.UUID;
  * @param reactions           what people reacted with, for {@code REACTIONS}
  * @param settings            the room's title, topic and seats, for {@code ROOM_UPDATED}
  * @param profileUpdate       the participant's updated profile, for {@code PARTICIPANT_PROFILE_UPDATED}
+ * @param commentId           the comment ID for {@code COMMENT_PINNED} and {@code COMMENT_UNPINNED} events
  */
 @Serdeable
 public record RoomRealtimeEvent(RoomEventType type, UUID roomId, @Nullable UUID targetUserId, Instant timestamp,
                                 @Nullable StageState stage, @Nullable PresenceChange presence,
                                 @Nullable List<ReactionBurst> reactions, @Nullable RoomSettings settings,
-                                @Nullable ParticipantProfileUpdate profileUpdate) {
+                                @Nullable ParticipantProfileUpdate profileUpdate, @Nullable String commentId) {
 }

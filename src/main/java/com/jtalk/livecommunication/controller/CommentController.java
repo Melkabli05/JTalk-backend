@@ -87,4 +87,16 @@ class CommentController {
     void clearTopic(UUID roomId, @CurrentUser UUID userId) {
         comments.clearTopic(roomId, userId);
     }
+
+    @Put("/{commentId}/pin")
+    @Status(HttpStatus.NO_CONTENT)
+    void pinComment(UUID roomId, UUID commentId, @CurrentUser UUID userId) {
+        comments.pinComment(roomId, userId, commentId);
+    }
+
+    @Delete("/{commentId}/pin")
+    @Status(HttpStatus.NO_CONTENT)
+    void unpinComment(UUID roomId, UUID commentId, @CurrentUser UUID userId) {
+        comments.unpinComment(roomId, userId, commentId);
+    }
 }

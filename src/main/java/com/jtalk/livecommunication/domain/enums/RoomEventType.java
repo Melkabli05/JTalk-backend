@@ -15,5 +15,9 @@ public enum RoomEventType {
     /** Reactions people sent in the last moment, batched into one message. */
     REACTIONS,
     /** A participant updated their profile (picture). Carries the participant profile update. */
-    PARTICIPANT_PROFILE_UPDATED
+    PARTICIPANT_PROFILE_UPDATED,
+    /** A comment was pinned. Carries the comment ID. */
+    COMMENT_PINNED,
+    /** A comment was unpinned. Carries the comment ID. */
+    COMMENT_UNPINNED
 }

@@ -14,7 +14,7 @@ import java.util.UUID;
  * of comments never queues behind a stage change. Which fields are set depends on the type.
  *
  * @param comment      the comment, for {@code COMMENT_POSTED}
- * @param commentId    the comment that went, for {@code COMMENT_DELETED}, or the one reacted to, for {@code COMMENT_REACTED}
+ * @param commentId    the comment that went, for {@code COMMENT_DELETED}, or the one reacted to, for {@code COMMENT_REACTED}, or pinned/unpinned for {@code COMMENT_PINNED}/{@code COMMENT_UNPINNED}
  * @param targetUserId who was muted or unmuted, for {@code CHAT_MUTED} and {@code CHAT_UNMUTED}, or who reacted, for {@code COMMENT_REACTED}
  * @param topic        the pinned topic, for {@code TOPIC_CHANGED}; absent when it was cleared
  * @param reaction     what they now react with, for {@code COMMENT_REACTED}; absent when they took it back
@@ -48,5 +48,13 @@ public record ChatEvent(ChatEventType type, UUID roomId, Instant timestamp, @Nul
 
     public static ChatEvent reacted(UUID roomId, Instant at, UUID commentId, UUID userId, @Nullable Reaction reaction, @Nullable Reaction previous) {
         return new ChatEvent(ChatEventType.COMMENT_REACTED, roomId, at, null, commentId, userId, null, reaction, previous);
+    }
+
+    public static ChatEvent pinned(UUID roomId, Instant at, UUID commentId) {
+        return new ChatEvent(ChatEventType.COMMENT_PINNED, roomId, at, null, commentId, null, null, null, null);
+    }
+
+    public static ChatEvent unpinned(UUID roomId, Instant at, UUID commentId) {
+        return new ChatEvent(ChatEventType.COMMENT_UNPINNED, roomId, at, null, commentId, null, null, null, null);
     }
 }

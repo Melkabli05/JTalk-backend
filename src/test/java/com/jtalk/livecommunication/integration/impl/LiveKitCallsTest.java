@@ -79,7 +79,7 @@ class LiveKitCallsTest extends ApiTestBase {
         PATHS.clear();
 
         long started = System.nanoTime();
-        gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, UUID.randomUUID(), null, Instant.now(), null, null, null, null, null));
+        gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.STAGE_UPDATED, UUID.randomUUID(), null, Instant.now(), null, null, null, null, null, null));
         long callerWaitedMs = (System.nanoTime() - started) / 1_000_000;
 
         assertTrue(callerWaitedMs < 500, "the caller was held for " + callerWaitedMs + " ms by a media server that takes " + SLOW_MS + " ms");

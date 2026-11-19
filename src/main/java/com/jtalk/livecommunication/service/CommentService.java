@@ -46,4 +46,10 @@ public interface CommentService {
 
     /** Host-only. */
     void clearTopic(@NonNull UUID roomId, @NonNull UUID hostId);
+
+    /** Host-only. Pins a comment, marking it with the current timestamp. 404 {@code comment-not-found} if the comment is gone. */
+    void pinComment(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID commentId);
+
+    /** Host-only. Unpins a comment, clearing its pinned timestamp. 404 {@code comment-not-found} if the comment is gone. */
+    void unpinComment(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID commentId);
 }

@@ -6,6 +6,10 @@ public enum ChatEventType {
     COMMENT_DELETED,
     /** Someone chose, changed or took back their reaction to a comment. */
     COMMENT_REACTED,
+    /** The host pinned a comment. */
+    COMMENT_PINNED,
+    /** The host unpinned a comment. */
+    COMMENT_UNPINNED,
     /** The host muted someone in the chat: they may keep listening and speaking, but cannot comment. */
     CHAT_MUTED,
     CHAT_UNMUTED,
