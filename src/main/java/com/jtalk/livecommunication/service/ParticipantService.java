@@ -2,6 +2,7 @@ package com.jtalk.livecommunication.service;
 
 import com.jtalk.livecommunication.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.dto.response.RoomSnapshotResponse;
 import com.jtalk.livecommunication.domain.model.AudiencePage;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
@@ -19,6 +20,8 @@ public interface ParticipantService {
      * with a scoped LiveKit token. A user the host kicked is refused.
      */
     RoomSessionResponse joinRoom(@NonNull UUID roomId, @NonNull UUID userId);
+
+    RoomSnapshotResponse snapshot(@NonNull UUID roomId, @NonNull UUID userId);
 
     /** Leaves the room, cleaning up presence, hand raise or stage seat (promoting the next hand-raiser). */
     void leaveRoom(@NonNull UUID roomId, @NonNull UUID userId);

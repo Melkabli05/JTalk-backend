@@ -2,6 +2,7 @@ package com.jtalk.livecommunication.controller;
 
 import com.jtalk.livecommunication.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.dto.response.RoomSnapshotResponse;
 import com.jtalk.livecommunication.domain.model.AudiencePage;
 import com.jtalk.livecommunication.service.ParticipantService;
 import io.micronaut.core.annotation.Nullable;
@@ -32,6 +33,11 @@ class ParticipantController {
     @Post("/join")
     RoomSessionResponse joinRoom(UUID roomId, @CurrentUser UUID userId) {
         return participants.joinRoom(roomId, userId);
+    }
+
+    @Get("/snapshot")
+    RoomSnapshotResponse snapshot(UUID roomId, @CurrentUser UUID userId) {
+        return participants.snapshot(roomId, userId);
     }
 
     @Post("/leave")

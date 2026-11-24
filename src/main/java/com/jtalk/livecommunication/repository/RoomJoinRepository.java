@@ -13,6 +13,7 @@ import io.lettuce.core.RedisFuture;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.core.io.ResourceResolver;
 import jakarta.inject.Singleton;
 
@@ -38,7 +39,7 @@ public class RoomJoinRepository extends RedisRepository {
     private final long stateTtlSeconds;
     private final LuaScript snapshotScript;
 
-    public record JoinState(RoomLiveStats stats, RoomJoinSnapshot snapshot, ParticipantPreview joiningProfile,
+    public record RoomState(RoomLiveStats stats, RoomJoinSnapshot snapshot, @Nullable ParticipantPreview joiningProfile,
                             boolean onStage, boolean restoredSeat) {
     }
 
@@ -63,14 +64,22 @@ public class RoomJoinRepository extends RedisRepository {
         this.snapshotScript = LuaScript.load(resources, "lua/room_join_snapshot.lua");
     }
 
-    public Optional<JoinState> enter(UUID roomId, UUID userId, boolean host, int roomSeats) {
+    public Optional<RoomState> enter(UUID roomId, UUID userId, boolean host, int roomSeats) {
+        return snapshot(roomId, userId, host, roomSeats, true);
+    }
+
+    public Optional<RoomState> read(UUID roomId, UUID userId, boolean host) {
+        return snapshot(roomId, userId, host, 0, false);
+    }
+
+    private Optional<RoomState> snapshot(UUID roomId, UUID userId, boolean host, int roomSeats, boolean entering) {
         List<?> state = snapshotScript.execute(connection.sync(), ScriptOutputType.MULTI,
                 new String[]{PresenceRepository.key(roomId), StageRepository.stageKey(roomId), StageRepository.queueKey(roomId),
                         CommentRepository.commentsKey(roomId), CommentRepository.topicKey(roomId), CommentRepository.mutedKey(roomId),
                         PresenceRepository.bannedKey(roomId), LeaseRepository.key(roomId, userId)},
                 Long.toString(presence.freshnessCutoff().toEpochMilli()), Integer.toString(PAGE_SIZE), Integer.toString(MAX_STAGE_SEATS),
                 userId.toString(), Boolean.toString(host), Integer.toString(CommentRepository.KEPT),
-                Long.toString(clock.millis()), Long.toString(stateTtlSeconds), Integer.toString(roomSeats));
+                Long.toString(clock.millis()), Long.toString(stateTtlSeconds), Integer.toString(roomSeats), Boolean.toString(entering));
         if ((Long) state.getFirst() == -1) {
             return Optional.empty();
         }
@@ -80,7 +89,7 @@ public class RoomJoinRepository extends RedisRepository {
         List<String> visible = listeners.stream().limit(PAGE_SIZE).toList();
         var chatHistory = comments.readHistory(roomId, raw.comments());
         var redis = connection.async();
-        var profiles = requestProfiles(redis, speakerIds, visible, userId.toString());
+        var profiles = requestProfiles(redis, speakerIds, visible, entering ? userId.toString() : null);
         var leases = speakerIds.isEmpty() ? null
                 : redis.mget(speakerIds.stream().map(id -> LeaseRepository.key(roomId, UUID.fromString(id))).toArray(String[]::new));
         List<UUID> authors = chatHistory.stream().map(comment -> comment.authorId()).distinct().toList();
@@ -107,7 +116,7 @@ public class RoomJoinRepository extends RedisRepository {
             return new ParticipantPreview(preview.userId(), preview.displayName(), preview.avatarUrl(), preview.nativeLanguage(), reconnecting.contains(id));
         }).toList();
         var snapshot = new RoomJoinSnapshot(speakers, raw.audienceCount(), page(listeners, previews), raw.handQueue(), chat);
-        return Optional.of(new JoinState(stats, snapshot, previews.get(userId.toString()), raw.entry() > 0, raw.entry() == 2));
+        return Optional.of(new RoomState(stats, snapshot, entering ? previews.get(userId.toString()) : null, raw.entry() > 0, raw.entry() == 2));
     }
 
     private static List<String> strings(Object value) {
@@ -118,6 +127,9 @@ public class RoomJoinRepository extends RedisRepository {
         var redis = connection.async();
         var stage = speakers(redis, roomId);
         Long rank = cursor == null ? null : redis.zrevrank(PresenceRepository.key(roomId), cursor.toString()).toCompletableFuture().join();
+        if (cursor != null && rank == null) {
+            return new AudiencePage(List.of(), false, null);
+        }
         var candidates = candidates(redis, roomId, recent(), rank == null ? 0 : rank + 1);
         await(stage, candidates);
         List<String> listeners = excludeSpeakers(candidates.toCompletableFuture().join(), stage.toCompletableFuture().join());

@@ -2,6 +2,7 @@ package com.jtalk.livecommunication.service.impl;
 
 import com.jtalk.livecommunication.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.dto.response.RoomSnapshotResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.enums.PresenceStatus;
@@ -60,6 +61,14 @@ class ParticipantServiceImpl implements ParticipantService {
         return new RoomSessionResponse(mapper.toResponse(room, join.stats()), gateway.serverUrl(),
                 gateway.generateToken(roomId, userId, join.onStage(), join.joiningProfile()),
                 room.roleOf(userId, join.onStage()), join.onStage(), join.snapshot().chat().muted(), join.snapshot());
+    }
+
+    @Override
+    public RoomSnapshotResponse snapshot(UUID roomId, UUID userId) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        var state = roomJoin.read(roomId, userId, room.isHost(userId))
+                .orElseThrow(() -> ProblemType.NOT_IN_ROOM.because(userId + " has not joined room " + roomId));
+        return new RoomSnapshotResponse(mapper.toResponse(room, state.stats()), room.roleOf(userId, state.onStage()), state.snapshot());
     }
 
     @Override

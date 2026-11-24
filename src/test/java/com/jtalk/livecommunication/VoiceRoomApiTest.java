@@ -41,6 +41,8 @@ class VoiceRoomApiTest extends ApiTestBase {
         var speakers = (List<Map<String, Object>>) snapshot.get("speakers");
         assertEquals(List.of(id("host").toString()), speakers.stream().map(speaker -> speaker.get("userId")).toList());
         assertEquals(0, ((Number) snapshot.get("audienceCount")).intValue());
+        assertEquals(List.of(), snapshot.get("handRaiseQueue"));
+        assertEquals(List.of(), ((Map<?, ?>) snapshot.get("audience")).get("audiencePreview"));
     }
 
     @Test
@@ -74,7 +76,42 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertTrue(next.stream().noneMatch(item -> ids.contains(item.get("userId"))));
         assertProblem(HttpStatus.FORBIDDEN, "not-in-room", () -> http.exchange(
                 HttpRequest.GET(path(room, "/participants/audience")).bearerAuth(token("outsider"))));
+        redis.sync().zrem("voiceroom:{" + room + "}:presence", (String) first.get("nextCursor"));
+        var expired = http.retrieve(HttpRequest.GET(path(room, "/participants/audience?cursor=" + first.get("nextCursor")))
+                .bearerAuth(token("host")), MAP);
+        assertEquals(List.of(), expired.get("audiencePreview"));
+        assertEquals(false, expired.get("hasMoreAudience"));
         redis.sync().del("user:profile:{" + id("host") + "}");
+    }
+
+    @Test
+    void reconnectSnapshotRequiresMembershipAndLeavesRedisPresenceAndGraceLeaseIntact() {
+        String room = createRoom("host", "Reconnect", 6);
+        var url = path(room, "/participants/snapshot");
+        assertProblem(HttpStatus.FORBIDDEN, "not-in-room", () -> http.exchange(
+                HttpRequest.GET(url).bearerAuth(token("outsider"))));
+
+        join(room, "host");
+        seatSpeaker(room, "guest");
+        String presenceKey = "voiceroom:{" + room + "}:presence";
+        String guestId = id("guest").toString();
+        double seen = redis.sync().zscore(presenceKey, guestId) - 1_000;
+        redis.sync().zadd(presenceKey, seen, guestId);
+        String leaseKey = "voiceroom:{" + room + "}:lease:" + guestId;
+        redis.sync().set(leaseKey, "1");
+
+        var result = http.retrieve(HttpRequest.GET(url).bearerAuth(token("guest")), MAP);
+        assertEquals("SPEAKER", result.get("role"));
+        assertFalse(result.containsKey("liveKitToken"));
+        var snapshot = (Map<?, ?>) result.get("snapshot");
+        assertEquals(0, ((Number) snapshot.get("audienceCount")).intValue());
+        assertEquals(List.of(), snapshot.get("handRaiseQueue"));
+        assertEquals(List.of(), ((Map<?, ?>) snapshot.get("audience")).get("audiencePreview"));
+        assertTrue(((List<?>) snapshot.get("speakers")).stream().map(Map.class::cast)
+                .anyMatch(person -> guestId.equals(person.get("userId")) && Boolean.TRUE.equals(person.get("isReconnecting"))));
+        assertEquals(seen, redis.sync().zscore(presenceKey, guestId));
+        assertEquals("1", redis.sync().get(leaseKey));
+        redis.sync().del(leaseKey);
     }
 
     @Test

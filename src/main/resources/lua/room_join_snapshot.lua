@@ -1,21 +1,32 @@
 -- KEYS: presence, stage, hand-raise queue, comments, topic, muted users, banned users, grace lease.
--- ARGV: presence cutoff, page size, stage cap, user ID, is host, comment cap, now, state TTL, room seats.
+-- ARGV: presence cutoff, page size, stage cap, user ID, is host, comment cap, now, state TTL, room seats, entering.
 local userId = ARGV[4]
 local host = ARGV[5] == 'true'
+local entering = ARGV[10] == 'true'
 if redis.call('SISMEMBER', KEYS[7], userId) == 1 then
   return {-1}
 end
 
-redis.call('ZADD', KEYS[1], 'GT', ARGV[7], userId)
-redis.call('EXPIRE', KEYS[1], ARGV[8])
-local entry = 0
-if redis.call('ZSCORE', KEYS[2], userId) then
-  entry = 1 + redis.call('DEL', KEYS[8])
-elseif host and redis.call('ZCARD', KEYS[2]) < tonumber(ARGV[9]) then
-  redis.call('ZADD', KEYS[2], ARGV[7], userId)
-  redis.call('ZREM', KEYS[3], userId)
-  redis.call('EXPIRE', KEYS[2], ARGV[8])
-  entry = 1
+if not entering then
+  local score = redis.call('ZSCORE', KEYS[1], userId)
+  if not score or tonumber(score) < tonumber(ARGV[1]) then
+    return {-1}
+  end
+end
+
+local onStage = redis.call('ZSCORE', KEYS[2], userId)
+local entry = onStage and 1 or 0
+if entering then
+  redis.call('ZADD', KEYS[1], 'GT', ARGV[7], userId)
+  redis.call('EXPIRE', KEYS[1], ARGV[8])
+  if onStage then
+    entry = entry + redis.call('DEL', KEYS[8])
+  elseif host and redis.call('ZCARD', KEYS[2]) < tonumber(ARGV[9]) then
+    redis.call('ZADD', KEYS[2], ARGV[7], userId)
+    redis.call('ZREM', KEYS[3], userId)
+    redis.call('EXPIRE', KEYS[2], ARGV[8])
+    entry = 1
+  end
 end
 
 local speakers = redis.call('ZRANGE', KEYS[2], 0, tonumber(ARGV[3]) - 1)
