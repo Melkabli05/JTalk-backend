@@ -1,5 +1,7 @@
 package com.jtalk.livecommunication.integration.impl;
 
+import com.jtalk.livecommunication.domain.model.ParticipantPreview;
+
 import com.jtalk.livecommunication.config.LiveKitConfig;
 import com.jtalk.livecommunication.domain.model.ChatEvent;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
@@ -74,7 +76,12 @@ class LiveKitGatewayImpl implements LiveKitGateway {
 
     @Override
     public String generateToken(UUID roomId, UUID userId, boolean canPublish) {
-        return token(roomId.toString(), userId, canPublish, true);
+        return token(roomId.toString(), userId, canPublish, null);
+    }
+
+    @Override
+    public String generateToken(UUID roomId, UUID userId, boolean canPublish, ParticipantPreview profile) {
+        return token(roomId.toString(), userId, canPublish, profile);
     }
 
     @Override
@@ -155,17 +162,21 @@ class LiveKitGatewayImpl implements LiveKitGateway {
         }
     }
 
-    private String token(String roomName, UUID userId, boolean canPublish, boolean canSubscribe) {
+    private String token(String roomName, UUID userId, boolean canPublish, ParticipantPreview profile) {
         var token = new AccessToken(properties.apiKey(), properties.apiSecret());
         token.setIdentity(userId.toString());
         token.setExpiration(Date.from(clock.instant().plus(properties.tokenTtl())));
+        if (profile != null && profile.displayName() != null) {
+            token.setName(profile.displayName());
+            token.setMetadata(new String(toJson(profile), java.nio.charset.StandardCharsets.UTF_8));
+        }
         // Enforced by the media server whatever a modified client does with the token: listeners cannot publish at all, speakers only a
         // microphone, no one can write to the data channel (room events are sent by this service alone, so a client cannot fake one), and
         // no one can change their own metadata (LiveKit's default too, stated so that it stays true if that default ever changes).
         token.addGrants(
                 new RoomJoin(true),
                 new RoomName(roomName),
-                new CanSubscribe(canSubscribe),
+                new CanSubscribe(true),
                 new CanPublish(canPublish),
                 new CanPublishSources(canPublish ? List.of(MICROPHONE_SOURCE) : List.of()),
                 new CanPublishData(false),

@@ -156,6 +156,7 @@ class CommentApiTest extends ApiTestBase {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void aNewcomerGetsTheLastFiftyCommentsOldestFirstAndNoMore() {
         String room = roomWithPeople();
         for (int i = 1; i <= 55; i++) {
@@ -167,6 +168,11 @@ class CommentApiTest extends ApiTestBase {
         assertEquals(50, history.size(), "the chat keeps a short tail, and costs the database nothing");
         assertEquals("comment 6", history.get(0).get("content"));
         assertEquals("comment 55", history.get(49).get("content"));
+        assertEquals(HttpStatus.NO_CONTENT, topic(room, "host", "Travel").status());
+        var snapshot = (Map<String, Object>) join(room, "bob").get("snapshot");
+        var bundledChat = (Map<String, Object>) snapshot.get("chat");
+        assertEquals(history, bundledChat.get("comments"));
+        assertEquals("Travel", bundledChat.get("topic"));
     }
 
     @Test
@@ -207,6 +213,9 @@ class CommentApiTest extends ApiTestBase {
         assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "cannot-mute-host", () -> postEmpty(room, "/comments/mute/" + id("host"), "host"));
         assertEquals(HttpStatus.NO_CONTENT, postEmpty(room, "/comments/mute/" + id("alice"), "host").status());
 
+        assertEquals(true, join(room, "alice").get("isChatMuted"));
+        assertEquals(false, join(room, "bob").get("isChatMuted"));
+        assertEquals(true, post(room, "/stage/join", "alice").get("isChatMuted"));
         assertProblem(HttpStatus.FORBIDDEN, "chat-muted", () -> comment(room, "alice", text("after")));
         assertEquals(true, chat(room, "alice").get("muted"), "they are told when they open the chat, so it can say so");
         assertEquals(false, chat(room, "bob").get("muted"));
@@ -215,6 +224,7 @@ class CommentApiTest extends ApiTestBase {
 
         assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> delete(room, "/comments/mute/" + id("alice"), "bob"));
         assertEquals(HttpStatus.NO_CONTENT, delete(room, "/comments/mute/" + id("alice"), "host").status());
+        assertEquals(false, join(room, "alice").get("isChatMuted"));
         assertEquals("again", comment(room, "alice", text("again")).get("content"));
         assertEquals(1, events(ChatEventType.CHAT_UNMUTED).size());
         assertEquals(false, chat(room, "alice").get("muted"));

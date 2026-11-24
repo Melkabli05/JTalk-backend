@@ -8,6 +8,9 @@ import com.jtalk.livecommunication.support.FakeLiveKitGateway.PermissionChange;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.client.exceptions.HttpClientResponseException;
+import io.lettuce.core.ScoredValue;
+import io.lettuce.core.api.StatefulRedisConnection;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -22,6 +25,57 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VoiceRoomApiTest extends ApiTestBase {
+
+    @Inject
+    StatefulRedisConnection<String, String> redis;
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theJoinSnapshotIncludesTheHostsRestoredSeat() {
+        String room = createRoom("host", "Restored stage", 6);
+        redis.sync().zrem("voiceroom:{" + room + "}:stage", id("host").toString());
+
+        var session = join(room, "host");
+        assertEquals(true, session.get("canPublishAudio"));
+        var snapshot = (Map<String, Object>) session.get("snapshot");
+        var speakers = (List<Map<String, Object>>) snapshot.get("speakers");
+        assertEquals(List.of(id("host").toString()), speakers.stream().map(speaker -> speaker.get("userId")).toList());
+        assertEquals(0, ((Number) snapshot.get("audienceCount")).intValue());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void joinCapsAudienceButReturnsTheExactCountAndAContinuation() {
+        String room = createRoom("host", "Big room", 6);
+        var listeners = java.util.stream.IntStream.range(0, 300)
+                .mapToObj(i -> ScoredValue.just((double) Long.MAX_VALUE, id("listener-" + i).toString()))
+                .toArray(ScoredValue[]::new);
+        redis.sync().zadd("voiceroom:{" + room + "}:presence", listeners);
+        redis.sync().hset("user:profile:{" + id("host") + "}",
+                Map.of("status", "ACTIVE", "displayName", "Cached host", "nativeLanguage", "en"));
+
+        Map<String, Object> snapshot = (Map<String, Object>) join(room, "host").get("snapshot");
+        assertEquals(300, ((Number) snapshot.get("audienceCount")).intValue());
+        var stage = (List<Map<String, Object>>) snapshot.get("speakers");
+        assertEquals(1, stage.size());
+        assertEquals("Cached host", stage.getFirst().get("displayName"));
+        var first = (Map<String, Object>) snapshot.get("audience");
+        var preview = (List<Map<String, Object>>) first.get("audiencePreview");
+        assertEquals(20, preview.size());
+        assertEquals(true, first.get("hasMoreAudience"));
+        assertTrue(preview.stream().noneMatch(item -> id("host").toString().equals(item.get("userId"))));
+        assertTrue(preview.stream().allMatch(item -> item.get("displayName") == null));
+
+        var page = http.retrieve(HttpRequest.GET(path(room, "/participants/audience?cursor=" + first.get("nextCursor")))
+                .bearerAuth(token("host")), MAP);
+        var next = (List<Map<String, Object>>) page.get("audiencePreview");
+        assertEquals(20, next.size());
+        var ids = new HashSet<>(preview.stream().map(item -> item.get("userId")).toList());
+        assertTrue(next.stream().noneMatch(item -> ids.contains(item.get("userId"))));
+        assertProblem(HttpStatus.FORBIDDEN, "not-in-room", () -> http.exchange(
+                HttpRequest.GET(path(room, "/participants/audience")).bearerAuth(token("outsider"))));
+        redis.sync().del("user:profile:{" + id("host") + "}");
+    }
 
     @Test
     void fullRoomLifecycleWithStageAndPresence() {

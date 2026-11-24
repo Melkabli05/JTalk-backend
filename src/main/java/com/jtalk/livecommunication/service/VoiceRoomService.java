@@ -58,6 +58,5 @@ public interface VoiceRoomService {
     /** Shared by the other services so a missing or closed room is always the same 404. */
     VoiceRoom getRequiredActiveRoom(@NonNull UUID roomId);
 
-    /** The room merged with its real-time numbers, without re-reading it from the database. */
-    VoiceRoomResponse toResponse(@NonNull VoiceRoom room);
+    RoomSessionResponse sessionFor(@NonNull VoiceRoom room, @NonNull UUID userId, boolean onStage);
 }

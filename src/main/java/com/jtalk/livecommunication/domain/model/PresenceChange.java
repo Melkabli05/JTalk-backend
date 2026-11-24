@@ -8,5 +8,5 @@ import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.ALWAYS)
 @Serdeable
-public record PresenceChange(long participantCount, List<UUID> joined, List<UUID> left) {
+public record PresenceChange(long participantCount, long audienceCount, List<UUID> joined, List<UUID> left) {
 }

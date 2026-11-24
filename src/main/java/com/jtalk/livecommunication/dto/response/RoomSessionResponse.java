@@ -1,6 +1,9 @@
 package com.jtalk.livecommunication.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.jtalk.livecommunication.domain.enums.ParticipantRole;
+import com.jtalk.livecommunication.domain.model.RoomJoinSnapshot;
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 
 /**
@@ -9,5 +12,6 @@ import io.micronaut.serde.annotation.Serdeable;
  */
 @Serdeable.Serializable
 public record RoomSessionResponse(VoiceRoomResponse room, String liveKitUrl, String liveKitToken, ParticipantRole role,
-                                  boolean canPublishAudio) {
+                                  boolean canPublishAudio, boolean isChatMuted,
+                                  @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable RoomJoinSnapshot snapshot) {
 }

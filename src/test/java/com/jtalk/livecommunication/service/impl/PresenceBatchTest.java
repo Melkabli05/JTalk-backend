@@ -3,6 +3,7 @@ package com.jtalk.livecommunication.service.impl;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
 import com.jtalk.livecommunication.support.ApiTestBase;
 import com.jtalk.livecommunication.support.RedisCommandRecorder;
+import io.lettuce.core.api.StatefulRedisConnection;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,9 @@ class PresenceBatchTest extends ApiTestBase {
 
     @Inject
     LiveStatsRepository liveStats;
+
+    @Inject
+    StatefulRedisConnection<String, String> redis;
 
     @Override
     public Map<String, String> getProperties() {
@@ -56,6 +60,8 @@ class PresenceBatchTest extends ApiTestBase {
         assertEquals(5, gateway.presenceEvents.stream().map(event -> event.roomId()).distinct().count(), "and every room still hears about its own change");
         assertTrue(gateway.presenceEvents.stream().allMatch(event -> event.presence().joined().equals(List.of(id("latecomer")))),
                 "each announcement names who came since the last one");
+        assertTrue(gateway.presenceEvents.stream().allMatch(event -> event.presence().audienceCount() == 2),
+                "an absent host holding a stage seat does not reduce the audience count");
     }
 
     private static void pause(long millis) {
@@ -64,6 +70,30 @@ class PresenceBatchTest extends ApiTestBase {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    @Test
+    void aFailedReadKeepsPendingChangesAndLetsNewerDeparturesWin() {
+        String room = createRoom("host", "Room", 4);
+        join(room, "guest");
+        join(room, "staying");
+        String presence = "voiceroom:{" + room + "}:presence";
+        var commands = redis.sync();
+        commands.rename(presence, presence + ":saved");
+        commands.set(presence, "wrong Redis type");
+        try {
+            events.sendPresenceChanges();
+            assertTrue(gateway.presenceEvents.isEmpty());
+        } finally {
+            commands.rename(presence + ":saved", presence);
+        }
+
+        postEmpty(room, "/participants/leave", "guest");
+        events.sendPresenceChanges();
+
+        var change = gateway.presenceEvents.getFirst().presence();
+        assertEquals(List.of(id("staying")), change.joined());
+        assertEquals(List.of(id("guest")), change.left());
     }
 
     @Test

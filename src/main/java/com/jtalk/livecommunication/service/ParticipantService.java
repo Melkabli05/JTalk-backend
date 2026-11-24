@@ -2,7 +2,9 @@ package com.jtalk.livecommunication.service;
 
 import com.jtalk.livecommunication.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.domain.model.AudiencePage;
 import io.micronaut.core.annotation.NonNull;
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.validation.Validated;
 
 import java.util.List;
@@ -42,4 +44,6 @@ public interface ParticipantService {
 
     /** Who is in the room, with roles and whether they are inside a grace lease. */
     List<ParticipantResponse> listParticipants(@NonNull UUID roomId);
+
+    AudiencePage audience(@NonNull UUID roomId, @NonNull UUID userId, @Nullable UUID cursor);
 }

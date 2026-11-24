@@ -1,5 +1,7 @@
 package com.jtalk.livecommunication.integration.impl;
 
+import com.jtalk.livecommunication.domain.model.ParticipantPreview;
+
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.jtalk.livecommunication.config.LiveKitConfig;
@@ -328,6 +330,16 @@ class LiveKitGatewayImplTest {
         assertEquals(false, speaker.get("canUpdateOwnMetadata"), "nobody can rewrite their own name or metadata in the room");
         assertEquals(false, listener.get("canUpdateOwnMetadata"));
         assertEquals(false, listener.get("canPublish"), "a listener who unmutes in a custom client is dropped by the media server");
+    }
+
+    @Test
+    void aJoinTokenCarriesTheCachedPublicProfile() {
+        var profile = new ParticipantPreview(alice, "Alice", "/avatars/preset-2.svg", "en", false);
+        var token = JWT.decode(gateway().generateToken(room, alice, true, profile));
+
+        assertEquals("Alice", token.getClaim("name").asString());
+        assertTrue(token.getClaim("metadata").asString().contains("/avatars/preset-2.svg"));
+        assertEquals(false, token.getClaim("video").asMap().get("canUpdateOwnMetadata"));
     }
 
 }

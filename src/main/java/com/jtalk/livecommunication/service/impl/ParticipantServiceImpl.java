@@ -8,10 +8,12 @@ import com.jtalk.livecommunication.domain.enums.PresenceStatus;
 import com.jtalk.livecommunication.domain.event.LeaseExpired;
 import com.jtalk.livecommunication.dto.ApiMapper;
 import com.jtalk.livecommunication.domain.model.Participant;
+import com.jtalk.livecommunication.domain.model.AudiencePage;
 import com.jtalk.livecommunication.config.ProblemType;
 import com.jtalk.livecommunication.repository.LeaseRepository;
 import com.jtalk.livecommunication.repository.PresenceRepository;
 import com.jtalk.livecommunication.repository.RosterRepository;
+import com.jtalk.livecommunication.repository.RoomJoinRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
 import com.jtalk.livecommunication.service.ParticipantService;
 import com.jtalk.livecommunication.service.StageService;
@@ -40,6 +42,7 @@ class ParticipantServiceImpl implements ParticipantService {
     private final PresenceRepository presence;
     private final LeaseRepository leases;
     private final RosterRepository rosterRepository;
+    private final RoomJoinRepository roomJoin;
     private final LiveKitGateway gateway;
     private final ApiMapper mapper;
     private final RoomAccessValidator access;
@@ -48,20 +51,15 @@ class ParticipantServiceImpl implements ParticipantService {
     @Override
     public RoomSessionResponse joinRoom(UUID roomId, UUID userId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
-        PresenceRepository.Entry entry = presence.enter(roomId, userId);   // one round trip: refused if removed, marked present, seat looked up
-        if (entry == PresenceRepository.Entry.REMOVED) {
-            throw ProblemType.KICKED_FROM_ROOM.because(userId + " was removed from this room by the host");
-        }
-        boolean onStage = entry != PresenceRepository.Entry.LISTENER;
-        if (!onStage && room.isHost(userId)) {
-            onStage = stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats());   // the host's seat is permanent
-        }
-        if (entry == PresenceRepository.Entry.ON_STAGE_AGAIN) {   // reconnecting within the grace lease restored the seat
+        var join = roomJoin.enter(roomId, userId, room.isHost(userId), room.maxStageSeats())
+                .orElseThrow(() -> ProblemType.KICKED_FROM_ROOM.because(userId + " was removed from this room by the host"));
+        if (join.restoredSeat()) {
             events.announce(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
         }
         events.userJoined(roomId, userId);
-        return new RoomSessionResponse(rooms.toResponse(room), gateway.serverUrl(), gateway.generateToken(roomId, userId, onStage),
-                room.roleOf(userId, onStage), onStage);
+        return new RoomSessionResponse(mapper.toResponse(room, join.stats()), gateway.serverUrl(),
+                gateway.generateToken(roomId, userId, join.onStage(), join.joiningProfile()),
+                room.roleOf(userId, join.onStage()), join.onStage(), join.snapshot().chat().muted(), join.snapshot());
     }
 
     @Override
@@ -156,6 +154,13 @@ class ParticipantServiceImpl implements ParticipantService {
                 .map(userId -> new Participant(userId, room.roleOf(userId, speakers.contains(userId)),
                         roster.reconnecting().contains(userId) ? PresenceStatus.RECONNECTING : PresenceStatus.ACTIVE))
                 .toList());
+    }
+
+    @Override
+    public AudiencePage audience(UUID roomId, UUID userId, UUID cursor) {
+        rooms.getRequiredActiveRoom(roomId);
+        access.requireInRoom(roomId, userId);
+        return roomJoin.audience(roomId, cursor);
     }
 
     private void dropPresence(UUID roomId, UUID userId) {

@@ -6,6 +6,7 @@ import com.jtalk.livecommunication.domain.model.ChatState;
 import com.jtalk.livecommunication.domain.model.CommentReactions;
 import com.jtalk.livecommunication.domain.model.RoomComment;
 import io.lettuce.core.RedisFuture;
+import io.lettuce.core.KeyValue;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
@@ -120,28 +121,68 @@ public class CommentRepository extends RedisRepository {
     public Optional<ChatState> state(UUID roomId, UUID userId, boolean host) {
         RedisAsyncCommands<String, String> redis = connection.async();
         RedisFuture<Double> joined = redis.zscore(PresenceRepository.key(roomId), userId.toString());
-        RedisFuture<List<String>> comments = redis.lrange(commentsKey(roomId), 0, -1);
-        RedisFuture<String> topic = redis.get(topicKey(roomId));
-        RedisFuture<Boolean> muted = redis.sismember(mutedKey(roomId), userId.toString());
+        PendingChat pending = requestChat(redis, roomId, userId);
         RedisFuture<Set<String>> everyoneMuted = host ? redis.smembers(mutedKey(roomId)) : null;
-        RedisFuture<Map<String, String>> counts = redis.hgetall(reactionCountsKey(roomId));
-        RedisFuture<Map<String, String>> mine = redis.hgetall(reactionsByKey(roomId, userId));
-        await(host ? new RedisFuture<?>[]{joined, comments, topic, muted, counts, mine, everyoneMuted}
-                : new RedisFuture<?>[]{joined, comments, topic, muted, counts, mine});
+        await(joined);
 
         Double lastSeen = joined.toCompletableFuture().join();
         if (lastSeen == null || lastSeen < presence.freshnessCutoff().toEpochMilli()) {
             return Optional.empty();
         }
+        List<UUID> mutedUsers = host ? everyoneMuted.toCompletableFuture().join().stream().map(UUID::fromString).toList() : List.of();
+        return Optional.of(readChat(roomId, pending, mutedUsers));
+    }
 
+    record PendingChat(RedisFuture<List<String>> comments, RedisFuture<String> topic, RedisFuture<Boolean> muted,
+                       RedisFuture<Map<String, String>> counts, RedisFuture<Map<String, String>> mine) {
+    }
+
+    private static PendingChat requestChat(RedisAsyncCommands<String, String> redis, UUID roomId, UUID userId) {
+        RedisFuture<List<String>> comments = redis.lrange(commentsKey(roomId), 0, KEPT - 1);
+        RedisFuture<String> topic = redis.get(topicKey(roomId));
+        RedisFuture<Boolean> muted = redis.sismember(mutedKey(roomId), userId.toString());
+        RedisFuture<Map<String, String>> counts = redis.hgetall(reactionCountsKey(roomId));
+        RedisFuture<Map<String, String>> mine = redis.hgetall(reactionsByKey(roomId, userId));
+        return new PendingChat(comments, topic, muted, counts, mine);
+    }
+
+    private ChatState readChat(UUID roomId, PendingChat pending, List<UUID> mutedUsers) {
+        await(pending.comments(), pending.topic(), pending.muted());
+        List<RoomComment> oldestFirst = readHistory(roomId, pending.comments().toCompletableFuture().join());
+        var reactions = reactionsTo(oldestFirst, pending.counts().toCompletableFuture().join(), pending.mine().toCompletableFuture().join());
+        return new ChatState(oldestFirst, pending.topic().toCompletableFuture().join(), pending.muted().toCompletableFuture().join(),
+                mutedUsers, reactions);
+    }
+
+    List<RoomComment> readHistory(UUID roomId, List<String> newestFirst) {
         List<RoomComment> oldestFirst = new ArrayList<>();
-        List<String> newestFirst = comments.toCompletableFuture().join();
         for (int i = newestFirst.size() - 1; i >= 0; i--) {
             read(roomId, newestFirst.get(i)).ifPresent(oldestFirst::add);
         }
-        List<UUID> mutedUsers = host ? everyoneMuted.toCompletableFuture().join().stream().map(UUID::fromString).toList() : List.of();
-        return Optional.of(new ChatState(oldestFirst, topic.toCompletableFuture().join(), muted.toCompletableFuture().join(), mutedUsers,
-                reactionsTo(oldestFirst, counts.toCompletableFuture().join(), mine.toCompletableFuture().join())));
+        return oldestFirst;
+    }
+
+    record PendingReactions(RedisFuture<List<KeyValue<String, String>>> counts, RedisFuture<List<KeyValue<String, String>>> mine) {
+    }
+
+    static PendingReactions requestReactions(RedisAsyncCommands<String, String> redis, UUID roomId, UUID userId,
+                                             List<RoomComment> comments) {
+        String[] ids = comments.stream().map(comment -> comment.id().toString()).toArray(String[]::new);
+        String[] counts = Arrays.stream(ids).flatMap(id -> Arrays.stream(Reaction.values()).map(reaction -> id + "|" + reaction))
+                .toArray(String[]::new);
+        return new PendingReactions(redis.hmget(reactionCountsKey(roomId), counts), redis.hmget(reactionsByKey(roomId, userId), ids));
+    }
+
+    static List<CommentReactions> readReactions(List<RoomComment> comments, PendingReactions pending) {
+        return pending == null ? List.of() : reactionsTo(comments, values(pending.counts()), values(pending.mine()));
+    }
+
+    private static Map<String, String> values(RedisFuture<List<KeyValue<String, String>>> pending) {
+        Map<String, String> values = new HashMap<>();
+        pending.toCompletableFuture().join().forEach(value -> {
+            if (value.hasValue()) values.put(value.getKey(), value.getValue());
+        });
+        return values;
     }
 
     /** What each of these comments was reacted to with, as this person sees it. Comments nobody reacted to have no entry. */
@@ -241,15 +282,15 @@ public class CommentRepository extends RedisRepository {
         }
     }
 
-    private static String commentsKey(UUID roomId) {
+    static String commentsKey(UUID roomId) {
         return roomKey(roomId, "comments");
     }
 
-    private static String topicKey(UUID roomId) {
+    static String topicKey(UUID roomId) {
         return roomKey(roomId, "topic");
     }
 
-    private static String mutedKey(UUID roomId) {
+    static String mutedKey(UUID roomId) {
         return roomKey(roomId, "chat-muted");
     }
 

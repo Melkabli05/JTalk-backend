@@ -106,14 +106,17 @@ class PerformanceBudgetTest extends ApiTestBase {
     }
 
     @Test
-    void joiningARoomIsTwoRoundTripsAndNoQuery() {
+    void joiningARoomBatchesBoundedStateAndProfilesWithoutAQuery() {
         String room = roomWithListeners(3);
 
         Cost listener = cost(() -> join(room, "newcomer"));
         Cost host = cost(() -> join(room, "host"));
 
-        assertEquals(2, listener.redis().roundTrips(), "one script (removed? seated? present), then the room's numbers: " + listener.redis());
+        assertEquals(2, listener.redis().roundTrips(), listener.redis().toString());
         assertEquals(2, host.redis().roundTrips(), host.redis().toString());
+        assertEquals(1, listener.redis().count("EVALSHA"), "one script both registers presence and reads the snapshot");
+        assertEquals(0, listener.redis().count("SMEMBERS"));
+        assertTrue(listener.redis().count("HMGET") <= 33);
         assertEquals(0, listener.sql() + host.sql());
     }
 

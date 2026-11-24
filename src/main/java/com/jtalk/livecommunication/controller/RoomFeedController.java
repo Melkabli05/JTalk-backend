@@ -7,21 +7,23 @@ import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.sse.Event;
+import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.rules.SecurityRule;
-import lombok.RequiredArgsConstructor;
+import jakarta.inject.Named;
 import reactor.core.Disposable;
 import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.ConnectableFlux;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
 
 @Controller("/api/v1/voice-rooms/feed")
 @Secured(SecurityRule.IS_AUTHENTICATED)
-@RequiredArgsConstructor
 class RoomFeedController {
 
     /** How far behind a hallway may fall before it is cut off: it reconnects and starts from a fresh list. */
@@ -31,6 +33,13 @@ class RoomFeedController {
 
     private final RoomFeed feed;
     private final VoiceRoomService rooms;
+    private final Scheduler blocking;
+
+    RoomFeedController(RoomFeed feed, VoiceRoomService rooms, @Named(TaskExecutors.BLOCKING) ExecutorService executor) {
+        this.feed = feed;
+        this.rooms = rooms;
+        this.blocking = Schedulers.fromExecutor(executor);
+    }
 
     /**
      * The hallway's live view of the open rooms (server-sent events): the open rooms first, then a message whenever a room opens, changes,
@@ -43,7 +52,7 @@ class RoomFeedController {
             ConnectableFlux<RoomFeedEvent> missed = Flux.from(feed.changes()).replay(MAX_BACKLOG);
             Disposable listening = missed.connect();
             return Mono.fromCallable(() -> RoomFeedEvent.snapshot(rooms.openRooms()))
-                    .subscribeOn(Schedulers.boundedElastic())   // a database read must not block the event loop
+                    .subscribeOn(blocking)
                     .concatWith(missed)
                     .doFinally(signal -> listening.dispose());
         });

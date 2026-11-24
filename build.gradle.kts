@@ -74,8 +74,9 @@ application {
 }
 
 java {
-    sourceCompatibility = JavaVersion.toVersion("25")
-    targetCompatibility = JavaVersion.toVersion("25")
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
 }
 
 graalvmNative.toolchainDetection = false

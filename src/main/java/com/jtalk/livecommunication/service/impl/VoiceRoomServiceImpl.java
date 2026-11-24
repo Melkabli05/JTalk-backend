@@ -74,8 +74,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     private RoomSessionResponse rejoin(VoiceRoom room, UUID hostId) {
         log.info("Host {} already has active room {}, re-joining it", hostId, room.id());
-        return new RoomSessionResponse(toResponse(room), gateway.serverUrl(), gateway.generateToken(room.id(), hostId, true),
-                ParticipantRole.HOST, true);
+        return sessionFor(room, hostId, true);
     }
 
     private RoomSessionResponse open(UUID hostId, CreateVoiceRoomRequest request) {
@@ -94,7 +93,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         // A new room has nobody in it but the host on the stage, so there is nothing to read from Redis.
         VoiceRoomResponse opened = mapper.toResponse(saved, new RoomLiveStats(List.of(hostId), 0, 0));
         feed.opened(opened);
-        return new RoomSessionResponse(opened, gateway.serverUrl(), token, ParticipantRole.HOST, true);
+        return new RoomSessionResponse(opened, gateway.serverUrl(), token, ParticipantRole.HOST, true, false, null);
     }
 
     @Override
@@ -230,7 +229,13 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     }
 
     @Override
-    public VoiceRoomResponse toResponse(VoiceRoom room) {
+    public RoomSessionResponse sessionFor(VoiceRoom room, UUID userId, boolean onStage) {
+        var live = liveStats.findForSession(room.id(), userId);
+        return new RoomSessionResponse(mapper.toResponse(room, live.stats()), gateway.serverUrl(),
+                gateway.generateToken(room.id(), userId, onStage), room.roleOf(userId, onStage), onStage, live.chatMuted(), null);
+    }
+
+    private VoiceRoomResponse toResponse(VoiceRoom room) {
         return mapper.toResponse(room, liveStats.find(List.of(room.id())).get(room.id()));
     }
 }

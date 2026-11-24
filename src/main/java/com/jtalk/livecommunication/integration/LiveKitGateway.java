@@ -1,5 +1,7 @@
 package com.jtalk.livecommunication.integration;
 
+import com.jtalk.livecommunication.domain.model.ParticipantPreview;
+
 import com.jtalk.livecommunication.domain.model.ChatEvent;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import io.micronaut.core.annotation.NonNull;
@@ -22,6 +24,10 @@ public interface LiveKitGateway {
     String serverUrl();
 
     String generateToken(@NonNull UUID roomId, @NonNull UUID userId, boolean canPublish);
+
+    default String generateToken(@NonNull UUID roomId, @NonNull UUID userId, boolean canPublish, ParticipantPreview profile) {
+        return generateToken(roomId, userId, canPublish);
+    }
 
     /** Grants or revokes publish rights of a participant that is already connected. Idempotent. */
     void setPublishPermission(@NonNull UUID roomId, @NonNull UUID userId, boolean canPublish);

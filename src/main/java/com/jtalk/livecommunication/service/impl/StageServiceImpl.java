@@ -46,8 +46,7 @@ class StageServiceImpl implements StageService {
         }
         gateway.setPublishPermission(roomId, userId, true);
         events.announceStage(roomId, RoomEventType.STAGE_UPDATED, null);
-        return new RoomSessionResponse(rooms.toResponse(room), gateway.serverUrl(), gateway.generateToken(roomId, userId, true),
-                room.roleOf(userId, true), true);
+        return rooms.sessionFor(room, userId, true);
     }
 
     @Override

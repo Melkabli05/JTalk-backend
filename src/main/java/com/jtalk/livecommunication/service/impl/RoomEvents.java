@@ -7,7 +7,6 @@ import com.jtalk.livecommunication.domain.model.PresenceChange;
 import com.jtalk.livecommunication.domain.model.ReactionBurst;
 import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import com.jtalk.livecommunication.domain.model.RoomSettings;
-import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
@@ -38,6 +37,14 @@ class RoomEvents {
     private static final class Pending {
         final Set<UUID> joined = new LinkedHashSet<>();
         final Set<UUID> left = new LinkedHashSet<>();
+
+        Pending followedBy(Pending newer) {
+            joined.removeAll(newer.left);
+            left.removeAll(newer.joined);
+            joined.addAll(newer.joined);
+            left.addAll(newer.left);
+            return this;
+        }
     }
 
     private final LiveKitGateway gateway;
@@ -106,15 +113,21 @@ class RoomEvents {
             return;
         }
         // One pipelined read for every room that changed, not one round trip per room.
-        Map<UUID, RoomLiveStats> stats = liveStats.find(changed.keySet());
+        Map<UUID, LiveStatsRepository.AudienceStats> stats;
+        try {
+            stats = liveStats.findWithAudience(changed.keySet());
+        } catch (RuntimeException e) {
+            changed.forEach((roomId, older) -> pending.merge(roomId, older, (newer, previous) -> previous.followedBy(newer)));
+            log.warn("Could not read presence changes for {} rooms; retrying in the next batch", changed.size(), e);
+            return;
+        }
         changed.forEach((roomId, changes) -> {
-            feed.stats(roomId, stats.get(roomId));
-            if (changes.joined.isEmpty() && changes.left.isEmpty()) {
-                return;   // only the stage moved: the room already heard that
-            }
+            var live = stats.get(roomId);
+            feed.stats(roomId, live.room());
             try {
                 gateway.broadcastRoomEvent(new RoomRealtimeEvent(RoomEventType.PRESENCE_CHANGED, roomId, null, clock.instant(), null,
-                        new PresenceChange(stats.get(roomId).participantCount(), new ArrayList<>(changes.joined), new ArrayList<>(changes.left)), null, null, null, null));
+                        new PresenceChange(live.room().participantCount(), live.audienceCount(),
+                                new ArrayList<>(changes.joined), new ArrayList<>(changes.left)), null, null, null, null));
             } catch (RuntimeException e) {
                 log.warn("Could not announce who came and went in room {}", roomId, e);
             }

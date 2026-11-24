@@ -2,12 +2,15 @@ package com.jtalk.livecommunication.controller;
 
 import com.jtalk.livecommunication.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.domain.model.AudiencePage;
 import com.jtalk.livecommunication.service.ParticipantService;
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
+import io.micronaut.http.annotation.QueryValue;
 import io.micronaut.http.annotation.Status;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
@@ -40,6 +43,11 @@ class ParticipantController {
     @Get
     List<ParticipantResponse> listParticipants(UUID roomId) {
         return participants.listParticipants(roomId);
+    }
+
+    @Get("/audience")
+    AudiencePage audience(UUID roomId, @CurrentUser UUID userId, @Nullable @QueryValue UUID cursor) {
+        return participants.audience(roomId, userId, cursor);
     }
 
     /** Host moderation: removes the participant from the room and bars them from rejoining. */
