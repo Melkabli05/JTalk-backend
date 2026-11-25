@@ -32,7 +32,9 @@ public enum ProblemType {
     CANNOT_MUTE_HOST(HttpStatus.UNPROCESSABLE_ENTITY, "The host cannot be muted in their own chat"),
     INVALID_WEBHOOK_SIGNATURE(HttpStatus.UNAUTHORIZED, "Invalid webhook signature"),
     MEDIA_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "Media server rejected the request"),
-    MEDIA_SERVER_UNREACHABLE(HttpStatus.BAD_GATEWAY, "Media server unreachable");
+    MEDIA_SERVER_UNREACHABLE(HttpStatus.BAD_GATEWAY, "Media server unreachable"),
+    NOT_A_PARTICIPANT(HttpStatus.CONFLICT, "User is not a participant in this room"),
+    CANNOT_TRANSFER_HOST_TO_SELF(HttpStatus.UNPROCESSABLE_ENTITY, "Cannot transfer host to yourself");
 
     private static final String TYPE_PREFIX = "urn:jtalk:live-communication:problem:";
 

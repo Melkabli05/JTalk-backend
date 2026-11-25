@@ -12,6 +12,7 @@ import com.jtalk.livecommunication.dto.ApiMapper;
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.domain.model.RoomSettings;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
+import com.jtalk.livecommunication.repository.RosterRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
 import com.jtalk.livecommunication.repository.VoiceRoomRepository;
 import com.jtalk.livecommunication.service.RoomFeed;
@@ -56,6 +57,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     private final VoiceRoomRepository rooms;
     private final StageRepository stage;
     private final LiveStatsRepository liveStats;
+    private final RosterRepository roster;
     private final LiveKitGateway gateway;
     private final ApplicationEventPublisher<VoiceRoomClosed> closedEvents;
     private final ApiMapper mapper;
@@ -174,6 +176,27 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         feed.updated(toResponse(saved));
         events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
         log.info("Room {} handed from {} to {}", roomId, fromHostId, toUserId);
+    }
+
+    @Override
+    @CacheInvalidate(value = "room-metadata", parameters = "roomId")
+    @CacheInvalidate(value = FEED_CACHE, all = true)
+    public void transferHost(UUID roomId, UUID currentHostId, UUID toUserId) {
+        if (currentHostId.equals(toUserId)) {
+            throw ProblemType.CANNOT_TRANSFER_HOST_TO_SELF.because("Choose a different participant to transfer the host role to");
+        }
+        VoiceRoom room = loadForUpdate(roomId);
+        access.requireHost(room, currentHostId, "transfer host role");
+        // Verify the target is actually in the room (in the roster)
+        boolean targetPresent = roster.read(roomId).present().contains(toUserId);
+        if (!targetPresent) {
+            throw ProblemType.NOT_A_PARTICIPANT.because("User " + toUserId + " is not in this room");
+        }
+        VoiceRoom saved = rooms.update(room.withHost(toUserId));
+        VoiceRoomResponse updated = toResponse(saved);
+        feed.updated(updated);
+        events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
+        log.info("Host of room {} transferred from {} to {}", roomId, currentHostId, toUserId);
     }
 
     @Override

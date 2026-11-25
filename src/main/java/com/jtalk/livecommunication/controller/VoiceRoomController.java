@@ -1,6 +1,7 @@
 package com.jtalk.livecommunication.controller;
 
 import com.jtalk.livecommunication.dto.request.CreateVoiceRoomRequest;
+import com.jtalk.livecommunication.dto.request.TransferHostRequest;
 import com.jtalk.livecommunication.dto.request.UpdateVoiceRoomRequest;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.dto.response.VoiceRoomResponse;
@@ -75,5 +76,11 @@ class VoiceRoomController {
     @Status(HttpStatus.NO_CONTENT)
     void closeRoom(UUID roomId, @CurrentUser UUID userId) {
         rooms.closeRoom(roomId, userId);
+    }
+
+    @Post("/{roomId}/transfer-host")
+    @Status(HttpStatus.NO_CONTENT)
+    void transferHost(UUID roomId, @CurrentUser UUID userId, @Body @Valid TransferHostRequest request) {
+        rooms.transferHost(roomId, userId, request.toUserId());
     }
 }

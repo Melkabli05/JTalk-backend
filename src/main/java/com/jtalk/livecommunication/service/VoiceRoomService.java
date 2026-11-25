@@ -46,6 +46,12 @@ public interface VoiceRoomService {
      */
     void handOverRoom(@NonNull UUID roomId, @NonNull UUID fromHostId, @NonNull UUID toUserId);
 
+    /**
+     * Explicit host-initiated transfer: the current host passes control to any active participant in the room.
+     * The caller must be the host; the target must be a participant (not necessarily on stage).
+     */
+    void transferHost(@NonNull UUID roomId, @NonNull UUID currentHostId, @NonNull UUID toUserId);
+
     /** The ids of the rooms that are open right now. */
     List<UUID> openRoomIds();
 
