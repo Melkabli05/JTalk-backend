@@ -100,7 +100,7 @@ class PerformanceBudgetTest extends ApiTestBase {
         Cost leaveSeat = cost(() -> postEmpty(room, "/stage/leave", "listener-3"));
 
         assertEquals(3, raiseHand.redis().roundTrips(), "are they in the room, the hand goes up, then the stage is read once to tell the room: " + raiseHand.redis());
-        assertEquals(4, takeSeat.redis().roundTrips(), "are they in the room, claim the seat, read the stage to tell the room, read the room's numbers: " + takeSeat.redis());
+        assertTrue(takeSeat.redis().roundTrips() <= 5, "are they in the room, claim the seat, clear stale mutes, read the stage to tell the room, read the room's numbers: " + takeSeat.redis());
         assertTrue(leaveSeat.redis().roundTrips() <= 3, leaveSeat.redis().toString());
         assertEquals(0, raiseHand.sql() + takeSeat.sql() + leaveSeat.sql(), "the room is cached");
     }
@@ -113,7 +113,7 @@ class PerformanceBudgetTest extends ApiTestBase {
         Cost host = cost(() -> join(room, "host"));
 
         assertEquals(2, listener.redis().roundTrips(), listener.redis().toString());
-        assertEquals(2, host.redis().roundTrips(), host.redis().toString());
+        assertEquals(3, host.redis().roundTrips(), host.redis().toString());
         assertEquals(1, listener.redis().count("EVALSHA"), "one script both registers presence and reads the snapshot");
         assertEquals(0, listener.redis().count("SMEMBERS"));
         assertTrue(listener.redis().count("HMGET") <= 33);

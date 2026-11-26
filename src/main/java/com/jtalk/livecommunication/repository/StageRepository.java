@@ -102,6 +102,20 @@ public class StageRepository extends RedisRepository {
         }
     }
 
+    public record MuteState(boolean selfMuted, boolean hostMuted) {
+    }
+
+    public MuteState muteState(UUID roomId, UUID userId) {
+        String id = userId.toString();
+        RedisAsyncCommands<String, String> async = connection.async();
+        RedisFuture<Boolean> selfMuted = async.sismember(selfMuteKey(roomId), id);
+        RedisFuture<Boolean> hostMuted = async.sismember(micMuteKey(roomId), id);
+        await(selfMuted, hostMuted);
+        return new MuteState(
+                Boolean.TRUE.equals(selfMuted.toCompletableFuture().join()),
+                Boolean.TRUE.equals(hostMuted.toCompletableFuture().join()));
+    }
+
     public boolean isSelfMuted(UUID roomId, UUID userId) {
         return Boolean.TRUE.equals(redis().sismember(selfMuteKey(roomId), userId.toString()));
     }

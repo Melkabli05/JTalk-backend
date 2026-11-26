@@ -8,6 +8,7 @@ import com.jtalk.livecommunication.domain.model.Participant;
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.domain.model.StageState;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
 
@@ -21,6 +22,8 @@ import java.util.List;
 public interface ApiMapper {
 
     /** Room metadata (PostgreSQL) merged with its real-time numbers (Redis). */
+    @Mapping(target = "host", ignore = true)
+    @Mapping(target = "speakerProfiles", ignore = true)
     VoiceRoomResponse toResponse(VoiceRoom room, RoomLiveStats live);
 
     ParticipantResponse toResponse(Participant participant);

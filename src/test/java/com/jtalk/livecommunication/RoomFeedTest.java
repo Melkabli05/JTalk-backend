@@ -38,8 +38,12 @@ class RoomFeedTest extends ApiTestBase {
 
     /** Opens the feed as this user; what arrives is collected in the returned watch. Dispose to disconnect. */
     private Watch watch(String userName) {
+        return watch(userName, "/api/v1/voice-rooms/feed");
+    }
+
+    private Watch watch(String userName, String uri) {
         List<Map<String, Object>> received = new CopyOnWriteArrayList<>();
-        Disposable subscription = Flux.from(sse.eventStream(HttpRequest.GET("/api/v1/voice-rooms/feed").bearerAuth(token(userName)), MAP))
+        Disposable subscription = Flux.from(sse.eventStream(HttpRequest.GET(uri).bearerAuth(token(userName)), MAP))
                 .map(Event::getData)
                 .subscribe(received::add);
         return new Watch(received, subscription);
@@ -158,6 +162,26 @@ class RoomFeedTest extends ApiTestBase {
             redis.sync().publish(CHANNEL, "{\"type\":\"ROOM_CLOSED\",\"roomId\":\"" + id("x") + "\"}");
 
             await("ROOM_CLOSED", 5_000, () -> !watch.of("ROOM_CLOSED").isEmpty());
+        } finally {
+            watch.subscription().dispose();
+        }
+    }
+
+    @Test
+    void targetLanguageFiltersSnapshotAndLiveEvents() {
+        String spanishExisting = (String) createRoom("host-es-1", Map.of("title", "Spanish 1", "targetLanguage", "es", "nativeLanguage", "en")).get("id");
+        createRoom("host-fr-1", Map.of("title", "French 1", "targetLanguage", "fr", "nativeLanguage", "en"));
+        Watch watch = watch("carol", "/api/v1/voice-rooms/feed?targetLanguage=es");
+        try {
+            await("SNAPSHOT", 5_000, () -> !watch.of("SNAPSHOT").isEmpty());
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> snapshotRooms = (List<Map<String, Object>>) watch.of("SNAPSHOT").get(0).get("rooms");
+            assertEquals(List.of(spanishExisting), snapshotRooms.stream().map(r -> r.get("id")).toList());
+
+            createRoom("host-fr-2", Map.of("title", "French 2", "targetLanguage", "fr", "nativeLanguage", "en"));
+            String spanishNew = (String) createRoom("host-es-2", Map.of("title", "Spanish 2", "targetLanguage", "es", "nativeLanguage", "en")).get("id");
+            await("ROOM_OPENED", 5_000, () -> !watch.of("ROOM_OPENED").isEmpty());
+            assertEquals(List.of(spanishNew), watch.of("ROOM_OPENED").stream().map(m -> m.get("roomId")).toList());
         } finally {
             watch.subscription().dispose();
         }

@@ -58,13 +58,14 @@ class VoiceRoomController {
     CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable @QueryValue @Size(max = 10) String targetLanguage,
                                                     @QueryValue(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size,
                                                     @Nullable @QueryValue Instant afterCreatedAt,
-                                                    @Nullable @QueryValue UUID afterId) {
-        return rooms.listActiveRooms(targetLanguage, size, afterCreatedAt, afterId);
+                                                    @Nullable @QueryValue UUID afterId,
+                                                    @Nullable @QueryValue String expand) {
+        return rooms.listActiveRooms(targetLanguage, size, afterCreatedAt, afterId, "speakers".equalsIgnoreCase(expand));
     }
 
     @Get("/{roomId}")
-    VoiceRoomResponse getRoom(UUID roomId) {
-        return rooms.getRoom(roomId);
+    VoiceRoomResponse getRoom(UUID roomId, @Nullable @QueryValue String expand) {
+        return rooms.getRoom(roomId, "speakers".equalsIgnoreCase(expand));
     }
 
     @Patch("/{roomId}")

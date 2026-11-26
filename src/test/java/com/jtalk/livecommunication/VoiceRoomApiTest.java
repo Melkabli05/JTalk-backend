@@ -31,6 +31,31 @@ class VoiceRoomApiTest extends ApiTestBase {
 
     @Test
     @SuppressWarnings("unchecked")
+    void expandSpeakersPopulatesHostAndSpeakerSummariesFromRedis() {
+        redis.sync().hset("user:profile:{" + id("host") + "}", Map.of(
+                "status", "ACTIVE",
+                "username", "host_user",
+                "displayName", "Host User",
+                "avatarUrl", "/avatars/preset-1.svg",
+                "countryCode", "MA",
+                "nativeLanguage", "ar"));
+        String room = (String) createRoom("host", Map.of("title", "Expanded Room", "targetLanguage", "ja", "nativeLanguage", "ar")).get("id");
+
+        Map<String, Object> expanded = getRoom(room + "?expand=speakers");
+        Map<String, Object> host = (Map<String, Object>) expanded.get("host");
+        assertEquals(id("host").toString(), host.get("id"));
+        assertEquals("Host User", host.get("displayName"));
+        List<Map<String, Object>> speakerProfiles = (List<Map<String, Object>>) expanded.get("speakerProfiles");
+        assertEquals(1, speakerProfiles.size());
+        assertEquals("host_user", speakerProfiles.get(0).get("username"));
+
+        List<Map<String, Object>> items = listRooms("?targetLanguage=ja&expand=speakers");
+        assertEquals(1, items.size());
+        assertEquals("Host User", ((Map<String, Object>) items.get(0).get("host")).get("displayName"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void theJoinSnapshotIncludesTheHostsRestoredSeat() {
         String room = createRoom("host", "Restored stage", 6);
         redis.sync().zrem("voiceroom:{" + room + "}:stage", id("host").toString());

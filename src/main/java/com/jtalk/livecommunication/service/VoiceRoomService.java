@@ -26,10 +26,17 @@ public interface VoiceRoomService {
 
     CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt, @Nullable UUID afterId);
 
+    CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt, @Nullable UUID afterId, boolean expandSpeakers);
+
     /** The newest open rooms (at most one discovery page), read fresh: for a feed's first message, which must not miss a room that just opened or closed. */
     List<VoiceRoomResponse> openRooms();
 
+    /** Open rooms filtered by optional targetLanguage, with speaker and host summaries expanded for the hallway feed. */
+    List<VoiceRoomResponse> openRooms(@Nullable String targetLanguage);
+
     VoiceRoomResponse getRoom(@NonNull UUID roomId);
+
+    VoiceRoomResponse getRoom(@NonNull UUID roomId, boolean expandSpeakers);
 
     /** Host-only partial update. Lowering the seat count never evicts anyone; seats just stay unavailable until freed. */
     VoiceRoomResponse updateRoom(@NonNull UUID roomId, @NonNull UUID requesterId, @Valid @NotNull UpdateVoiceRoomRequest request);

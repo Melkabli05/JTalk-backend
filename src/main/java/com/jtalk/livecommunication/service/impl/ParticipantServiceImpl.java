@@ -58,8 +58,11 @@ class ParticipantServiceImpl implements ParticipantService {
             events.announce(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
         }
         events.userJoined(roomId, userId);
-        boolean isHostMuted = join.onStage() && stage.isMicMutedByHost(roomId, userId);
-        boolean isSelfMuted = join.onStage() && stage.isSelfMuted(roomId, userId);
+        StageRepository.MuteState muteState = join.onStage()
+                ? stage.muteState(roomId, userId)
+                : new StageRepository.MuteState(false, false);
+        boolean isHostMuted = muteState.hostMuted();
+        boolean isSelfMuted = muteState.selfMuted();
         boolean canPublishAudio = join.onStage() && !isHostMuted;
         return new RoomSessionResponse(mapper.toResponse(room, join.stats()), gateway.serverUrl(),
                 gateway.generateToken(roomId, userId, canPublishAudio, join.joiningProfile()),
