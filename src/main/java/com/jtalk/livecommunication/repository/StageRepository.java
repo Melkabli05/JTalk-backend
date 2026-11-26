@@ -80,6 +80,18 @@ public class StageRepository extends RedisRepository {
         return redis().zscore(stageKey(roomId), userId.toString()) != null;
     }
 
+    public void muteByHost(UUID roomId, UUID userId) {
+        redis().sadd(micMuteKey(roomId), userId.toString());
+    }
+
+    public void clearHostMute(UUID roomId, UUID userId) {
+        redis().srem(micMuteKey(roomId), userId.toString());
+    }
+
+    public boolean isMicMutedByHost(UUID roomId, UUID userId) {
+        return Boolean.TRUE.equals(redis().sismember(micMuteKey(roomId), userId.toString()));
+    }
+
     /** The seated speakers and the hand-raise queue: two commands, one round trip. */
     public StageState snapshot(UUID roomId) {
         RedisAsyncCommands<String, String> redis = connection.async();
@@ -92,7 +104,11 @@ public class StageRepository extends RedisRepository {
     }
 
     public void clear(UUID roomId) {
-        redis().del(stageKey(roomId), queueKey(roomId));
+        redis().del(stageKey(roomId), queueKey(roomId), micMuteKey(roomId));
+    }
+
+    private static String micMuteKey(UUID roomId) {
+        return "voiceroom:{" + roomId + "}:micmute";
     }
 
     private RedisCommands<String, String> redis() {

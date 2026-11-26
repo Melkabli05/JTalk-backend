@@ -59,6 +59,7 @@ class StageServiceImpl implements StageService {
 
     @Override
     public void vacateSeat(UUID roomId, UUID userId) {
+        stage.clearHostMute(roomId, userId);
         stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> {
             log.info("Seat freed in room {}: promoting queued user {} to the stage", roomId, promoted);
             gateway.setPublishPermission(roomId, promoted, true);
@@ -94,6 +95,7 @@ class StageServiceImpl implements StageService {
         if (!stage.tryClaimStageSeat(roomId, targetUserId, room.maxStageSeats())) {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
+        stage.clearHostMute(roomId, targetUserId);
         gateway.setPublishPermission(roomId, targetUserId, true);
         events.announceStage(roomId, RoomEventType.STAGE_UPDATED, targetUserId);
         log.info("Host {} promoted user {} to stage in room {}", hostId, targetUserId, roomId);
@@ -103,7 +105,9 @@ class StageServiceImpl implements StageService {
     public void muteSpeaker(UUID roomId, UUID hostId, UUID targetUserId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         access.requireHost(room, hostId, "mute speakers");
+        stage.muteByHost(roomId, targetUserId);
         gateway.muteMicrophone(roomId, targetUserId);
+        gateway.setPublishPermission(roomId, targetUserId, false);
         log.info("Host {} muted speaker {} in room {}", hostId, targetUserId, roomId);
     }
 
