@@ -84,14 +84,6 @@ public class StageRepository extends RedisRepository {
         redis().sadd(micMuteKey(roomId), userId.toString());
     }
 
-    public void clearHostMute(UUID roomId, UUID userId) {
-        redis().srem(micMuteKey(roomId), userId.toString());
-    }
-
-    public boolean isMicMutedByHost(UUID roomId, UUID userId) {
-        return Boolean.TRUE.equals(redis().sismember(micMuteKey(roomId), userId.toString()));
-    }
-
     public void setSelfMuted(UUID roomId, UUID userId, boolean muted) {
         String key = selfMuteKey(roomId);
         if (muted) {
@@ -114,10 +106,6 @@ public class StageRepository extends RedisRepository {
         return new MuteState(
                 Boolean.TRUE.equals(selfMuted.toCompletableFuture().join()),
                 Boolean.TRUE.equals(hostMuted.toCompletableFuture().join()));
-    }
-
-    public boolean isSelfMuted(UUID roomId, UUID userId) {
-        return Boolean.TRUE.equals(redis().sismember(selfMuteKey(roomId), userId.toString()));
     }
 
     public void clearUserMuteStates(UUID roomId, UUID userId) {

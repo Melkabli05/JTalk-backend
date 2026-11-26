@@ -1,11 +1,11 @@
 package com.jtalk.livecommunication.controller;
 
-import com.jtalk.livecommunication.domain.enums.RoomFeedEventType;
 import com.jtalk.livecommunication.dto.response.RoomFeedEvent;
 import com.jtalk.livecommunication.dto.response.VoiceRoomResponse;
 import com.jtalk.livecommunication.service.RoomFeed;
 import com.jtalk.livecommunication.service.VoiceRoomService;
 import io.micronaut.core.annotation.Nullable;
+import io.micronaut.core.util.StringUtils;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
@@ -58,7 +58,7 @@ class RoomFeedController {
      */
     @Get(produces = MediaType.TEXT_EVENT_STREAM)
     Flux<Event<?>> watch(@Nullable @QueryValue @Size(max = 10) String targetLanguage) {
-        String filter = targetLanguage == null || targetLanguage.isBlank() ? null : targetLanguage.trim();
+        String filter = StringUtils.trimToNull(targetLanguage);
         Flux<RoomFeedEvent> listThenChanges = Flux.defer(() -> {
             Set<UUID> matchingRoomIds = ConcurrentHashMap.newKeySet();
             // Listen before reading the list, so a room that opens in between is replayed after it instead of being lost.
@@ -83,20 +83,21 @@ class RoomFeedController {
         if (filter == null) {
             return true;
         }
-        if (event.type() == RoomFeedEventType.ROOM_OPENED || event.type() == RoomFeedEventType.ROOM_UPDATED) {
-            VoiceRoomResponse room = event.room();
-            if (room != null && filter.equalsIgnoreCase(room.targetLanguage())) {
-                matchingRoomIds.add(room.id());
-                return true;
+        return switch (event.type()) {
+            case ROOM_OPENED, ROOM_UPDATED -> {
+                VoiceRoomResponse room = event.room();
+                if (room != null && filter.equalsIgnoreCase(room.targetLanguage())) {
+                    matchingRoomIds.add(room.id());
+                    yield true;
+                }
+                if (event.roomId() != null) {
+                    matchingRoomIds.remove(event.roomId());
+                }
+                yield false;
             }
-            if (event.roomId() != null) {
-                matchingRoomIds.remove(event.roomId());
-            }
-            return false;
-        }
-        if (event.type() == RoomFeedEventType.ROOM_CLOSED) {
-            return event.roomId() != null && matchingRoomIds.remove(event.roomId());
-        }
-        return event.roomId() != null && matchingRoomIds.contains(event.roomId());
+            case ROOM_CLOSED -> event.roomId() != null && matchingRoomIds.remove(event.roomId());
+            case ROOM_STATS -> event.roomId() != null && matchingRoomIds.contains(event.roomId());
+            case SNAPSHOT -> true;
+        };
     }
 }

@@ -14,7 +14,6 @@ import com.jtalk.livecommunication.domain.model.RoomSettings;
 import com.jtalk.livecommunication.domain.model.RoomSpeakerSummary;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
 import com.jtalk.livecommunication.repository.RosterRepository;
-import com.jtalk.livecommunication.repository.SpeakerProfileRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
 import com.jtalk.livecommunication.repository.VoiceRoomRepository;
 import com.jtalk.livecommunication.service.RoomFeed;
@@ -41,12 +40,9 @@ import static com.jtalk.livecommunication.config.CommunicationConstants.MAX_PAGE
 
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 @Singleton
@@ -63,7 +59,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     private final StageRepository stage;
     private final LiveStatsRepository liveStats;
     private final RosterRepository roster;
-    private final SpeakerProfileRepository speakerProfiles;
+    private final SpeakerProfileExpander speakerExpander;
     private final LiveKitGateway gateway;
     private final ApplicationEventPublisher<VoiceRoomClosed> closedEvents;
     private final ApiMapper mapper;
@@ -106,17 +102,15 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     @Override
     public CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt,
-                                                           @Nullable UUID afterId) {
-        return listActiveRooms(targetLanguage, size, afterCreatedAt, afterId, false);
-    }
-
-    @Override
-    public CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt,
                                                            @Nullable UUID afterId, boolean expandSpeakers) {
         CursoredPage<VoiceRoomResponse> page = caches.getCache(FEED_CACHE).get(
                 Arrays.asList(targetLanguage, size, afterCreatedAt, afterId), FEED_PAGE,
                 () -> loadFeed(targetLanguage, size, afterCreatedAt, afterId));
-        return expandSpeakers ? expandPage(page) : page;
+        if (!expandSpeakers || page.isEmpty()) {
+            return page;
+        }
+        List<VoiceRoomResponse> expanded = speakerExpander.expandAll(page.getContent());
+        return CursoredPage.of(expanded, page.getPageable(), page.getCursors(), null);
     }
 
     private CursoredPage<VoiceRoomResponse> loadFeed(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt,
@@ -132,24 +126,14 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     }
 
     @Override
-    public List<VoiceRoomResponse> openRooms() {
-        return openRooms(null);
-    }
-
-    @Override
     public List<VoiceRoomResponse> openRooms(@Nullable String targetLanguage) {
-        return expandRooms(loadFeed(targetLanguage, MAX_PAGE_SIZE, null, null).getContent());
-    }
-
-    @Override
-    public VoiceRoomResponse getRoom(UUID roomId) {
-        return getRoom(roomId, false);
+        return speakerExpander.expandAll(loadFeed(targetLanguage, MAX_PAGE_SIZE, null, null).getContent());
     }
 
     @Override
     public VoiceRoomResponse getRoom(UUID roomId, boolean expandSpeakers) {
         VoiceRoomResponse room = toResponse(getRequiredActiveRoom(roomId));
-        return expandSpeakers ? expandRoom(room) : room;
+        return expandSpeakers ? speakerExpander.expand(room) : room;
     }
 
     @Override
@@ -163,42 +147,6 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         feed.updated(updated);
         events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
         return updated;
-    }
-
-    private CursoredPage<VoiceRoomResponse> expandPage(CursoredPage<VoiceRoomResponse> page) {
-        Map<UUID, RoomSpeakerSummary> summaries = loadSummaries(page.getContent());
-        return page.map(room -> attachSummaries(room, summaries));
-    }
-
-    private List<VoiceRoomResponse> expandRooms(List<VoiceRoomResponse> list) {
-        if (list.isEmpty()) {
-            return list;
-        }
-        Map<UUID, RoomSpeakerSummary> summaries = loadSummaries(list);
-        return list.stream().map(room -> attachSummaries(room, summaries)).toList();
-    }
-
-    private VoiceRoomResponse expandRoom(VoiceRoomResponse room) {
-        return attachSummaries(room, loadSummaries(List.of(room)));
-    }
-
-    private Map<UUID, RoomSpeakerSummary> loadSummaries(List<VoiceRoomResponse> list) {
-        Set<UUID> ids = new LinkedHashSet<>();
-        for (VoiceRoomResponse room : list) {
-            ids.add(room.hostId());
-            if (room.speakers() != null) {
-                ids.addAll(room.speakers());
-            }
-        }
-        return speakerProfiles.findSummaries(ids);
-    }
-
-    private static VoiceRoomResponse attachSummaries(VoiceRoomResponse room, Map<UUID, RoomSpeakerSummary> summaries) {
-        RoomSpeakerSummary host = summaries.get(room.hostId());
-        List<RoomSpeakerSummary> speakers = room.speakers() == null
-                ? List.of()
-                : room.speakers().stream().map(summaries::get).filter(Objects::nonNull).toList();
-        return room.withProfiles(host, speakers);
     }
 
     /**

@@ -36,10 +36,6 @@ public record RoomFeedEvent(RoomFeedEventType type, @Nullable UUID roomId, @Null
         return new RoomFeedEvent(RoomFeedEventType.ROOM_CLOSED, roomId, null, null, null, null);
     }
 
-    public static RoomFeedEvent stats(UUID roomId, RoomLiveStats live) {
-        return stats(roomId, live, null);
-    }
-
     public static RoomFeedEvent stats(UUID roomId, RoomLiveStats live, @Nullable List<RoomSpeakerSummary> speakerProfiles) {
         return new RoomFeedEvent(RoomFeedEventType.ROOM_STATS, roomId, null, null, live, speakerProfiles);
     }
