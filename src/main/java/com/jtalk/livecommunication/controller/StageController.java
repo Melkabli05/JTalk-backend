@@ -1,6 +1,7 @@
 package com.jtalk.livecommunication.controller;
 
 import com.jtalk.livecommunication.dto.request.NetworkModeRequest;
+import com.jtalk.livecommunication.dto.request.SelfMuteRequest;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.dto.response.StageResponse;
 import com.jtalk.livecommunication.service.StageService;
@@ -10,6 +11,7 @@ import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
+import io.micronaut.http.annotation.Put;
 import io.micronaut.http.annotation.Status;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
@@ -83,5 +85,11 @@ class StageController {
     @Status(HttpStatus.NO_CONTENT)
     void updateNetworkMode(UUID roomId, @CurrentUser UUID userId, @Body @Valid NetworkModeRequest request) {
         stage.updateNetworkMode(roomId, userId, request);
+    }
+
+    @Put("/self-mute")
+    @Status(HttpStatus.NO_CONTENT)
+    void updateSelfMute(UUID roomId, @CurrentUser UUID userId, @Body @Valid SelfMuteRequest request) {
+        stage.setSelfMuted(roomId, userId, request.muted());
     }
 }

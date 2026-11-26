@@ -40,6 +40,9 @@ public interface StageService {
     /** Host-only: steps a speaker down to the audience. */
     void demoteToListener(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
 
+    /** Persists a seated speaker's self-mute preference across reconnects without revoking SFU publish rights. */
+    void setSelfMuted(@NonNull UUID roomId, @NonNull UUID userId, boolean muted);
+
     /**
      * {@code LOW_BANDWIDTH} unsubscribes the user from their secondary tracks and remembers them; {@code OPTIMAL} restores
      * those (plus any the request lists).

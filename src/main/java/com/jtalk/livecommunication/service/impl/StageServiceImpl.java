@@ -44,6 +44,7 @@ class StageServiceImpl implements StageService {
         if (!stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats())) {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
+        stage.clearUserMuteStates(roomId, userId);
         gateway.setPublishPermission(roomId, userId, true);
         events.announceStage(roomId, RoomEventType.STAGE_UPDATED, null);
         return rooms.sessionFor(room, userId, true);
@@ -59,7 +60,7 @@ class StageServiceImpl implements StageService {
 
     @Override
     public void vacateSeat(UUID roomId, UUID userId) {
-        stage.clearHostMute(roomId, userId);
+        stage.clearUserMuteStates(roomId, userId);
         stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> {
             log.info("Seat freed in room {}: promoting queued user {} to the stage", roomId, promoted);
             gateway.setPublishPermission(roomId, promoted, true);
@@ -95,7 +96,7 @@ class StageServiceImpl implements StageService {
         if (!stage.tryClaimStageSeat(roomId, targetUserId, room.maxStageSeats())) {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
-        stage.clearHostMute(roomId, targetUserId);
+        stage.clearUserMuteStates(roomId, targetUserId);
         gateway.setPublishPermission(roomId, targetUserId, true);
         events.announceStage(roomId, RoomEventType.STAGE_UPDATED, targetUserId);
         log.info("Host {} promoted user {} to stage in room {}", hostId, targetUserId, roomId);
@@ -117,6 +118,15 @@ class StageServiceImpl implements StageService {
         access.requireHost(room, hostId, "demote speakers");
         leaveStageSeat(roomId, targetUserId);
         log.info("Host {} demoted speaker {} to listener in room {}", hostId, targetUserId, roomId);
+    }
+
+    @Override
+    public void setSelfMuted(UUID roomId, UUID userId, boolean muted) {
+        rooms.getRequiredActiveRoom(roomId);
+        if (!stage.isOnStage(roomId, userId)) {
+            throw ProblemType.NOT_IN_ROOM.because("Only seated speakers can update microphone mute state.");
+        }
+        stage.setSelfMuted(roomId, userId, muted);
     }
 
     @Override
