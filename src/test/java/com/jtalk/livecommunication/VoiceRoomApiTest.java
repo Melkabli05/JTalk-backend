@@ -127,7 +127,7 @@ class VoiceRoomApiTest extends ApiTestBase {
 
         var result = http.retrieve(HttpRequest.GET(url).bearerAuth(token("guest")), MAP);
         assertEquals("SPEAKER", result.get("role"));
-        assertFalse(result.containsKey("liveKitToken"));
+        assertFalse(result.containsKey("mediaToken"));
         var snapshot = (Map<?, ?>) result.get("snapshot");
         assertEquals(0, ((Number) snapshot.get("audienceCount")).intValue());
         assertEquals(List.of(), snapshot.get("handRaiseQueue"));
@@ -151,8 +151,8 @@ class VoiceRoomApiTest extends ApiTestBase {
         Map<String, Object> hostSession = join(roomId, "host");
         assertEquals("HOST", hostSession.get("role"));
         assertEquals(true, hostSession.get("canPublishAudio"));
-        assertEquals("token:" + id("host") + ":publish=true", hostSession.get("liveKitToken"));
-        assertEquals(FakeLiveKitGateway.SERVER_URL, hostSession.get("liveKitUrl"), "clients are told where to connect");
+        assertEquals("token:" + id("host") + ":publish=true", hostSession.get("mediaToken"));
+        assertEquals(FakeLiveKitGateway.SERVER_URL, hostSession.get("mediaUrl"), "clients are told where to connect");
         Map<String, Object> aliceSession = join(roomId, "alice");
         assertEquals("LISTENER", aliceSession.get("role"));
         assertEquals(false, aliceSession.get("canPublishAudio"));

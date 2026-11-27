@@ -11,12 +11,12 @@ import io.micronaut.serde.annotation.Serdeable;
  * (LiveKit), and their rights. Rights change while connected (the server updates them), so the token needs no refresh.
  */
 @Serdeable.Serializable
-public record RoomSessionResponse(VoiceRoomResponse room, String liveKitUrl, String liveKitToken, ParticipantRole role,
+public record RoomSessionResponse(VoiceRoomResponse room, String mediaUrl, String mediaToken, ParticipantRole role,
                                   boolean canPublishAudio, boolean isChatMuted, boolean isSelfMuted, boolean isMutedByHost,
                                   @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable RoomJoinSnapshot snapshot) {
 
-    public RoomSessionResponse(VoiceRoomResponse room, String liveKitUrl, String liveKitToken, ParticipantRole role,
+    public RoomSessionResponse(VoiceRoomResponse room, String mediaUrl, String mediaToken, ParticipantRole role,
                                boolean canPublishAudio, boolean isChatMuted, @Nullable RoomJoinSnapshot snapshot) {
-        this(room, liveKitUrl, liveKitToken, role, canPublishAudio, isChatMuted, false, false, snapshot);
+        this(room, mediaUrl, mediaToken, role, canPublishAudio, isChatMuted, false, false, snapshot);
     }
 }
