@@ -25,12 +25,6 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 class CommentServiceImpl implements CommentService {
 
-    /** Control characters (a line break is the one that stays) and the text-direction overrides that can make one person's words read as another's. */
-    private static final Pattern UNWANTED = Pattern.compile("[\\p{Cc}&&[^\\n]]|[\\u202A-\\u202E]");
-    private static final Pattern BLANK_LINES = Pattern.compile("\\n{3,}");
-    /** Something a person can see: a letter, a number, a mark, a symbol or punctuation. Invisible characters alone make no comment. */
-    private static final Pattern VISIBLE = Pattern.compile("[\\p{L}\\p{N}\\p{M}\\p{P}\\p{S}]");
-
     private final VoiceRoomService rooms;
     private final CommentRepository comments;
     private final RoomAccessValidator access;
@@ -165,7 +159,7 @@ class CommentServiceImpl implements CommentService {
     }
 
     private static boolean isVisible(String text) {
-        return VISIBLE.matcher(text).find();
+        return TextSanitizer.isVisible(text);
     }
 
     private VoiceRoom requireHost(UUID roomId, UUID hostId, String action) {
@@ -174,8 +168,7 @@ class CommentServiceImpl implements CommentService {
         return room;
     }
 
-    /** Text as it is kept: without control characters or direction overrides, runs of blank lines cut to one, trimmed. Any script and any emoji stay. */
     private static String clean(String text) {
-        return BLANK_LINES.matcher(UNWANTED.matcher(text).replaceAll("")).replaceAll("\n\n").strip();
+        return TextSanitizer.cleanMultiLine(text);
     }
 }

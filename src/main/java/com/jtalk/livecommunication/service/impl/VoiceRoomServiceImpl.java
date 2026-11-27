@@ -92,7 +92,9 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     }
 
     private RoomSessionResponse open(UUID hostId, CreateVoiceRoomRequest request) {
-        VoiceRoom saved = rooms.save(VoiceRoom.open(request.title(), request.topic(), hostId, request.targetLanguage(),
+        String title = sanitizeRequiredTitle(request.title());
+        String topic = sanitizeOptionalTopic(request.topic());
+        VoiceRoom saved = rooms.save(VoiceRoom.open(title, topic, hostId, request.targetLanguage(),
                 request.nativeLanguage(), request.seatsOrDefault()));
         try {
             gateway.createRoom(saved.id());
@@ -161,11 +163,33 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     public VoiceRoomResponse updateRoom(UUID roomId, UUID requesterId, UpdateVoiceRoomRequest request) {
         VoiceRoom room = loadForUpdate(roomId);
         access.requireHost(room, requesterId, "update room settings");
-        VoiceRoom saved = rooms.update(room.withSettings(request.title(), request.topic(), request.maxStageSeats()));
+        String title = request.title() == null ? null : sanitizeRequiredTitle(request.title());
+        String topic = sanitizeOptionalTopic(request.topic());
+        VoiceRoom saved = rooms.update(room.withSettings(title, topic, request.maxStageSeats()));
         VoiceRoomResponse updated = toResponse(saved);
         feed.updated(updated);
         events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
         return updated;
+    }
+
+    private static String sanitizeRequiredTitle(String raw) {
+        String cleaned = TextSanitizer.cleanSingleLine(raw);
+        if (cleaned == null || cleaned.isEmpty()) {
+            throw ProblemType.INVALID_INPUT.because("Room title must contain visible characters");
+        }
+        return cleaned;
+    }
+
+    @Nullable
+    private static String sanitizeOptionalTopic(@Nullable String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String cleaned = TextSanitizer.cleanSingleLine(raw);
+        if (!raw.isEmpty() && (cleaned == null || cleaned.isEmpty())) {
+            throw ProblemType.INVALID_INPUT.because("Room topic must contain visible characters or be empty");
+        }
+        return cleaned;
     }
 
     /**

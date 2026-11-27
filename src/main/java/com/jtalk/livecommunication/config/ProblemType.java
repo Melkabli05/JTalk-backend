@@ -26,6 +26,7 @@ public enum ProblemType {
     NOT_IN_ROOM(HttpStatus.FORBIDDEN, "Join the room first"),
     REACTING_TOO_FAST(HttpStatus.TOO_MANY_REQUESTS, "Reacting too fast"),
     INVALID_COMMENT(HttpStatus.BAD_REQUEST, "Not a comment the room can take"),
+    INVALID_INPUT(HttpStatus.BAD_REQUEST, "Invalid input"),
     CHAT_MUTED(HttpStatus.FORBIDDEN, "Muted in the chat"),
     COMMENTING_TOO_FAST(HttpStatus.TOO_MANY_REQUESTS, "Commenting too fast"),
     COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "Comment not found"),
