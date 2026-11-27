@@ -13,21 +13,25 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Who is in the room right now: ZSET {@code voiceroom:{id}:presence}, userId -> when they joined (epoch millis) until LiveKit
  * confirms their media connection, then {@link #CONNECTED}, which no staleness check ever trims. Someone who joined but never
  * connected ages out on read, so no sweeper is needed. Kicked users are kept in {@code voiceroom:{id}:banned}.
+ * Also maintains {@link #USER_ROOM_KEY} for O(1) per-user active room lookup.
  */
 @Singleton
 public class PresenceRepository extends RedisRepository {
 
     private static final double CONNECTED = Long.MAX_VALUE;
+    static final String USER_ROOM_KEY = "voiceroom:user-room";
 
     private final Clock clock;
     private final Duration presenceTimeout;
@@ -42,13 +46,18 @@ public class PresenceRepository extends RedisRepository {
 
     public boolean connected(UUID roomId, UUID userId) {
         RedisAsyncCommands<String, String> redis = connection.async();
-        RedisFuture<Long> added = redis.zadd(key(roomId), CONNECTED, userId.toString());
-        await(added, redis.expire(key(roomId), ttlSeconds));
+        String uid = userId.toString();
+        RedisFuture<Long> added = redis.zadd(key(roomId), CONNECTED, uid);
+        await(added, redis.expire(key(roomId), ttlSeconds), redis.hset(USER_ROOM_KEY, uid, roomId.toString()));
         return added.toCompletableFuture().join() > 0;
     }
 
     public boolean remove(UUID roomId, UUID userId) {
-        return connection.sync().zrem(key(roomId), userId.toString()) > 0;
+        RedisAsyncCommands<String, String> redis = connection.async();
+        String uid = userId.toString();
+        RedisFuture<Long> removed = redis.zrem(key(roomId), uid);
+        await(removed, redis.hdel(USER_ROOM_KEY, uid));
+        return removed.toCompletableFuture().join() > 0;
     }
 
     public boolean isPresent(UUID roomId, UUID userId) {
@@ -79,11 +88,19 @@ public class PresenceRepository extends RedisRepository {
     }
 
     /**
-     * Finds the first active room {@code userId} is currently present in, in one pipelined Redis round trip.
+     * Finds the first active room {@code userId} is currently present in, using the O(1) {@code voiceroom:user-room} index first
+     * and falling back to a pipelined scan across {@code activeRoomIds} if the user has not yet been indexed.
      */
     public Optional<UUID> findActiveRoomForUser(Collection<UUID> activeRoomIds, UUID userId) {
         if (activeRoomIds.isEmpty()) {
             return Optional.empty();
+        }
+        String mapped = connection.sync().hget(USER_ROOM_KEY, userId.toString());
+        if (mapped != null) {
+            UUID indexedRoomId = UUID.fromString(mapped);
+            if (activeRoomIds.contains(indexedRoomId) && isPresent(indexedRoomId, userId)) {
+                return Optional.of(indexedRoomId);
+            }
         }
         String member = userId.toString();
         long cutoff = freshnessCutoff().toEpochMilli();
@@ -144,7 +161,14 @@ public class PresenceRepository extends RedisRepository {
     }
 
     public void clear(UUID roomId) {
-        connection.sync().del(key(roomId), bannedKey(roomId));
+        List<String> members = connection.sync().zrange(key(roomId), 0, -1);
+        RedisAsyncCommands<String, String> redis = connection.async();
+        RedisFuture<Long> deleted = redis.del(key(roomId), bannedKey(roomId));
+        if (!members.isEmpty()) {
+            await(deleted, redis.hdel(USER_ROOM_KEY, members.toArray(String[]::new)));
+        } else {
+            await(deleted);
+        }
     }
 
     /** A join that LiveKit has not confirmed within this long no longer counts as present. */

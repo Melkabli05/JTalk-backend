@@ -54,6 +54,7 @@ import java.util.UUID;
 class VoiceRoomServiceImpl implements VoiceRoomService {
 
     private static final String FEED_CACHE = "active-rooms-feed";
+    private static final String EXPANDED_FEED_CACHE = "active-rooms-feed-expanded";
     private static final String ACTIVE_ROOM_IDS_CACHE = "active-room-ids";
     @SuppressWarnings("unchecked")
     private static final Class<CursoredPage<VoiceRoomResponse>> FEED_PAGE = (Class<CursoredPage<VoiceRoomResponse>>) (Class<?>) CursoredPage.class;
@@ -77,6 +78,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     @Override
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
     @CacheInvalidate(value = ACTIVE_ROOM_IDS_CACHE, all = true)
     public RoomSessionResponse createRoom(UUID hostId, CreateVoiceRoomRequest request) {
         return rooms.findFirstByHostIdAndStatus(hostId, VoiceRoomStatus.ACTIVE)
@@ -111,14 +113,22 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @Override
     public CursoredPage<VoiceRoomResponse> listActiveRooms(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt,
                                                            @Nullable UUID afterId, boolean expandSpeakers) {
-        CursoredPage<VoiceRoomResponse> page = caches.getCache(FEED_CACHE).get(
-                Arrays.asList(targetLanguage, size, afterCreatedAt, afterId), FEED_PAGE,
-                () -> loadFeed(targetLanguage, size, afterCreatedAt, afterId));
-        if (!expandSpeakers || page.isEmpty()) {
-            return page;
+        if (!expandSpeakers) {
+            return caches.getCache(FEED_CACHE).get(
+                    Arrays.asList(targetLanguage, size, afterCreatedAt, afterId), FEED_PAGE,
+                    () -> loadFeed(targetLanguage, size, afterCreatedAt, afterId));
         }
-        List<VoiceRoomResponse> expanded = speakerExpander.expandAll(page.getContent());
-        return CursoredPage.of(expanded, page.getPageable(), page.getCursors(), null);
+        return caches.getCache(EXPANDED_FEED_CACHE).get(
+                Arrays.asList(targetLanguage, size, afterCreatedAt, afterId), FEED_PAGE,
+                () -> {
+                    CursoredPage<VoiceRoomResponse> page = caches.getCache(FEED_CACHE).get(
+                            Arrays.asList(targetLanguage, size, afterCreatedAt, afterId), FEED_PAGE,
+                            () -> loadFeed(targetLanguage, size, afterCreatedAt, afterId));
+                    if (page.isEmpty()) {
+                        return page;
+                    }
+                    return CursoredPage.of(speakerExpander.expandAll(page.getContent()), page.getPageable(), page.getCursors(), null);
+                });
     }
 
     private CursoredPage<VoiceRoomResponse> loadFeed(@Nullable String targetLanguage, int size, @Nullable Instant afterCreatedAt,
@@ -147,6 +157,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @Override
     @CacheInvalidate(value = "room-metadata", parameters = "roomId")
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
     public VoiceRoomResponse updateRoom(UUID roomId, UUID requesterId, UpdateVoiceRoomRequest request) {
         VoiceRoom room = loadForUpdate(roomId);
         access.requireHost(room, requesterId, "update room settings");
@@ -166,6 +177,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @Transactional
     @CacheInvalidate(value = "room-metadata", parameters = "roomId")
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
     @CacheInvalidate(value = ACTIVE_ROOM_IDS_CACHE, all = true)
     public void closeRoom(UUID roomId, UUID requesterId) {
         VoiceRoom room = loadForUpdate(roomId);
@@ -185,6 +197,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @Override
     @CacheInvalidate(value = "room-metadata", parameters = "roomId")
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
     public void handOverRoom(UUID roomId, UUID fromHostId, UUID toUserId) {
         VoiceRoom room = loadForUpdate(roomId);
         if (!room.isHost(fromHostId)) {
@@ -199,6 +212,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @Override
     @CacheInvalidate(value = "room-metadata", parameters = "roomId")
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
     public void transferHost(UUID roomId, UUID currentHostId, UUID toUserId) {
         if (currentHostId.equals(toUserId)) {
             throw ProblemType.CANNOT_TRANSFER_HOST_TO_SELF.because("Choose a different participant to transfer the host role to");
@@ -225,6 +239,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     @Override
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
     @CacheInvalidate(value = ACTIVE_ROOM_IDS_CACHE, all = true)
     public void eraseRoomsHostedBy(UUID hostId) {
         rooms.deleteByHostId(hostId);

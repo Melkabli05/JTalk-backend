@@ -58,9 +58,10 @@ public class RosterRepository extends RedisRepository {
         RedisAsyncCommands<String, String> redis = connection.async();
         String id = userId.toString();
         RedisFuture<Long> present = redis.zrem(PresenceRepository.key(roomId), id);
+        RedisFuture<Long> userIndex = redis.hdel(PresenceRepository.USER_ROOM_KEY, id);
         RedisFuture<Long> queued = redis.zrem(StageRepository.queueKey(roomId), id);
         RedisFuture<Double> seat = redis.zscore(StageRepository.stageKey(roomId), id);
-        await(present, queued, seat);
+        await(present, userIndex, queued, seat);
         return new Departure(present.toCompletableFuture().join() > 0, seat.toCompletableFuture().join() != null);
     }
 
