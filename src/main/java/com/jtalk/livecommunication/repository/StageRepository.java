@@ -13,6 +13,7 @@ import jakarta.inject.Singleton;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -68,12 +69,37 @@ public class StageRepository extends RedisRepository {
         return result != 0;
     }
 
+    /** Frees the user's seat without auto-promoting anyone from the hand-raise queue. */
+    public boolean releaseSeatOnly(UUID roomId, UUID userId) {
+        return redis().zrem(stageKey(roomId), userId.toString()) > 0;
+    }
+
     /** Frees the user's seat and, atomically, seats the longest-waiting hand-raiser; returns who was seated. */
     public Optional<UUID> releaseAndPromoteNext(UUID roomId, UUID userId) {
         String promoted = releaseAndPromoteScript.execute(redis(), ScriptOutputType.VALUE,
                 new String[]{stageKey(roomId), queueKey(roomId)},
                 userId.toString(), nowMillis(), ttlSeconds);
         return Optional.ofNullable(promoted).map(UUID::fromString);
+    }
+
+    public boolean addModerator(UUID roomId, UUID userId) {
+        String key = moderatorsKey(roomId);
+        RedisAsyncCommands<String, String> async = connection.async();
+        RedisFuture<Long> added = async.sadd(key, userId.toString());
+        await(added, async.expire(key, Long.parseLong(ttlSeconds)));
+        return added.toCompletableFuture().join() > 0;
+    }
+
+    public boolean removeModerator(UUID roomId, UUID userId) {
+        return redis().srem(moderatorsKey(roomId), userId.toString()) > 0;
+    }
+
+    public boolean isModerator(UUID roomId, UUID userId) {
+        return Boolean.TRUE.equals(redis().sismember(moderatorsKey(roomId), userId.toString()));
+    }
+
+    public Set<UUID> moderators(UUID roomId) {
+        return redis().smembers(moderatorsKey(roomId)).stream().map(UUID::fromString).collect(java.util.stream.Collectors.toSet());
     }
 
     public boolean isOnStage(UUID roomId, UUID userId) {
@@ -126,7 +152,11 @@ public class StageRepository extends RedisRepository {
     }
 
     public void clear(UUID roomId) {
-        redis().del(stageKey(roomId), queueKey(roomId), micMuteKey(roomId), selfMuteKey(roomId));
+        redis().del(stageKey(roomId), queueKey(roomId), micMuteKey(roomId), selfMuteKey(roomId), moderatorsKey(roomId));
+    }
+
+    static String moderatorsKey(UUID roomId) {
+        return roomKey(roomId, "moderators");
     }
 
     private static String micMuteKey(UUID roomId) {

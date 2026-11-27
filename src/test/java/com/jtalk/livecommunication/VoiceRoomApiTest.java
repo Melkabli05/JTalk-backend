@@ -159,30 +159,36 @@ class VoiceRoomApiTest extends ApiTestBase {
         join(roomId, "bob");
         join(roomId, "carol");
 
-        // Alice takes a free seat herself and is granted publish rights on the media server
-        Map<String, Object> claimed = post(roomId, "/stage/join", "alice");
-        assertEquals("SPEAKER", claimed.get("role"));
-        assertEquals(true, claimed.get("canPublishAudio"));
+        // Alice cannot claim a stage seat directly as a LISTENER (403); host promotes her
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> post(roomId, "/stage/join", "alice"));
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/promote/" + id("alice"), "host").status());
         assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("alice"), true)));
 
-        // Bob raises a hand while a seat is still free; then Carol takes the last seat, so the stage is full
+        // Bob raises a hand while a seat is still free; Carol is made MODERATOR and joins the last seat directly
         assertEquals(HttpStatus.ACCEPTED, postEmpty(roomId, "/stage/raise-hand", "bob").status());
-        post(roomId, "/stage/join", "carol");
-        assertProblem(HttpStatus.CONFLICT, "stage-full", () -> post(roomId, "/stage/join", "bob"));
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/moderator/" + id("carol"), "host").status());
+        Map<String, Object> claimed = post(roomId, "/stage/join", "carol");
+        assertEquals("MODERATOR", claimed.get("role"));
+        assertEquals(true, claimed.get("canPublishAudio"));
+        assertProblem(HttpStatus.CONFLICT, "stage-full", () -> postEmpty(roomId, "/stage/promote/" + id("bob"), "carol"));
         Map<String, Object> stage = getStage(roomId);
         assertEquals(new HashSet<>(ids("host", "alice", "carol")), new HashSet<>((List<?>) stage.get("speakers")));
         assertEquals(ids("bob"), stage.get("handRaiseQueue"));
 
         // Roles are visible to everyone in the room
         assertEquals(Map.of(id("host").toString(), "HOST", id("alice").toString(), "SPEAKER",
-                id("bob").toString(), "LISTENER", id("carol").toString(), "SPEAKER"), rolesByUser(getParticipants(roomId)));
+                id("bob").toString(), "LISTENER", id("carol").toString(), "MODERATOR"), rolesByUser(getParticipants(roomId)));
 
-        // Alice steps down: the longest-waiting hand-raiser (Bob) takes her seat, atomically
+        // Alice steps down: freed seat stays open (no queue auto-promotion) until moderator Carol approves Bob
         gateway.permissionChanges.clear();
         assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/leave", "alice").status());
+        assertEquals(new HashSet<>(ids("host", "carol")), new HashSet<>((List<?>) getStage(roomId).get("speakers")));
+        assertEquals(ids("bob"), getStage(roomId).get("handRaiseQueue"));
+        assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("alice"), false)));
+
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/promote/" + id("bob"), "carol").status());
         assertEquals(new HashSet<>(ids("host", "carol", "bob")), new HashSet<>((List<?>) getStage(roomId).get("speakers")));
         assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
-        assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("alice"), false)));
         assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("bob"), true)));
 
         // Closing: only the host; then the room is gone from discovery and cannot be joined
@@ -233,7 +239,7 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertEquals(id("host").toString(), room.get("hostId"));
 
         join(roomId, "host");
-        assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "host-cannot-leave-stage", () -> postEmpty(roomId, "/stage/leave", "host"));
+        assertProblem(HttpStatus.FORBIDDEN, "host-cannot-leave-stage", () -> postEmpty(roomId, "/stage/leave", "host"));
         assertProblem(HttpStatus.CONFLICT, "already-on-stage", () -> postEmpty(roomId, "/stage/raise-hand", "host"));
     }
 

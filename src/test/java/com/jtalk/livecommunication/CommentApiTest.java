@@ -215,7 +215,8 @@ class CommentApiTest extends ApiTestBase {
 
         assertEquals(true, join(room, "alice").get("isChatMuted"));
         assertEquals(false, join(room, "bob").get("isChatMuted"));
-        assertEquals(true, post(room, "/stage/join", "alice").get("isChatMuted"));
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(room, "/stage/promote/" + id("alice"), "host").status());
+        assertEquals(true, join(room, "alice").get("isChatMuted"));
         assertProblem(HttpStatus.FORBIDDEN, "chat-muted", () -> comment(room, "alice", text("after")));
         assertEquals(true, chat(room, "alice").get("muted"), "they are told when they open the chat, so it can say so");
         assertEquals(false, chat(room, "bob").get("muted"));

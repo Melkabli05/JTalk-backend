@@ -16,7 +16,16 @@ public interface RoomAccessValidator {
      */
     void requireHost(VoiceRoom room, UUID userId, String action);
 
-    /** The host may remove anyone but themselves: 403 {@code not-room-host}, or 422 {@code cannot-kick-host}. */
+    /** Allows the room host or a moderator in the room: 403 {@code not-room-moderator} otherwise. */
+    void requireModeratorOrHost(VoiceRoom room, UUID userId, String action);
+
+    /**
+     * Allows host or moderator to act on a target user, enforcing that moderators can never act on the host
+     * or peer moderators (403 {@code not-room-host} / {@code host-cannot-leave-stage}).
+     */
+    void requireCanModerateTarget(VoiceRoom room, UUID requesterId, UUID targetId, String action);
+
+    /** The host or a moderator may remove speakers/listeners (never the host; moderators cannot kick peer moderators). */
     void requireCanKick(VoiceRoom room, UUID requesterId, UUID targetId);
 
     /**

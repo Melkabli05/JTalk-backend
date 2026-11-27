@@ -33,19 +33,19 @@ class RoomAccessValidatorTest {
     void theHostMayKickEveryoneExceptThemselves() {
         assertDoesNotThrow(() -> access.requireCanKick(room, host, guest));
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", "kick participants", () -> access.requireCanKick(room, guest, host));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", "kick participants", () -> access.requireCanKick(room, guest, host));
         assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "cannot-kick-host", "host cannot be kicked", () -> access.requireCanKick(room, host, host));
     }
 
     @Test
     void notBeingTheHostIsCheckedBeforeWhoIsBeingKicked() {
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", "kick participants", () -> access.requireCanKick(room, guest, host));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", "kick participants", () -> access.requireCanKick(room, guest, host));
     }
 
     @Test
     void theHostKeepsTheirSeatButEveryoneElseMayLeaveTheirs() {
         assertDoesNotThrow(() -> access.requireCanLeaveStage(room, guest));
 
-        assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "host-cannot-leave-stage", "keeps their stage seat", () -> access.requireCanLeaveStage(room, host));
+        assertProblem(HttpStatus.FORBIDDEN, "host-cannot-leave-stage", "keeps their stage seat", () -> access.requireCanLeaveStage(room, host));
     }
 }

@@ -53,13 +53,12 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         assertTrue(speakers(roomId).contains(id("alice").toString()));
         assertEquals("RECONNECTING", statusOf(roomId, "alice"));
 
-        // The lease expires (1s in tests) -> Redis keyspace event -> seat freed and bob promoted.
-        await("bob promoted after alice's lease expired", 10_000, () -> speakers(roomId).contains(id("bob").toString()));
-        assertEquals(new HashSet<>(ids("host", "bob")), speakers(roomId));
-        assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"));
+        // The lease expires (1s in tests) -> Redis keyspace event -> seat freed without auto-promoting bob.
+        await("alice's seat freed after lease expired", 10_000, () -> !speakers(roomId).contains(id("alice").toString()));
+        assertEquals(new HashSet<>(ids("host")), speakers(roomId));
+        assertEquals(ids("bob"), getStage(roomId).get("handRaiseQueue"));
         assertFalse(getParticipants(roomId).stream().anyMatch(p -> id("alice").toString().equals(p.get("userId"))),
                 "a speaker whose lease ran out is no longer in the room");
-        assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("bob"), true)));
         assertTrue(gateway.events.stream().anyMatch(e -> e.type() == RoomEventType.STAGE_UPDATED), "the room is told the stage changed");
     }
 
@@ -173,13 +172,13 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
 
         postEmpty(roomId, "/stage/raise-hand", "bob");
         delete(roomId, "/stage/raise-hand", "bob");
-        post(roomId, "/stage/join", "alice");
+        postEmpty(roomId, "/stage/promote/" + id("alice"), "host");
         webhook("participant_left", roomId, "alice");
         join(roomId, "alice");
         postEmpty(roomId, "/stage/leave", "alice");
 
         assertEquals(List.of(
-                "HAND_RAISED:" + id("bob"), "HAND_LOWERED:" + id("bob"), "STAGE_UPDATED:null",
+                "HAND_RAISED:" + id("bob"), "HAND_LOWERED:" + id("bob"), "STAGE_UPDATED:" + id("alice"),
                 "SPEAKER_RECONNECTING:" + id("alice"), "SPEAKER_RECONNECTED:" + id("alice"), "STAGE_UPDATED:null"),
                 gateway.events.stream().map(e -> e.type() + ":" + e.targetUserId()).toList());
         assertTrue(gateway.events.stream().allMatch(e -> e.roomId().equals(uuid(roomId))));
@@ -193,7 +192,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         join(roomId, "bob");
 
         postEmpty(roomId, "/stage/raise-hand", "bob");
-        post(roomId, "/stage/join", "alice");
+        postEmpty(roomId, "/stage/promote/" + id("alice"), "host");
 
         var raised = gateway.events.get(0);
         var seated = gateway.events.get(1);
@@ -264,15 +263,19 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         join(roomId, "bob");
         postEmpty(roomId, "/stage/raise-hand", "bob");  // NOSCRIPT -> falls back to sending the source
         assertEquals(ids("bob"), getStage(roomId).get("handRaiseQueue"));
-        postEmpty(roomId, "/stage/leave", "alice");     // release-and-promote also recovers
-        assertEquals(new HashSet<>(ids("host", "bob")), speakers(roomId));
+        postEmpty(roomId, "/stage/leave", "alice");     // freed seat stays open; no queue auto-promotion
+        assertEquals(new HashSet<>(ids("host")), speakers(roomId));
+        assertEquals(ids("bob"), getStage(roomId).get("handRaiseQueue"));
     }
 
     @Test
     void concurrentSeatClaimsNeverOverfillTheStage() throws Exception {
         String roomId = createRoom("host", "Race", 2);   // the host plus exactly one free seat
         List<String> racers = java.util.stream.IntStream.range(0, 12).mapToObj(i -> "racer" + i).toList();
-        racers.forEach(racer -> join(roomId, racer));
+        racers.forEach(racer -> {
+            join(roomId, racer);
+            postEmpty(roomId, "/stage/moderator/" + id(racer), "host");
+        });
 
         var startTogether = new java.util.concurrent.CountDownLatch(1);
         try (var pool = java.util.concurrent.Executors.newFixedThreadPool(racers.size())) {
@@ -303,7 +306,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         join(roomId, "bob");
         postEmpty(roomId, "/stage/raise-hand", "bob");
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> postEmpty(roomId, "/stage/promote/" + id("bob"), "alice"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> postEmpty(roomId, "/stage/promote/" + id("bob"), "alice"));
         assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/promote/" + id("bob"), "host").status());
         assertEquals(new HashSet<>(ids("host", "bob")), speakers(roomId));
         assertEquals(List.of(), getStage(roomId).get("handRaiseQueue"), "promoted users leave the queue");
@@ -312,7 +315,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/demote/" + id("bob"), "host").status());
         assertEquals(new HashSet<>(ids("host")), speakers(roomId));
         assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("bob"), false)));
-        assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "host-cannot-leave-stage", () -> postEmpty(roomId, "/stage/demote/" + id("host"), "host"));
+        assertProblem(HttpStatus.FORBIDDEN, "host-cannot-leave-stage", () -> postEmpty(roomId, "/stage/demote/" + id("host"), "host"));
     }
 
     @Test
@@ -321,7 +324,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         join(roomId, "host");
         seatSpeaker(roomId, "alice");
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> postEmpty(roomId, "/stage/mute/" + id("alice"), "alice"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> postEmpty(roomId, "/stage/mute/" + id("alice"), "alice"));
         assertTrue(gateway.mutes.isEmpty(), "a refused request must not reach the media server");
 
         assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/mute/" + id("alice"), "host").status());
@@ -350,7 +353,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
         join(roomId, "mallory");
         postEmpty(roomId, "/stage/raise-hand", "mallory");
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> delete(roomId, "/participants/" + id("host"), "mallory"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> delete(roomId, "/participants/" + id("host"), "mallory"));
         assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "cannot-kick-host", () -> delete(roomId, "/participants/" + id("host"), "host"));
         assertEquals(HttpStatus.NO_CONTENT, delete(roomId, "/participants/" + id("mallory"), "host").status());
 
@@ -373,6 +376,9 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
 
         delete(roomId, "/participants/" + id("alice"), "host");
 
+        assertEquals(new HashSet<>(ids("host")), speakers(roomId));
+        assertEquals(ids("bob"), getStage(roomId).get("handRaiseQueue"));
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/promote/" + id("bob"), "host").status());
         assertEquals(new HashSet<>(ids("host", "bob")), speakers(roomId));
         assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("bob"), true)));
     }

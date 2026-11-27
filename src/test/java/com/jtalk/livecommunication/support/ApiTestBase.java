@@ -128,10 +128,14 @@ public abstract class ApiTestBase implements TestPropertyProvider {
         return post(roomId, "/participants/join", userName);
     }
 
-    /** A user takes a free stage seat themselves: join the room, then claim. */
+    /** Seats a user on stage via host approval (listeners cannot claim seats directly). */
     protected void seatSpeaker(String roomId, String userName) {
+        seatSpeaker(roomId, "host", userName);
+    }
+
+    protected void seatSpeaker(String roomId, String hostName, String userName) {
         join(roomId, userName);
-        post(roomId, "/stage/join", userName);
+        postEmpty(roomId, "/stage/promote/" + id(userName), hostName);
     }
 
     protected Map<String, Object> getStage(String roomId) {

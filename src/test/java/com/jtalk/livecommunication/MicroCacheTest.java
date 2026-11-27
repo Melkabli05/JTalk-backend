@@ -73,9 +73,9 @@ class MicroCacheTest extends ApiTestBase {
         assertEquals("After", getRoom(roomId).get("title"));
         assertTrue(listRooms("?targetLanguage=en&size=100").stream().anyMatch(r -> "After".equals(r.get("title"))));
         join(roomId, "guest-1");
-        post(roomId, "/stage/join", "guest-1");
+        postEmpty(roomId, "/stage/promote/" + id("guest-1"), "host-cache-d");
         join(roomId, "guest-2");
-        assertProblem(HttpStatus.CONFLICT, "stage-full", () -> post(roomId, "/stage/join", "guest-2"));
+        assertProblem(HttpStatus.CONFLICT, "stage-full", () -> postEmpty(roomId, "/stage/promote/" + id("guest-2"), "host-cache-d"));
     }
 
     @Test
@@ -86,7 +86,7 @@ class MicroCacheTest extends ApiTestBase {
 
         delete(roomId, "", "host-cache-e");
 
-        assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found", () -> post(roomId, "/stage/join", "alice"));
+        assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found", () -> postEmpty(roomId, "/stage/promote/" + id("alice"), "host-cache-e"));
         assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found", () -> getRoom(roomId));
         assertTrue(listRooms("?targetLanguage=en&size=100").stream().noneMatch(r -> roomId.equals(r.get("id"))));
     }

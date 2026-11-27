@@ -74,11 +74,25 @@ class StageController {
         stage.muteSpeaker(roomId, userId, targetUserId);
     }
 
-    /** Host steps a speaker down to the audience. */
+    /** Host or moderator steps a speaker down to the audience. */
     @Post("/demote/{targetUserId}")
     @Status(HttpStatus.NO_CONTENT)
     void demoteToListener(UUID roomId, UUID targetUserId, @CurrentUser UUID userId) {
         stage.demoteToListener(roomId, userId, targetUserId);
+    }
+
+    /** Host promotes a participant to moderator. */
+    @Post("/moderator/{targetUserId}")
+    @Status(HttpStatus.NO_CONTENT)
+    void grantModerator(UUID roomId, UUID targetUserId, @CurrentUser UUID userId) {
+        stage.setModerator(roomId, userId, targetUserId, true);
+    }
+
+    /** Host revokes moderator status from a participant. */
+    @Delete("/moderator/{targetUserId}")
+    @Status(HttpStatus.NO_CONTENT)
+    void revokeModerator(UUID roomId, UUID targetUserId, @CurrentUser UUID userId) {
+        stage.setModerator(roomId, userId, targetUserId, false);
     }
 
     @Post("/network-mode")

@@ -105,8 +105,8 @@ class UserEventsTest extends ApiTestBase {
     void aRoomWithSomeoneElseOnItsStageCarriesOnUnderTheOneWhoHasBeenThereLongest() {
         String roomId = createRoom("alice", "Spanish coffee", 4);
         join(roomId, "alice");
-        seatSpeaker(roomId, "bob");
-        seatSpeaker(roomId, "carol");
+        seatSpeaker(roomId, "alice", "bob");
+        seatSpeaker(roomId, "alice", "carol");
         join(roomId, "dave");
 
         deleted(id("alice"));
@@ -125,7 +125,7 @@ class UserEventsTest extends ApiTestBase {
     @Test
     void theNewHostCanRunTheRoomAndTheOldOneCannotAnyMore() {
         String roomId = createRoom("alice", "Handed over", 4);
-        seatSpeaker(roomId, "bob");
+        seatSpeaker(roomId, "alice", "bob");
         join(roomId, "carol");
         postEmpty(roomId, "/stage/raise-hand", "carol");
 
@@ -133,7 +133,7 @@ class UserEventsTest extends ApiTestBase {
         await("handed over", 10_000, () -> hostOf(roomId).equals(id("bob").toString()));
 
         assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/promote/" + id("carol"), "bob").status(), "bob can invite now");
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> postEmpty(roomId, "/stage/promote/" + id("dave"), "alice"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> postEmpty(roomId, "/stage/promote/" + id("dave"), "alice"));
     }
 
     @Test
@@ -151,8 +151,8 @@ class UserEventsTest extends ApiTestBase {
     @Test
     void aSuccessorWhoIsDeletedInTurnPassesItOnOrCloses() {
         String roomId = createRoom("alice", "Passed on", 4);
-        seatSpeaker(roomId, "bob");
-        seatSpeaker(roomId, "carol");
+        seatSpeaker(roomId, "alice", "bob");
+        seatSpeaker(roomId, "alice", "carol");
 
         deleted(id("alice"));
         await("bob hosts", 10_000, () -> hostOf(roomId).equals(id("bob").toString()));
@@ -168,7 +168,7 @@ class UserEventsTest extends ApiTestBase {
     @Test
     void aDeletedSpeakerAndAHandRaisedByADeletedListenerAreRemovedFromTheRoom() {
         String roomId = createRoom("alice", "Alice's room", 4);
-        seatSpeaker(roomId, "bob");
+        seatSpeaker(roomId, "alice", "bob");
         join(roomId, "carol");
         postEmpty(roomId, "/stage/raise-hand", "carol");
 
@@ -218,7 +218,7 @@ class UserEventsTest extends ApiTestBase {
     @Test
     void aRoomHandedOverIsNotErasedWithItsOldHost() {
         String roomId = createRoom("alice", "Handed over", 4);
-        seatSpeaker(roomId, "bob");
+        seatSpeaker(roomId, "alice", "bob");
 
         deleted(id("alice"));
         await("handed over", 10_000, () -> hostOf(roomId).equals(id("bob").toString()));

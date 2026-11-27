@@ -41,6 +41,7 @@ class StageServiceImpl implements StageService {
     public RoomSessionResponse claimStageSeat(UUID roomId, UUID userId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         access.requireInRoom(roomId, userId);
+        access.requireModeratorOrHost(room, userId, "claim a stage seat directly");
         if (!stage.tryClaimStageSeat(roomId, userId, room.maxStageSeats())) {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
@@ -61,10 +62,7 @@ class StageServiceImpl implements StageService {
     @Override
     public void vacateSeat(UUID roomId, UUID userId) {
         stage.clearUserMuteStates(roomId, userId);
-        stage.releaseAndPromoteNext(roomId, userId).ifPresent(promoted -> {
-            log.info("Seat freed in room {}: promoting queued user {} to the stage", roomId, promoted);
-            gateway.setPublishPermission(roomId, promoted, true);
-        });
+        stage.releaseSeatOnly(roomId, userId);
         events.announceStage(roomId, RoomEventType.STAGE_UPDATED, null);
     }
 
@@ -92,32 +90,48 @@ class StageServiceImpl implements StageService {
     @Override
     public void promoteToStage(UUID roomId, UUID hostId, UUID targetUserId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
-        access.requireHost(room, hostId, "promote listeners to the stage");
+        access.requireModeratorOrHost(room, hostId, "promote listeners to the stage");
         if (!stage.tryClaimStageSeat(roomId, targetUserId, room.maxStageSeats())) {
             throw ProblemType.STAGE_FULL.because("All " + room.maxStageSeats() + " stage seats are taken");
         }
         stage.clearUserMuteStates(roomId, targetUserId);
         gateway.setPublishPermission(roomId, targetUserId, true);
         events.announceStage(roomId, RoomEventType.STAGE_UPDATED, targetUserId);
-        log.info("Host {} promoted user {} to stage in room {}", hostId, targetUserId, roomId);
+        log.info("Moderator/Host {} promoted user {} to stage in room {}", hostId, targetUserId, roomId);
     }
 
     @Override
     public void muteSpeaker(UUID roomId, UUID hostId, UUID targetUserId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
-        access.requireHost(room, hostId, "mute speakers");
+        access.requireCanModerateTarget(room, hostId, targetUserId, "mute speakers");
         stage.muteByHost(roomId, targetUserId);
         gateway.muteMicrophone(roomId, targetUserId);
         gateway.setPublishPermission(roomId, targetUserId, false);
-        log.info("Host {} muted speaker {} in room {}", hostId, targetUserId, roomId);
+        log.info("Moderator/Host {} muted speaker {} in room {}", hostId, targetUserId, roomId);
     }
 
     @Override
     public void demoteToListener(UUID roomId, UUID hostId, UUID targetUserId) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
-        access.requireHost(room, hostId, "demote speakers");
+        access.requireCanModerateTarget(room, hostId, targetUserId, "demote speakers");
         leaveStageSeat(roomId, targetUserId);
-        log.info("Host {} demoted speaker {} to listener in room {}", hostId, targetUserId, roomId);
+        log.info("Moderator/Host {} demoted speaker {} to listener in room {}", hostId, targetUserId, roomId);
+    }
+
+    @Override
+    public void setModerator(UUID roomId, UUID hostId, UUID targetUserId, boolean moderator) {
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        access.requireHost(room, hostId, "manage moderators");
+        access.requireInRoom(roomId, targetUserId);
+        if (room.isHost(targetUserId)) {
+            throw ProblemType.HOST_CANNOT_LEAVE_STAGE.because("The host already has full room permissions");
+        }
+        boolean changed = moderator
+                ? stage.addModerator(roomId, targetUserId)
+                : stage.removeModerator(roomId, targetUserId);
+        if (changed) {
+            events.announceStage(roomId, RoomEventType.STAGE_UPDATED, targetUserId);
+        }
     }
 
     @Override

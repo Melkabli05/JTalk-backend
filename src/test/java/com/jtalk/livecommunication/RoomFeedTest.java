@@ -115,7 +115,7 @@ class RoomFeedTest extends ApiTestBase {
             join(roomId, "alice");
             await("a head count of 1", 10_000, () -> counts(watch, roomId).contains(1));
 
-            post(roomId, "/stage/join", "alice");
+            postEmpty(roomId, "/stage/promote/" + id("alice"), "host");
             await("alice on stage", 10_000, () -> watch.of("ROOM_STATS").stream().anyMatch(m -> speakers(m).contains(id("alice").toString())));
         } finally {
             watch.subscription().dispose();

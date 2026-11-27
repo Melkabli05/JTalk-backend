@@ -367,7 +367,9 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     public RoomSessionResponse sessionFor(VoiceRoom room, UUID userId, boolean onStage) {
         var live = liveStats.findForSession(room.id(), userId);
         return new RoomSessionResponse(mapper.toResponse(room, live.stats()), gateway.serverUrl(),
-                gateway.generateToken(room.id(), userId, onStage), room.roleOf(userId, onStage), onStage, live.chatMuted(), null);
+                gateway.generateToken(room.id(), userId, onStage),
+                room.roleOf(userId, onStage, stage.isModerator(room.id(), userId)),
+                onStage, live.chatMuted(), null);
     }
 
     @Override

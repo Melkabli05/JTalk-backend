@@ -25,7 +25,10 @@ public class RosterRepository extends RedisRepository {
      * @param present     who is in the room: confirmed by the media server, or joined recently
      * @param reconnecting the present people whose media dropped and whose seat is on a grace lease
      */
-    public record Roster(List<UUID> speakers, List<UUID> present, Set<UUID> reconnecting) {
+    public record Roster(List<UUID> speakers, List<UUID> present, Set<UUID> reconnecting, Set<UUID> moderators) {
+        public Roster(List<UUID> speakers, List<UUID> present, Set<UUID> reconnecting) {
+            this(speakers, present, reconnecting, Set.of());
+        }
     }
 
     /** What leaving a room found: whether the person was listed as present, and whether they hold a stage seat. */
@@ -46,11 +49,14 @@ public class RosterRepository extends RedisRepository {
         RedisFuture<Long> trimmed = redis.zremrangebyscore(PresenceRepository.key(roomId),
                 Range.create(Double.NEGATIVE_INFINITY, (double) presence.freshnessCutoff().toEpochMilli() - 1));
         RedisFuture<List<String>> present = redis.zrange(PresenceRepository.key(roomId), 0, -1);
-        await(speakers, trimmed, present);
+        RedisFuture<Set<String>> moderators = redis.smembers(StageRepository.moderatorsKey(roomId));
+        await(speakers, trimmed, present, moderators);
 
         List<UUID> people = present.toCompletableFuture().join().stream().map(UUID::fromString).toList();
+        Set<UUID> modIds = moderators.toCompletableFuture().join().stream().map(UUID::fromString)
+                .collect(java.util.stream.Collectors.toSet());
         return new Roster(speakers.toCompletableFuture().join().stream().map(UUID::fromString).toList(), people,
-                leaseHolders(roomId, people));
+                leaseHolders(roomId, people), modIds);
     }
 
     /** Drops the person from the room and its hand-raise queue, and looks up their seat: three commands, one round trip. */
@@ -60,8 +66,9 @@ public class RosterRepository extends RedisRepository {
         RedisFuture<Long> present = redis.zrem(PresenceRepository.key(roomId), id);
         RedisFuture<Long> userIndex = redis.hdel(PresenceRepository.USER_ROOM_KEY, id);
         RedisFuture<Long> queued = redis.zrem(StageRepository.queueKey(roomId), id);
+        RedisFuture<Long> mod = redis.srem(StageRepository.moderatorsKey(roomId), id);
         RedisFuture<Double> seat = redis.zscore(StageRepository.stageKey(roomId), id);
-        await(present, userIndex, queued, seat);
+        await(present, userIndex, queued, mod, seat);
         return new Departure(present.toCompletableFuture().join() > 0, seat.toCompletableFuture().join() != null);
     }
 

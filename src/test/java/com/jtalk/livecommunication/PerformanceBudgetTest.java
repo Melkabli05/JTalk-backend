@@ -90,6 +90,8 @@ class PerformanceBudgetTest extends ApiTestBase {
     @Test
     void anActionOnTheStageCostsTheActionAndOneRead() {
         String room = roomWithListeners(4);
+        postEmpty(room, "/stage/moderator/" + id("listener-0"), "host");
+        postEmpty(room, "/stage/moderator/" + id("listener-3"), "host");
         post(room, "/stage/join", "listener-0");           // the first call of a Lua script also sends the script: warm each one up
         postEmpty(room, "/stage/raise-hand", "listener-1");
         postEmpty(room, "/stage/leave", "listener-0");

@@ -18,9 +18,10 @@ import java.util.Locale;
 public enum ProblemType {
     VOICE_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "Voice room not found"),
     NOT_ROOM_HOST(HttpStatus.FORBIDDEN, "Only the host can do this"),
+    NOT_ROOM_MODERATOR(HttpStatus.FORBIDDEN, "Only the host or a moderator can do this"),
     STAGE_FULL(HttpStatus.CONFLICT, "Stage is full"),
     ALREADY_ON_STAGE(HttpStatus.CONFLICT, "Already on stage"),
-    HOST_CANNOT_LEAVE_STAGE(HttpStatus.UNPROCESSABLE_ENTITY, "The host keeps their stage seat"),
+    HOST_CANNOT_LEAVE_STAGE(HttpStatus.FORBIDDEN, "The host keeps their stage seat"),
     CANNOT_KICK_HOST(HttpStatus.UNPROCESSABLE_ENTITY, "The host cannot be kicked"),
     KICKED_FROM_ROOM(HttpStatus.FORBIDDEN, "Removed from this room"),
     NOT_IN_ROOM(HttpStatus.FORBIDDEN, "Join the room first"),

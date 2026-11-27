@@ -37,8 +37,11 @@ public interface StageService {
     /** Host-only: mutes a speaker's microphone. They can unmute themselves. */
     void muteSpeaker(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
 
-    /** Host-only: steps a speaker down to the audience. */
+    /** Host or moderator: steps a speaker down to the audience. */
     void demoteToListener(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId);
+
+    /** Host-only: grants or revokes moderator permissions for a participant in the room. */
+    void setModerator(@NonNull UUID roomId, @NonNull UUID hostId, @NonNull UUID targetUserId, boolean moderator);
 
     /** Persists a seated speaker's self-mute preference across reconnects without revoking SFU publish rights. */
     void setSelfMuted(@NonNull UUID roomId, @NonNull UUID userId, boolean muted);
