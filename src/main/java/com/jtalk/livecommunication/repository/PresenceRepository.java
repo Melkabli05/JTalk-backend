@@ -1,6 +1,8 @@
 package com.jtalk.livecommunication.repository;
 
 import com.jtalk.livecommunication.config.VoiceRoomProperties;
+import io.lettuce.core.Limit;
+import io.lettuce.core.Range;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.ZAddArgs;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -52,6 +54,28 @@ public class PresenceRepository extends RedisRepository {
     public boolean isPresent(UUID roomId, UUID userId) {
         Double lastSeen = connection.sync().zscore(key(roomId), userId.toString());
         return lastSeen != null && lastSeen >= freshnessCutoff().toEpochMilli();
+    }
+
+    /**
+     * Returns up to {@code limitPerRoom} currently-present user IDs per room in one pipelined Redis round trip.
+     */
+    public Map<UUID, List<UUID>> findPresentUsers(Collection<UUID> roomIds, int limitPerRoom) {
+        if (roomIds.isEmpty() || limitPerRoom <= 0) {
+            return Map.of();
+        }
+        Range<Double> active = Range.create((double) freshnessCutoff().toEpochMilli(), Double.POSITIVE_INFINITY);
+        Limit limit = Limit.create(0, limitPerRoom);
+        RedisAsyncCommands<String, String> redis = connection.async();
+        Map<UUID, RedisFuture<List<String>>> pending = new LinkedHashMap<>();
+        for (UUID roomId : roomIds) {
+            pending.put(roomId, redis.zrevrangebyscore(key(roomId), active, limit));
+        }
+        await(pending.values().toArray(RedisFuture[]::new));
+
+        Map<UUID, List<UUID>> result = new LinkedHashMap<>();
+        pending.forEach((roomId, future) -> result.put(roomId,
+                future.toCompletableFuture().join().stream().map(UUID::fromString).toList()));
+        return result;
     }
 
     /**

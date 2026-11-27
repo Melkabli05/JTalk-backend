@@ -27,7 +27,8 @@ public record VoiceRoomResponse(
         long participantCount,
         long handRaiseCount,
         @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable RoomSpeakerSummary host,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable List<RoomSpeakerSummary> speakerProfiles) {
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable List<RoomSpeakerSummary> speakerProfiles,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable List<RoomSpeakerSummary> participantProfiles) {
 
     public VoiceRoomResponse(
             UUID id,
@@ -43,12 +44,18 @@ public record VoiceRoomResponse(
             long participantCount,
             long handRaiseCount) {
         this(id, title, topic, hostId, targetLanguage, nativeLanguage, maxStageSeats, status,
-                createdAt, speakers, participantCount, handRaiseCount, null, null);
+                createdAt, speakers, participantCount, handRaiseCount, null, null, null);
     }
 
     public VoiceRoomResponse withProfiles(@Nullable RoomSpeakerSummary host,
                                           @Nullable List<RoomSpeakerSummary> speakerProfiles) {
+        return withProfiles(host, speakerProfiles, null);
+    }
+
+    public VoiceRoomResponse withProfiles(@Nullable RoomSpeakerSummary host,
+                                          @Nullable List<RoomSpeakerSummary> speakerProfiles,
+                                          @Nullable List<RoomSpeakerSummary> participantProfiles) {
         return new VoiceRoomResponse(id, title, topic, hostId, targetLanguage, nativeLanguage, maxStageSeats,
-                status, createdAt, speakers, participantCount, handRaiseCount, host, speakerProfiles);
+                status, createdAt, speakers, participantCount, handRaiseCount, host, speakerProfiles, participantProfiles);
     }
 }

@@ -24,6 +24,7 @@ public interface ApiMapper {
     /** Room metadata (PostgreSQL) merged with its real-time numbers (Redis). */
     @Mapping(target = "host", ignore = true)
     @Mapping(target = "speakerProfiles", ignore = true)
+    @Mapping(target = "participantProfiles", ignore = true)
     VoiceRoomResponse toResponse(VoiceRoom room, RoomLiveStats live);
 
     ParticipantResponse toResponse(Participant participant);
