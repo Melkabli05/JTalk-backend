@@ -15,5 +15,10 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Serdeable
 public record RoomComment(UUID id, UUID authorId, CommentType type, String content, @Nullable String correctedContent,
-                          @Nullable UUID replyTo, Instant createdAt, @Nullable Instant pinnedAt) {
+                          @Nullable UUID replyTo, Instant createdAt, @Nullable Instant pinnedAt, @Nullable String tip) {
+
+    public RoomComment(UUID id, UUID authorId, CommentType type, String content, @Nullable String correctedContent,
+                       @Nullable UUID replyTo, Instant createdAt, @Nullable Instant pinnedAt) {
+        this(id, authorId, type, content, correctedContent, replyTo, createdAt, pinnedAt, null);
+    }
 }

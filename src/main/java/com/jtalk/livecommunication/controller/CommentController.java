@@ -42,7 +42,7 @@ class CommentController {
     @Post
     @Status(HttpStatus.CREATED)
     RoomComment post(UUID roomId, @CurrentUser UUID userId, @Body @Valid PostCommentRequest request) {
-        return comments.post(roomId, userId, request.type(), request.content(), request.correctedContent(), request.replyTo());
+        return comments.post(roomId, userId, request.type(), request.content(), request.correctedContent(), request.replyTo(), request.tip());
     }
 
     /** Reacts to a comment, with the one reaction a person has to it: a different one replaces theirs. */

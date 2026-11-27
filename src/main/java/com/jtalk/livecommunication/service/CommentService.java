@@ -19,8 +19,13 @@ public interface CommentService {
      * Posts a comment as someone who is in the room (checked in the same Redis script that keeps the comment: one round trip). 400 {@code invalid-comment} for an empty one (once control characters are gone) or a
      * correction without its corrected phrase, 403 {@code not-in-room}, 403 {@code chat-muted}, 429 {@code commenting-too-fast}.
      */
+    default RoomComment post(@NonNull UUID roomId, @NonNull UUID userId, @NonNull CommentType type, @NonNull String content,
+                             @Nullable String correctedContent, @Nullable UUID replyTo) {
+        return post(roomId, userId, type, content, correctedContent, replyTo, null);
+    }
+
     RoomComment post(@NonNull UUID roomId, @NonNull UUID userId, @NonNull CommentType type, @NonNull String content,
-                     @Nullable String correctedContent, @Nullable UUID replyTo);
+                     @Nullable String correctedContent, @Nullable UUID replyTo, @Nullable String tip);
 
     /**
      * Makes {@code reaction} this person's reaction to the comment, replacing the one they had (a person has one per comment); the room is told

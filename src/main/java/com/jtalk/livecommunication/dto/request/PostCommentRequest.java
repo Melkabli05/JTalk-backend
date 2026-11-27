@@ -19,5 +19,6 @@ public record PostCommentRequest(
         @NotNull CommentType type,
         @NotBlank @Size(max = 500) String content,
         @Nullable @Size(max = 500) String correctedContent,
-        @Nullable UUID replyTo) {
+        @Nullable UUID replyTo,
+        @Nullable @Size(max = 200) String tip) {
 }

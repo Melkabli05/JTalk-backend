@@ -40,12 +40,17 @@ class CommentServiceImpl implements CommentService {
     }
 
     @Override
-    public RoomComment post(UUID roomId, UUID userId, CommentType type, String content, @Nullable String correctedContent, @Nullable UUID replyTo) {
+    public RoomComment post(UUID roomId, UUID userId, CommentType type, String content, @Nullable String correctedContent,
+                            @Nullable UUID replyTo, @Nullable String tip) {
         rooms.getRequiredActiveRoom(roomId);
         String said = clean(content);
         String corrected = correctedContent == null ? null : clean(correctedContent);
         if (corrected != null && !isVisible(corrected)) {
             corrected = null;
+        }
+        String cleanedTip = tip == null ? null : TextSanitizer.cleanSingleLine(tip);
+        if (cleanedTip != null && !isVisible(cleanedTip)) {
+            cleanedTip = null;
         }
         if (!isVisible(said)) {
             throw ProblemType.INVALID_COMMENT.because("A comment cannot be empty");
@@ -53,11 +58,11 @@ class CommentServiceImpl implements CommentService {
         if (type == CommentType.CORRECTION && corrected == null) {
             throw ProblemType.INVALID_COMMENT.because("A correction needs the corrected phrase");
         }
-        if (type == CommentType.TEXT && corrected != null) {
+        if (type == CommentType.TEXT && (corrected != null || cleanedTip != null)) {
             throw ProblemType.INVALID_COMMENT.because("Only a correction has a corrected phrase");
         }
 
-        RoomComment comment = new RoomComment(UUID.randomUUID(), userId, type, said, corrected, replyTo, clock.instant(), null);
+        RoomComment comment = new RoomComment(UUID.randomUUID(), userId, type, said, corrected, replyTo, clock.instant(), null, cleanedTip);
         switch (comments.post(roomId, userId, comment)) {
             case NOT_IN_ROOM -> throw notInRoom(roomId, userId);
             case MUTED -> throw ProblemType.CHAT_MUTED.because("The host has muted you in this room's chat");

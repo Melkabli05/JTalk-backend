@@ -237,7 +237,7 @@ public class CommentRepository extends RedisRepository {
             if (maybe.isPresent() && maybe.get().id().equals(commentId)) {
                 RoomComment comment = maybe.get();
                 RoomComment pinned = new RoomComment(comment.id(), comment.authorId(), comment.type(), comment.content(),
-                        comment.correctedContent(), comment.replyTo(), comment.createdAt(), java.time.Instant.now());
+                        comment.correctedContent(), comment.replyTo(), comment.createdAt(), java.time.Instant.now(), comment.tip());
                 String newRaw = write(pinned);
                 return connection.sync().lset(commentsKey(roomId), allComments.indexOf(raw), newRaw) != null;
             }
@@ -252,7 +252,7 @@ public class CommentRepository extends RedisRepository {
             if (maybe.isPresent() && maybe.get().id().equals(commentId)) {
                 RoomComment comment = maybe.get();
                 RoomComment unpinned = new RoomComment(comment.id(), comment.authorId(), comment.type(), comment.content(),
-                        comment.correctedContent(), comment.replyTo(), comment.createdAt(), null);
+                        comment.correctedContent(), comment.replyTo(), comment.createdAt(), null, comment.tip());
                 String newRaw = write(unpinned);
                 return connection.sync().lset(commentsKey(roomId), allComments.indexOf(raw), newRaw) != null;
             }
