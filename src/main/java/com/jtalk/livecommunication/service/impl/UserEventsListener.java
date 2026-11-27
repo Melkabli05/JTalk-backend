@@ -64,11 +64,8 @@ class UserEventsListener {
             return;
         }
         try {
-            for (UUID roomId : rooms.openRoomIds()) {
-                if (presence.isPresent(roomId, userId)) {
-                    events.announceParticipantProfileUpdate(roomId, userId, avatarUrl);
-                }
-            }
+            presence.findActiveRoomForUser(rooms.openRoomIds(), userId)
+                    .ifPresent(roomId -> events.announceParticipantProfileUpdate(roomId, userId, avatarUrl));
         } catch (RuntimeException e) {
             log.warn("Could not broadcast profile update for user {}", userId, e);
         }
