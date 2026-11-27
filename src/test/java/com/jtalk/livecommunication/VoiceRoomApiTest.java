@@ -383,6 +383,18 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertTrue(String.valueOf(problem.get("detail")).contains(missing.toString()));
     }
 
+    @Test
+    void hostLeavingWhenAloneClosesRoomAndNonHostCannotCloseRoom() {
+        String roomId = createRoom("host", "Solo Room", 6);
+        post(roomId, "/participants/join", "host");
+
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-host",
+                () -> delete(roomId, "", "intruder"));
+
+        postEmpty(roomId, "/participants/leave", "host");
+        assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found", () -> getRoom(roomId));
+    }
+
     // ---- helpers ----------------------------------------------------------------------------------
 
     private static Map<String, String> rolesByUser(List<Map<String, Object>> participants) {
