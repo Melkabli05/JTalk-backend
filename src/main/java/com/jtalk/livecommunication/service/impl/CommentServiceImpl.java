@@ -18,7 +18,10 @@ import jakarta.inject.Singleton;
 import lombok.RequiredArgsConstructor;
 import org.zalando.problem.ThrowableProblem;
 
+import java.net.URI;
 import java.time.Clock;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -28,6 +31,10 @@ class CommentServiceImpl implements CommentService {
 
     private static final Pattern BLOCKED_IMAGE_PATTERN = Pattern.compile(
             "(?is)(data:image/|<img\\b|!\\[[^\\]]*\\]\\([^)]+\\)|https?://\\S+\\.(?:png|jpe?g|webp|gif|svg|bmp|avif)(?:[?#]\\S*)?)");
+    private static final Set<String> ALLOWED_GIF_HOSTS = Set.of(
+            "media.tenor.com", "c.tenor.com", "media1.tenor.com",
+            "media.giphy.com", "media0.giphy.com", "media1.giphy.com",
+            "media2.giphy.com", "media3.giphy.com", "media4.giphy.com", "i.giphy.com");
 
     private final VoiceRoomService rooms;
     private final CommentRepository comments;
@@ -61,10 +68,14 @@ class CommentServiceImpl implements CommentService {
         if (type == CommentType.CORRECTION && corrected == null) {
             throw ProblemType.INVALID_COMMENT.because("A correction needs the corrected phrase");
         }
-        if (type == CommentType.TEXT && (corrected != null || cleanedTip != null)) {
+        if (type != CommentType.CORRECTION && (corrected != null || cleanedTip != null)) {
             throw ProblemType.INVALID_COMMENT.because("Only a correction has a corrected phrase");
         }
-        if (containsImagePayload(said) || containsImagePayload(corrected) || containsImagePayload(cleanedTip)) {
+        if (type == CommentType.GIF) {
+            if (!isValidGifUrl(said)) {
+                throw ProblemType.INVALID_COMMENT.because("Only approved GIF links are allowed");
+            }
+        } else if (containsImagePayload(said) || containsImagePayload(corrected) || containsImagePayload(cleanedTip)) {
             throw ProblemType.INVALID_COMMENT.because("Images are not supported in comments");
         }
 
@@ -196,5 +207,18 @@ class CommentServiceImpl implements CommentService {
 
     private static boolean containsImagePayload(@Nullable String text) {
         return text != null && BLOCKED_IMAGE_PATTERN.matcher(text).find();
+    }
+
+    private static boolean isValidGifUrl(String url) {
+        try {
+            URI uri = URI.create(url.trim());
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
+                return false;
+            }
+            String host = uri.getHost().toLowerCase(Locale.ROOT);
+            return ALLOWED_GIF_HOSTS.contains(host);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 }

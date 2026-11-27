@@ -5,5 +5,7 @@ public enum CommentType {
     /** A plain message. */
     TEXT,
     /** A correction of what someone said: what they said ({@code content}) and how it should be ({@code correctedContent}). */
-    CORRECTION
+    CORRECTION,
+    /** A GIF from an approved provider ({@code content} is the HTTPS media URL). */
+    GIF
 }

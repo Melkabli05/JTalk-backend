@@ -63,6 +63,11 @@ livekit:
   api-key: ${LIVEKIT_API_KEY}
   api-secret: ${LIVEKIT_API_SECRET}
 
+jtalk:
+  gifs:
+    tenor-api-key: ${TENOR_API_KEY:}
+    giphy-api-key: ${GIPHY_API_KEY:oumntrY77u9IN84pJ8PXPvioUZu36gHO}
+
 # Health probes for the load balancer or orchestrator. /health answers without a token (a probe carries none), but anonymous callers
 # get only the overall status: the details (database, Redis) are for authenticated callers. That is the endpoint's default; it is
 # stated anyway so an upgrade cannot quietly change it (HealthEndpointTest guards it).

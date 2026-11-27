@@ -403,4 +403,16 @@ class CommentApiTest extends ApiTestBase {
                     () -> comment(room, "alice", text(payload)));
         }
     }
+
+    @Test
+    void gifCommentsRequireApprovedProviderUrl() {
+        String room = roomWithPeople();
+        String approved = "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif";
+        Map<String, Object> posted = comment(room, "alice", Map.of("type", "GIF", "content", approved));
+        assertEquals("GIF", posted.get("type"));
+        assertEquals(approved, posted.get("content"));
+
+        assertProblem(HttpStatus.BAD_REQUEST, "invalid-comment",
+                () -> comment(room, "alice", Map.of("type", "GIF", "content", "https://evil.example.com/test.gif")));
+    }
 }
