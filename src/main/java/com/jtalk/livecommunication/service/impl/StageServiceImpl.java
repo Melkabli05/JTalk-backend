@@ -48,7 +48,7 @@ class StageServiceImpl implements StageService {
         stage.clearUserMuteStates(roomId, userId);
         gateway.setPublishPermission(roomId, userId, true);
         events.announceStage(roomId, RoomEventType.STAGE_UPDATED, null);
-        return rooms.sessionFor(room, userId, true);
+        return rooms.sessionFor(room, userId, true, !room.isHost(userId));
     }
 
     @Override
@@ -68,9 +68,15 @@ class StageServiceImpl implements StageService {
 
     @Override
     public void raiseHand(UUID roomId, UUID userId) {
-        rooms.getRequiredActiveRoom(roomId);
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         access.requireInRoom(roomId, userId);
+        if (room.isHost(userId)) {
+            throw ProblemType.CANNOT_RAISE_HAND.because("Hosts and moderators join the stage directly without raising a hand");
+        }
         int position = stage.raiseHand(roomId, userId);
+        if (position == -2) {
+            throw ProblemType.CANNOT_RAISE_HAND.because("Hosts and moderators join the stage directly without raising a hand");
+        }
         if (position < 0) {
             throw ProblemType.ALREADY_ON_STAGE.because(userId + " is already on stage");
         }
@@ -126,11 +132,16 @@ class StageServiceImpl implements StageService {
         if (room.isHost(targetUserId)) {
             throw ProblemType.HOST_CANNOT_LEAVE_STAGE.because("The host already has full room permissions");
         }
+        if (moderator && !stage.isModerator(roomId, targetUserId)
+                && stage.moderators(roomId).size() >= com.jtalk.livecommunication.config.CommunicationConstants.MAX_MODERATORS) {
+            throw ProblemType.MODERATOR_LIMIT_REACHED.because("A room can have at most "
+                    + com.jtalk.livecommunication.config.CommunicationConstants.MAX_MODERATORS + " moderators");
+        }
         boolean changed = moderator
                 ? stage.addModerator(roomId, targetUserId)
                 : stage.removeModerator(roomId, targetUserId);
         if (changed) {
-            events.announceStage(roomId, RoomEventType.STAGE_UPDATED, targetUserId);
+            events.announce(roomId, moderator ? RoomEventType.MODERATOR_ASSIGNED : RoomEventType.MODERATOR_REVOKED, targetUserId);
         }
     }
 

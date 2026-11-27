@@ -27,5 +27,9 @@ public enum RoomEventType {
     /** Host role was automatically transferred to the longest-seated speaker. */
     HOST_TRANSFERRED,
     /** Solo room inactivity warning: host must tap Stay Live before the countdown expires. */
-    ROOM_IDLE_WARNING
+    ROOM_IDLE_WARNING,
+    /** Host appointed a participant as a room moderator. Carries targetUserId. */
+    MODERATOR_ASSIGNED,
+    /** Host revoked moderator authority from a participant. Carries targetUserId. */
+    MODERATOR_REVOKED
 }

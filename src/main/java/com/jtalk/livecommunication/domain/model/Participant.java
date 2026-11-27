@@ -5,5 +5,9 @@ import com.jtalk.livecommunication.domain.enums.PresenceStatus;
 
 import java.util.UUID;
 
-public record Participant(UUID userId, ParticipantRole role, PresenceStatus status) {
+public record Participant(UUID userId, ParticipantRole role, PresenceStatus status, boolean isModerator) {
+
+    public Participant(UUID userId, ParticipantRole role, PresenceStatus status) {
+        this(userId, role, status, false);
+    }
 }

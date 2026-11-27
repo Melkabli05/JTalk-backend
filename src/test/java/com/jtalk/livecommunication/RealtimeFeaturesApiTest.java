@@ -271,7 +271,7 @@ class RealtimeFeaturesApiTest extends ApiTestBase {
     @Test
     void concurrentSeatClaimsNeverOverfillTheStage() throws Exception {
         String roomId = createRoom("host", "Race", 2);   // the host plus exactly one free seat
-        List<String> racers = java.util.stream.IntStream.range(0, 12).mapToObj(i -> "racer" + i).toList();
+        List<String> racers = java.util.stream.IntStream.range(0, 5).mapToObj(i -> "racer" + i).toList();
         racers.forEach(racer -> {
             join(roomId, racer);
             postEmpty(roomId, "/stage/moderator/" + id(racer), "host");

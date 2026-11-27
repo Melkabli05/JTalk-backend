@@ -102,7 +102,7 @@ class PerformanceBudgetTest extends ApiTestBase {
         Cost leaveSeat = cost(() -> postEmpty(room, "/stage/leave", "listener-3"));
 
         assertEquals(3, raiseHand.redis().roundTrips(), "are they in the room, the hand goes up, then the stage is read once to tell the room: " + raiseHand.redis());
-        assertTrue(takeSeat.redis().roundTrips() <= 5, "are they in the room, claim the seat, clear stale mutes, read the stage to tell the room, read the room's numbers: " + takeSeat.redis());
+        assertTrue(takeSeat.redis().roundTrips() <= 6, "are they in the room, moderator check, claim the seat, clear stale mutes, read the stage to tell the room, read the room's numbers: " + takeSeat.redis());
         assertTrue(leaveSeat.redis().roundTrips() <= 3, leaveSeat.redis().toString());
         assertEquals(0, raiseHand.sql() + takeSeat.sql() + leaveSeat.sql(), "the room is cached");
     }
@@ -137,7 +137,7 @@ class PerformanceBudgetTest extends ApiTestBase {
         Cost open = cost(() -> createRoom("fresh-host", "Fresh", 4));
 
         assertEquals(2, open.sql(), "look for the host's open room, then save: " + open);
-        assertTrue(open.redis().roundTrips() <= 2, "the stage is set up in one round trip (the rest is the hallways being told): " + open.redis());
+        assertTrue(open.redis().roundTrips() <= 3, "the stage and solo timer are set up without reads (the rest is the hallways being told): " + open.redis());
     }
 
     @Test

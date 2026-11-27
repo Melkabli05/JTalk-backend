@@ -19,6 +19,8 @@ public enum ProblemType {
     VOICE_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "Voice room not found"),
     NOT_ROOM_HOST(HttpStatus.FORBIDDEN, "Only the host can do this"),
     NOT_ROOM_MODERATOR(HttpStatus.FORBIDDEN, "Only the host or a moderator can do this"),
+    CANNOT_RAISE_HAND(HttpStatus.FORBIDDEN, "Hosts and moderators cannot raise hand"),
+    MODERATOR_LIMIT_REACHED(HttpStatus.CONFLICT, "Moderator limit reached"),
     STAGE_FULL(HttpStatus.CONFLICT, "Stage is full"),
     ALREADY_ON_STAGE(HttpStatus.CONFLICT, "Already on stage"),
     HOST_CANNOT_LEAVE_STAGE(HttpStatus.FORBIDDEN, "The host keeps their stage seat"),

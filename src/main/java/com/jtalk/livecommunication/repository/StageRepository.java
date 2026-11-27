@@ -49,10 +49,10 @@ public class StageRepository extends RedisRepository {
         await(redis.zadd(stageKey(roomId), clock.millis(), hostId.toString()), redis.expire(stageKey(roomId), Long.parseLong(ttlSeconds)));
     }
 
-    /** Adds the user to the queue if not already queued. Returns the new 1-based position, 0 if already queued, or -1 if already on stage. */
+    /** Adds the user to the queue if not already queued. Returns the new 1-based position, 0 if already queued, -1 if already on stage, or -2 if a moderator. */
     public int raiseHand(UUID roomId, UUID userId) {
         Long position = raiseHandScript.execute(redis(), ScriptOutputType.INTEGER,
-                new String[]{stageKey(roomId), queueKey(roomId)},
+                new String[]{stageKey(roomId), queueKey(roomId), moderatorsKey(roomId)},
                 userId.toString(), nowMillis(), ttlSeconds);
         return position.intValue();
     }

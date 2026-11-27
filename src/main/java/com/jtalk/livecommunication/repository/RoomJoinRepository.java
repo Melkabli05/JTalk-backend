@@ -40,17 +40,18 @@ public class RoomJoinRepository extends RedisRepository {
     private final LuaScript snapshotScript;
 
     public record RoomState(RoomLiveStats stats, RoomJoinSnapshot snapshot, @Nullable ParticipantPreview joiningProfile,
-                            boolean onStage, boolean restoredSeat) {
+                            boolean onStage, boolean restoredSeat, boolean moderator) {
     }
 
     private record Snapshot(int entry, List<String> speakers, List<String> listeners, long participantCount,
                             long audienceCount, long handRaiseCount, List<UUID> handQueue, List<String> comments,
-                            String topic, boolean muted) {
+                            String topic, boolean muted, boolean moderator) {
         static Snapshot read(List<?> values) {
             return new Snapshot(((Long) values.getFirst()).intValue(),
                     strings(values.get(1)), strings(values.get(2)), (Long) values.get(3), (Long) values.get(4),
                     (Long) values.get(5), strings(values.get(6)).stream().map(UUID::fromString).toList(),
-                    strings(values.get(7)), (String) values.get(8), (Long) values.get(9) == 1);
+                    strings(values.get(7)), (String) values.get(8), (Long) values.get(9) == 1,
+                    (Long) values.get(10) == 1);
         }
     }
 
@@ -76,7 +77,7 @@ public class RoomJoinRepository extends RedisRepository {
         List<?> state = snapshotScript.execute(connection.sync(), ScriptOutputType.MULTI,
                 new String[]{PresenceRepository.key(roomId), StageRepository.stageKey(roomId), StageRepository.queueKey(roomId),
                         CommentRepository.commentsKey(roomId), CommentRepository.topicKey(roomId), CommentRepository.mutedKey(roomId),
-                        PresenceRepository.bannedKey(roomId), LeaseRepository.key(roomId, userId)},
+                        PresenceRepository.bannedKey(roomId), LeaseRepository.key(roomId, userId), StageRepository.moderatorsKey(roomId)},
                 Long.toString(presence.freshnessCutoff().toEpochMilli()), Integer.toString(PAGE_SIZE), Integer.toString(MAX_STAGE_SEATS),
                 userId.toString(), Boolean.toString(host), Integer.toString(CommentRepository.KEPT),
                 Long.toString(clock.millis()), Long.toString(stateTtlSeconds), Integer.toString(roomSeats), Boolean.toString(entering));
@@ -116,7 +117,7 @@ public class RoomJoinRepository extends RedisRepository {
             return new ParticipantPreview(preview.userId(), preview.displayName(), preview.avatarUrl(), preview.nativeLanguage(), reconnecting.contains(id));
         }).toList();
         var snapshot = new RoomJoinSnapshot(speakers, raw.audienceCount(), page(listeners, previews), raw.handQueue(), chat);
-        return Optional.of(new RoomState(stats, snapshot, entering ? previews.get(userId.toString()) : null, raw.entry() > 0, raw.entry() == 2));
+        return Optional.of(new RoomState(stats, snapshot, entering ? previews.get(userId.toString()) : null, raw.entry() > 0, raw.entry() == 2, raw.moderator()));
     }
 
     private static List<String> strings(Object value) {

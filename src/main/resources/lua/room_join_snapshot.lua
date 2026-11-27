@@ -1,4 +1,4 @@
--- KEYS: presence, stage, hand-raise queue, comments, topic, muted users, banned users, grace lease.
+-- KEYS: presence, stage, hand-raise queue, comments, topic, muted users, banned users, grace lease, moderators.
 -- ARGV: presence cutoff, page size, stage cap, user ID, is host, comment cap, now, state TTL, room seats, entering.
 local userId = ARGV[4]
 local host = ARGV[5] == 'true'
@@ -60,4 +60,4 @@ end
 local participants = redis.call('ZCOUNT', KEYS[1], ARGV[1], '+inf')
 return {entry, speakers, audience, participants, participants - presentSpeakers, redis.call('ZCARD', KEYS[3]),
   hands, redis.call('LRANGE', KEYS[4], 0, tonumber(ARGV[6]) - 1), redis.call('GET', KEYS[5]),
-  redis.call('SISMEMBER', KEYS[6], userId)}
+  redis.call('SISMEMBER', KEYS[6], userId), redis.call('SISMEMBER', KEYS[9], userId)}

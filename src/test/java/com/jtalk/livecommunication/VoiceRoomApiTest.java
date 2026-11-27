@@ -166,18 +166,21 @@ class VoiceRoomApiTest extends ApiTestBase {
 
         // Bob raises a hand while a seat is still free; Carol is made MODERATOR and joins the last seat directly
         assertEquals(HttpStatus.ACCEPTED, postEmpty(roomId, "/stage/raise-hand", "bob").status());
-        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/stage/moderator/" + id("carol"), "host").status());
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/moderators/" + id("carol"), "host").status());
+        assertProblem(HttpStatus.FORBIDDEN, "cannot-raise-hand", () -> postEmpty(roomId, "/stage/raise-hand", "carol"));
+        assertProblem(HttpStatus.FORBIDDEN, "cannot-raise-hand", () -> postEmpty(roomId, "/stage/raise-hand", "host"));
         Map<String, Object> claimed = post(roomId, "/stage/join", "carol");
-        assertEquals("MODERATOR", claimed.get("role"));
+        assertEquals("SPEAKER", claimed.get("role"));
+        assertEquals(true, claimed.get("isModerator"));
         assertEquals(true, claimed.get("canPublishAudio"));
         assertProblem(HttpStatus.CONFLICT, "stage-full", () -> postEmpty(roomId, "/stage/promote/" + id("bob"), "carol"));
         Map<String, Object> stage = getStage(roomId);
         assertEquals(new HashSet<>(ids("host", "alice", "carol")), new HashSet<>((List<?>) stage.get("speakers")));
         assertEquals(ids("bob"), stage.get("handRaiseQueue"));
 
-        // Roles are visible to everyone in the room
+        // Roles are visible to everyone in the room (stage role decoupled from moderator authority)
         assertEquals(Map.of(id("host").toString(), "HOST", id("alice").toString(), "SPEAKER",
-                id("bob").toString(), "LISTENER", id("carol").toString(), "MODERATOR"), rolesByUser(getParticipants(roomId)));
+                id("bob").toString(), "LISTENER", id("carol").toString(), "SPEAKER"), rolesByUser(getParticipants(roomId)));
 
         // Alice steps down: freed seat stays open (no queue auto-promotion) until moderator Carol approves Bob
         gateway.permissionChanges.clear();
@@ -240,7 +243,7 @@ class VoiceRoomApiTest extends ApiTestBase {
 
         join(roomId, "host");
         assertProblem(HttpStatus.FORBIDDEN, "host-cannot-leave-stage", () -> postEmpty(roomId, "/stage/leave", "host"));
-        assertProblem(HttpStatus.CONFLICT, "already-on-stage", () -> postEmpty(roomId, "/stage/raise-hand", "host"));
+        assertProblem(HttpStatus.FORBIDDEN, "cannot-raise-hand", () -> postEmpty(roomId, "/stage/raise-hand", "host"));
     }
 
     @Test

@@ -68,6 +68,8 @@ public interface VoiceRoomService {
 
     RoomSessionResponse sessionFor(@NonNull VoiceRoom room, @NonNull UUID userId, boolean onStage);
 
+    RoomSessionResponse sessionFor(@NonNull VoiceRoom room, @NonNull UUID userId, boolean onStage, boolean isModerator);
+
     /** Whether {@code userId} is currently present in any active voice room. */
     UserLivePresenceResponse getUserPresence(@NonNull UUID userId);
 

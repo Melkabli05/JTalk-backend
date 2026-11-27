@@ -1,6 +1,9 @@
--- KEYS[1] = stage zset, KEYS[2] = hand-raise queue zset
+-- KEYS[1] = stage zset, KEYS[2] = hand-raise queue zset, KEYS[3] = moderators set
 -- ARGV[1] = userId, ARGV[2] = now (epoch millis, queue order), ARGV[3] = key ttl seconds
--- Returns: -1 if the user is already on stage, 0 if they were already queued, otherwise their new 1-based queue position.
+-- Returns: -2 if the user is a moderator, -1 if already on stage, 0 if already queued, otherwise their new 1-based queue position.
+if redis.call('SISMEMBER', KEYS[3], ARGV[1]) == 1 then
+  return -2
+end
 if redis.call('ZSCORE', KEYS[1], ARGV[1]) then
   return -1
 end

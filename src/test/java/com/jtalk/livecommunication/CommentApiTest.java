@@ -182,7 +182,7 @@ class CommentApiTest extends ApiTestBase {
         String reply = (String) comment(room, "bob", Map.of("type", "TEXT", "content", "an answer", "replyTo", first)).get("id");
         gateway.chatEvents.clear();
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> delete(room, "/comments/" + first, "alice"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> delete(room, "/comments/" + first, "alice"));
         assertEquals(2, historyOf(room, "bob").size());
         assertEquals(HttpStatus.NO_CONTENT, delete(room, "/comments/" + first, "host").status());
 
@@ -209,7 +209,7 @@ class CommentApiTest extends ApiTestBase {
         String room = roomWithPeople();
         comment(room, "alice", text("before"));
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> postEmpty(room, "/comments/mute/" + id("bob"), "alice"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> postEmpty(room, "/comments/mute/" + id("bob"), "alice"));
         assertProblem(HttpStatus.UNPROCESSABLE_ENTITY, "cannot-mute-host", () -> postEmpty(room, "/comments/mute/" + id("host"), "host"));
         assertEquals(HttpStatus.NO_CONTENT, postEmpty(room, "/comments/mute/" + id("alice"), "host").status());
 
@@ -223,7 +223,7 @@ class CommentApiTest extends ApiTestBase {
         assertEquals(id("alice"), events(ChatEventType.CHAT_MUTED).get(0).targetUserId());
         assertEquals("bob can", comment(room, "bob", text("bob can")).get("content"), "muting one person leaves the others");
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> delete(room, "/comments/mute/" + id("alice"), "bob"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> delete(room, "/comments/mute/" + id("alice"), "bob"));
         assertEquals(HttpStatus.NO_CONTENT, delete(room, "/comments/mute/" + id("alice"), "host").status());
         assertEquals(false, join(room, "alice").get("isChatMuted"));
         assertEquals("again", comment(room, "alice", text("again")).get("content"));
@@ -249,7 +249,7 @@ class CommentApiTest extends ApiTestBase {
         String room = roomWithPeople();
         assertNull(chat(room, "alice").get("topic"));
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> topic(room, "alice", "Tell us about your weekend"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> topic(room, "alice", "Tell us about your weekend"));
         assertProblem(HttpStatus.BAD_REQUEST, null, () -> topic(room, "host", ""));
         assertProblem(HttpStatus.BAD_REQUEST, null, () -> topic(room, "host", "x".repeat(201)));
         assertEquals(HttpStatus.NO_CONTENT, topic(room, "host", "Tell us about your weekend").status());
@@ -257,7 +257,7 @@ class CommentApiTest extends ApiTestBase {
         assertEquals("Tell us about your weekend", chat(room, "bob").get("topic"), "a newcomer sees it at once");
         assertEquals("Tell us about your weekend", events(ChatEventType.TOPIC_CHANGED).get(0).topic());
 
-        assertProblem(HttpStatus.FORBIDDEN, "not-room-host", () -> delete(room, "/comments/topic", "alice"));
+        assertProblem(HttpStatus.FORBIDDEN, "not-room-moderator", () -> delete(room, "/comments/topic", "alice"));
         assertEquals(HttpStatus.NO_CONTENT, delete(room, "/comments/topic", "host").status());
         assertNull(chat(room, "bob").get("topic"));
         assertNull(events(ChatEventType.TOPIC_CHANGED).get(1).topic(), "an event with no topic is the topic going away");

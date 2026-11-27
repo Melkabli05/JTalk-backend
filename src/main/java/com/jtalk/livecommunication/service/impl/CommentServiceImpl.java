@@ -99,7 +99,14 @@ class CommentServiceImpl implements CommentService {
 
     @Override
     public void delete(UUID roomId, UUID hostId, UUID commentId) {
-        requireHost(roomId, hostId, "delete comments");
+        VoiceRoom room = requireModeratorOrHost(roomId, hostId, "delete comments");
+        if (!room.isHost(hostId)) {
+            comments.authorOf(roomId, commentId)
+                    .filter(room::isHost)
+                    .ifPresent(author -> {
+                        throw ProblemType.NOT_ROOM_HOST.because("Moderators cannot delete the host's comments");
+                    });
+        }
         if (comments.delete(roomId, commentId)) {
             gateway.broadcastChatEvent(ChatEvent.deleted(roomId, clock.instant(), commentId));
         }
@@ -107,24 +114,27 @@ class CommentServiceImpl implements CommentService {
 
     @Override
     public void mute(UUID roomId, UUID hostId, UUID targetUserId) {
-        VoiceRoom room = requireHost(roomId, hostId, "mute people in the chat");
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
         if (room.isHost(targetUserId)) {
+            access.requireHost(room, hostId, "mute people in the chat");
             throw ProblemType.CANNOT_MUTE_HOST.because("The host cannot be muted in their own chat");
         }
+        access.requireCanModerateTarget(room, hostId, targetUserId, "mute people in the chat");
         comments.mute(roomId, targetUserId);
         gateway.broadcastChatEvent(ChatEvent.muted(roomId, clock.instant(), targetUserId));
     }
 
     @Override
     public void unmute(UUID roomId, UUID hostId, UUID targetUserId) {
-        requireHost(roomId, hostId, "unmute people in the chat");
+        VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
+        access.requireCanModerateTarget(room, hostId, targetUserId, "unmute people in the chat");
         comments.unmute(roomId, targetUserId);
         gateway.broadcastChatEvent(ChatEvent.unmuted(roomId, clock.instant(), targetUserId));
     }
 
     @Override
     public void pinTopic(UUID roomId, UUID hostId, String topic) {
-        requireHost(roomId, hostId, "pin a topic");
+        requireModeratorOrHost(roomId, hostId, "pin a topic");
         String pinned = clean(topic);
         if (!isVisible(pinned)) {
             throw ProblemType.INVALID_COMMENT.because("A topic cannot be empty");
@@ -135,14 +145,14 @@ class CommentServiceImpl implements CommentService {
 
     @Override
     public void clearTopic(UUID roomId, UUID hostId) {
-        requireHost(roomId, hostId, "clear the topic");
+        requireModeratorOrHost(roomId, hostId, "clear the topic");
         comments.clearTopic(roomId);
         gateway.broadcastChatEvent(ChatEvent.topic(roomId, clock.instant(), null));
     }
 
     @Override
     public void pinComment(UUID roomId, UUID hostId, UUID commentId) {
-        requireHost(roomId, hostId, "pin comments");
+        requireModeratorOrHost(roomId, hostId, "pin comments");
         if (comments.pinComment(roomId, commentId)) {
             gateway.broadcastChatEvent(ChatEvent.pinned(roomId, clock.instant(), commentId));
         } else {
@@ -152,7 +162,7 @@ class CommentServiceImpl implements CommentService {
 
     @Override
     public void unpinComment(UUID roomId, UUID hostId, UUID commentId) {
-        requireHost(roomId, hostId, "unpin comments");
+        requireModeratorOrHost(roomId, hostId, "unpin comments");
         if (comments.unpinComment(roomId, commentId)) {
             gateway.broadcastChatEvent(ChatEvent.unpinned(roomId, clock.instant(), commentId));
         } else {
@@ -168,9 +178,9 @@ class CommentServiceImpl implements CommentService {
         return TextSanitizer.isVisible(text);
     }
 
-    private VoiceRoom requireHost(UUID roomId, UUID hostId, String action) {
+    private VoiceRoom requireModeratorOrHost(UUID roomId, UUID requesterId, String action) {
         VoiceRoom room = rooms.getRequiredActiveRoom(roomId);
-        access.requireHost(room, hostId, action);
+        access.requireModeratorOrHost(room, requesterId, action);
         return room;
     }
 

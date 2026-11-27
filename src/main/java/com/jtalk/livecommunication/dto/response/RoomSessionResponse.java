@@ -13,10 +13,17 @@ import io.micronaut.serde.annotation.Serdeable;
 @Serdeable.Serializable
 public record RoomSessionResponse(VoiceRoomResponse room, String mediaUrl, String mediaToken, ParticipantRole role,
                                   boolean canPublishAudio, boolean isChatMuted, boolean isSelfMuted, boolean isMutedByHost,
-                                  @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable RoomJoinSnapshot snapshot) {
+                                  @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable RoomJoinSnapshot snapshot,
+                                  boolean isModerator) {
 
     public RoomSessionResponse(VoiceRoomResponse room, String mediaUrl, String mediaToken, ParticipantRole role,
                                boolean canPublishAudio, boolean isChatMuted, @Nullable RoomJoinSnapshot snapshot) {
-        this(room, mediaUrl, mediaToken, role, canPublishAudio, isChatMuted, false, false, snapshot);
+        this(room, mediaUrl, mediaToken, role, canPublishAudio, isChatMuted, false, false, snapshot, false);
+    }
+
+    public RoomSessionResponse(VoiceRoomResponse room, String mediaUrl, String mediaToken, ParticipantRole role,
+                               boolean canPublishAudio, boolean isChatMuted, @Nullable RoomJoinSnapshot snapshot,
+                               boolean isModerator) {
+        this(room, mediaUrl, mediaToken, role, canPublishAudio, isChatMuted, false, false, snapshot, isModerator);
     }
 }

@@ -202,6 +202,17 @@ public class CommentRepository extends RedisRepository {
                 .toList();
     }
 
+    /** Returns the author of the given comment if it still exists in the room's chat. */
+    public Optional<UUID> authorOf(UUID roomId, UUID commentId) {
+        for (String raw : connection.sync().lrange(commentsKey(roomId), 0, -1)) {
+            Optional<RoomComment> parsed = read(roomId, raw);
+            if (parsed.isPresent() && parsed.get().id().equals(commentId)) {
+                return Optional.of(parsed.get().authorId());
+            }
+        }
+        return Optional.empty();
+    }
+
     /** Removes the comment; false if there was none with that id. Matched by its id, not by text that may appear in a reply to it. */
     public boolean delete(UUID roomId, UUID commentId) {
         for (String raw : connection.sync().lrange(commentsKey(roomId), 0, -1)) {

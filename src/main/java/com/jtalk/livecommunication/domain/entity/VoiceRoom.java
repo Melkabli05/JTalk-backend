@@ -60,15 +60,8 @@ public record VoiceRoom(
 
     /** What a user is in this room: the host, a moderator, a speaker on the stage, or a listener. */
     public ParticipantRole roleOf(UUID userId, boolean onStage) {
-        return roleOf(userId, onStage, false);
-    }
-
-    public ParticipantRole roleOf(UUID userId, boolean onStage, boolean isModerator) {
         if (isHost(userId)) {
             return ParticipantRole.HOST;
-        }
-        if (isModerator) {
-            return ParticipantRole.MODERATOR;
         }
         return onStage ? ParticipantRole.SPEAKER : ParticipantRole.LISTENER;
     }

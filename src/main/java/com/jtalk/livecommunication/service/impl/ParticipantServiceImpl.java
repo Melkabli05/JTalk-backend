@@ -66,8 +66,8 @@ class ParticipantServiceImpl implements ParticipantService {
         boolean canPublishAudio = join.onStage() && !isHostMuted;
         return new RoomSessionResponse(mapper.toResponse(room, join.stats()), gateway.serverUrl(),
                 gateway.generateToken(roomId, userId, canPublishAudio, join.joiningProfile()),
-                room.roleOf(userId, join.onStage(), stage.isModerator(roomId, userId)), canPublishAudio, join.snapshot().chat().muted(),
-                isSelfMuted, isHostMuted, join.snapshot());
+                room.roleOf(userId, join.onStage()), canPublishAudio, join.snapshot().chat().muted(),
+                isSelfMuted, isHostMuted, join.snapshot(), join.moderator());
     }
 
     @Override
@@ -76,7 +76,7 @@ class ParticipantServiceImpl implements ParticipantService {
         var state = roomJoin.read(roomId, userId, room.isHost(userId))
                 .orElseThrow(() -> ProblemType.NOT_IN_ROOM.because(userId + " has not joined room " + roomId));
         return new RoomSnapshotResponse(mapper.toResponse(room, state.stats()),
-                room.roleOf(userId, state.onStage(), stage.isModerator(roomId, userId)), state.snapshot());
+                room.roleOf(userId, state.onStage()), state.snapshot(), state.moderator());
     }
 
     @Override
@@ -198,8 +198,9 @@ class ParticipantServiceImpl implements ParticipantService {
         Set<UUID> moderators = roster.moderators();
         return mapper.toParticipantResponses(roster.present().stream()
                 .map(userId -> new Participant(userId,
-                        room.roleOf(userId, speakers.contains(userId), moderators.contains(userId)),
-                        roster.reconnecting().contains(userId) ? PresenceStatus.RECONNECTING : PresenceStatus.ACTIVE))
+                        room.roleOf(userId, speakers.contains(userId)),
+                        roster.reconnecting().contains(userId) ? PresenceStatus.RECONNECTING : PresenceStatus.ACTIVE,
+                        moderators.contains(userId)))
                 .toList());
     }
 
