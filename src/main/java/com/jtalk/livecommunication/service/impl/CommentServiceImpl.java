@@ -26,6 +26,9 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 class CommentServiceImpl implements CommentService {
 
+    private static final Pattern BLOCKED_IMAGE_PATTERN = Pattern.compile(
+            "(?is)(data:image/|<img\\b|!\\[[^\\]]*\\]\\([^)]+\\)|https?://\\S+\\.(?:png|jpe?g|webp|gif|svg|bmp|avif)(?:[?#]\\S*)?)");
+
     private final VoiceRoomService rooms;
     private final CommentRepository comments;
     private final RoomAccessValidator access;
@@ -60,6 +63,9 @@ class CommentServiceImpl implements CommentService {
         }
         if (type == CommentType.TEXT && (corrected != null || cleanedTip != null)) {
             throw ProblemType.INVALID_COMMENT.because("Only a correction has a corrected phrase");
+        }
+        if (containsImagePayload(said) || containsImagePayload(corrected) || containsImagePayload(cleanedTip)) {
+            throw ProblemType.INVALID_COMMENT.because("Images are not supported in comments");
         }
 
         RoomComment comment = new RoomComment(UUID.randomUUID(), userId, type, said, corrected, replyTo, clock.instant(), null, cleanedTip);
@@ -186,5 +192,9 @@ class CommentServiceImpl implements CommentService {
 
     private static String clean(String text) {
         return TextSanitizer.cleanMultiLine(text);
+    }
+
+    private static boolean containsImagePayload(@Nullable String text) {
+        return text != null && BLOCKED_IMAGE_PATTERN.matcher(text).find();
     }
 }

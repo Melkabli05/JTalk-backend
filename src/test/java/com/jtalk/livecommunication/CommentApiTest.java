@@ -390,4 +390,17 @@ class CommentApiTest extends ApiTestBase {
         assertEquals(List.of(), redis.sync().hkeys("voiceroom:{" + room + "}:reaction-counts"), "its counts go with it");
         assertProblem(HttpStatus.NOT_FOUND, "comment-not-found", () -> react(room, id, "bob", "CLAP"));
     }
+
+    @Test
+    void rejectsImagePasteOrInjectionInComments() {
+        String room = roomWithPeople();
+        for (String payload : List.of(
+                "data:image/png;base64,iVBORw0KGgo=",
+                "<img src=\"https://example.com/photo.png\">",
+                "![photo](https://example.com/photo.jpg)",
+                "https://cdn.example.com/pic.webp?size=large")) {
+            assertProblem(HttpStatus.BAD_REQUEST, "invalid-comment",
+                    () -> comment(room, "alice", text(payload)));
+        }
+    }
 }
