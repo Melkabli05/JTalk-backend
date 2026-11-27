@@ -1,6 +1,7 @@
 package com.jtalk.livecommunication.service.impl;
 
 import com.jtalk.livecommunication.config.ProblemType;
+import com.jtalk.livecommunication.config.TextSanitizer;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.CommentType;
 import com.jtalk.livecommunication.domain.enums.Reaction;

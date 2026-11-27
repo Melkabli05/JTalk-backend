@@ -22,6 +22,7 @@ import com.jtalk.livecommunication.service.RoomFeed;
 import com.jtalk.livecommunication.service.VoiceRoomService;
 import com.jtalk.livecommunication.service.RoomAccessValidator;
 import com.jtalk.livecommunication.config.ProblemType;
+import com.jtalk.livecommunication.config.TextSanitizer;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import io.micronaut.cache.CacheManager;
 import io.micronaut.cache.annotation.CacheInvalidate;
