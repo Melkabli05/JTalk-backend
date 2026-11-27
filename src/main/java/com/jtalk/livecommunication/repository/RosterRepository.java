@@ -1,12 +1,17 @@
 package com.jtalk.livecommunication.repository;
 
+import com.jtalk.livecommunication.config.VoiceRoomProperties;
 import io.lettuce.core.KeyValue;
 import io.lettuce.core.Range;
 import io.lettuce.core.RedisFuture;
+import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
+import io.micronaut.core.annotation.Nullable;
+import io.micronaut.core.io.ResourceResolver;
 import jakarta.inject.Singleton;
 
+import java.time.Clock;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -35,11 +40,40 @@ public class RosterRepository extends RedisRepository {
     public record Departure(boolean wasPresent, boolean onStage) {
     }
 
-    private final PresenceRepository presence;
+    public enum HostExitAction {
+        CLOSE, CLOSE_HOST_ABSENT, NEED_SUCCESSOR, SUCCESSOR_NOT_IN_ROOM, TRANSFER
+    }
 
-    public RosterRepository(StatefulRedisConnection<String, String> connection, PresenceRepository presence) {
+    public record HostExitOutcome(HostExitAction action, @Nullable UUID nextHostId, boolean nextHostWasOnStage) {
+    }
+
+    private final PresenceRepository presence;
+    private final Clock clock;
+    private final String ttlSeconds;
+    private final LuaScript hostExitScript;
+
+    public RosterRepository(StatefulRedisConnection<String, String> connection, PresenceRepository presence,
+                            Clock clock, VoiceRoomProperties properties, ResourceResolver resources) {
         super(connection);
         this.presence = presence;
+        this.clock = clock;
+        this.ttlSeconds = Long.toString(properties.stateTtl().toSeconds());
+        this.hostExitScript = LuaScript.load(resources, "lua/host_exit.lua");
+    }
+
+    public HostExitOutcome exitHost(UUID roomId, UUID hostId, @Nullable UUID successorUserId, boolean abruptExpiry) {
+        List<?> res = hostExitScript.execute(connection.sync(), ScriptOutputType.MULTI,
+                new String[]{PresenceRepository.key(roomId), StageRepository.stageKey(roomId),
+                        StageRepository.queueKey(roomId), StageRepository.moderatorsKey(roomId)},
+                hostId.toString(), successorUserId == null ? "" : successorUserId.toString(),
+                Long.toString(presence.freshnessCutoff().toEpochMilli()), Long.toString(clock.millis()),
+                ttlSeconds, abruptExpiry ? "1" : "0");
+        HostExitAction action = HostExitAction.valueOf((String) res.getFirst());
+        if (action == HostExitAction.TRANSFER) {
+            connection.sync().hdel(PresenceRepository.USER_ROOM_KEY, hostId.toString());
+            return new HostExitOutcome(action, UUID.fromString((String) res.get(1)), "1".equals(res.get(2)));
+        }
+        return new HostExitOutcome(action, null, false);
     }
 
     public Roster read(UUID roomId) {

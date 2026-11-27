@@ -404,6 +404,46 @@ class VoiceRoomApiTest extends ApiTestBase {
         assertProblem(HttpStatus.NOT_FOUND, "voice-room-not-found", () -> getRoom(roomId));
     }
 
+    @Test
+    void hostLeavingWithModeratorPromotesModeratorOntoStage() {
+        String roomId = createRoom("host", "Mod Succession", 4);
+        join(roomId, "host");
+        join(roomId, "alice");
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/moderators/" + id("alice"), "host").status());
+        gateway.events.clear();
+        gateway.permissionChanges.clear();
+
+        assertEquals(HttpStatus.NO_CONTENT, postEmpty(roomId, "/participants/leave", "host").status());
+
+        Map<String, Object> room = getRoom(roomId);
+        assertEquals(id("alice").toString(), room.get("hostId"));
+        assertTrue(((List<?>) getStage(roomId).get("speakers")).contains(id("alice").toString()));
+        assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("alice"), true)));
+        assertTrue(gateway.events.stream().anyMatch(e ->
+                e.type() == com.jtalk.livecommunication.domain.enums.RoomEventType.HOST_TRANSFERRED
+                        && id("alice").equals(e.targetUserId())));
+    }
+
+    @Test
+    void hostLeavingWithoutModeratorRequiresValidSuccessorAndSeatsListener() {
+        String roomId = createRoom("host", "Pick Successor", 4);
+        join(roomId, "host");
+        join(roomId, "bob");
+
+        assertProblem(HttpStatus.CONFLICT, "host-successor-required",
+                () -> postEmpty(roomId, "/participants/leave", "host"));
+        assertProblem(HttpStatus.CONFLICT, "successor-not-in-room",
+                () -> postJson(roomId, "/participants/leave", "host", Map.of("successorUserId", UUID.randomUUID().toString())));
+
+        gateway.permissionChanges.clear();
+        assertEquals(HttpStatus.NO_CONTENT, postJson(roomId, "/participants/leave", "host",
+                Map.of("successorUserId", id("bob").toString())).status());
+
+        assertEquals(id("bob").toString(), getRoom(roomId).get("hostId"));
+        assertTrue(((List<?>) getStage(roomId).get("speakers")).contains(id("bob").toString()));
+        assertTrue(gateway.permissionChanges.contains(new PermissionChange(uuid(roomId), id("bob"), true)));
+    }
+
     // ---- helpers ----------------------------------------------------------------------------------
 
     private static Map<String, String> rolesByUser(List<Map<String, Object>> participants) {

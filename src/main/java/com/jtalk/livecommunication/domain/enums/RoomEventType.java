@@ -31,5 +31,7 @@ public enum RoomEventType {
     /** Host appointed a participant as a room moderator. Carries targetUserId. */
     MODERATOR_ASSIGNED,
     /** Host revoked moderator authority from a participant. Carries targetUserId. */
-    MODERATOR_REVOKED
+    MODERATOR_REVOKED,
+    /** Host grace lease expired with no moderator to succeed; room is closing. */
+    ROOM_CLOSED_HOST_ABSENT
 }

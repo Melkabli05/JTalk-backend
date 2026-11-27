@@ -26,6 +26,8 @@ public interface ParticipantService {
     /** Leaves the room, cleaning up presence, hand raise or stage seat (promoting the next hand-raiser). */
     void leaveRoom(@NonNull UUID roomId, @NonNull UUID userId);
 
+    void leaveRoom(@NonNull UUID roomId, @NonNull UUID userId, @io.micronaut.core.annotation.Nullable UUID successorUserId);
+
     /**
      * Host-only moderation: removes the user (freeing their seat), disconnects them from LiveKit, revokes the tokens they
      * hold and bars them from joining the room again.

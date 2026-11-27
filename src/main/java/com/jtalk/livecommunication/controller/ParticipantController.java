@@ -1,5 +1,6 @@
 package com.jtalk.livecommunication.controller;
 
+import com.jtalk.livecommunication.dto.request.LeaveRoomRequest;
 import com.jtalk.livecommunication.dto.response.ParticipantResponse;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
 import com.jtalk.livecommunication.dto.response.RoomSnapshotResponse;
@@ -7,6 +8,7 @@ import com.jtalk.livecommunication.domain.model.AudiencePage;
 import com.jtalk.livecommunication.service.ParticipantService;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.http.HttpStatus;
+import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
@@ -42,8 +44,8 @@ class ParticipantController {
 
     @Post("/leave")
     @Status(HttpStatus.NO_CONTENT)
-    void leaveRoom(UUID roomId, @CurrentUser UUID userId) {
-        participants.leaveRoom(roomId, userId);
+    void leaveRoom(UUID roomId, @CurrentUser UUID userId, @Nullable @Body LeaveRoomRequest request) {
+        participants.leaveRoom(roomId, userId, request == null ? null : request.successorUserId());
     }
 
     @Get

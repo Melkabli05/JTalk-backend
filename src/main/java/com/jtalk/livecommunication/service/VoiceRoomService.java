@@ -54,6 +54,8 @@ public interface VoiceRoomService {
      */
     void transferHost(@NonNull UUID roomId, @NonNull UUID currentHostId, @NonNull UUID toUserId);
 
+    void handleHostExit(@NonNull UUID roomId, @NonNull UUID hostId, @Nullable UUID successorUserId, boolean abruptExpiry);
+
     /** The ids of the rooms that are open right now. */
     List<UUID> openRoomIds();
 

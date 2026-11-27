@@ -38,7 +38,9 @@ public enum ProblemType {
     MEDIA_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "Media server rejected the request"),
     MEDIA_SERVER_UNREACHABLE(HttpStatus.BAD_GATEWAY, "Media server unreachable"),
     NOT_A_PARTICIPANT(HttpStatus.CONFLICT, "User is not a participant in this room"),
-    CANNOT_TRANSFER_HOST_TO_SELF(HttpStatus.UNPROCESSABLE_ENTITY, "Cannot transfer host to yourself");
+    CANNOT_TRANSFER_HOST_TO_SELF(HttpStatus.UNPROCESSABLE_ENTITY, "Cannot transfer host to yourself"),
+    HOST_SUCCESSOR_REQUIRED(HttpStatus.CONFLICT, "Choose a participant to take over as host before leaving"),
+    SUCCESSOR_NOT_IN_ROOM(HttpStatus.CONFLICT, "That participant is no longer in the room");
 
     private static final String TYPE_PREFIX = "urn:jtalk:live-communication:problem:";
 

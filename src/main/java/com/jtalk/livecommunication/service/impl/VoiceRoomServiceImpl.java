@@ -297,6 +297,50 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         }
     }
 
+    @Override
+    @Transactional
+    @CacheInvalidate(value = "room-metadata", parameters = "roomId")
+    @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
+    public void handleHostExit(UUID roomId, UUID hostId, @Nullable UUID successorUserId, boolean abruptExpiry) {
+        VoiceRoom room = loadForUpdate(roomId);
+        if (!room.isHost(hostId)) {
+            return;
+        }
+        RosterRepository.HostExitOutcome outcome = roster.exitHost(roomId, hostId, successorUserId, abruptExpiry);
+        switch (outcome.action()) {
+            case CLOSE -> closeRoomIfActive(roomId);
+            case CLOSE_HOST_ABSENT -> {
+                events.announce(roomId, RoomEventType.ROOM_CLOSED_HOST_ABSENT, hostId);
+                closeRoomIfActive(roomId);
+            }
+            case NEED_SUCCESSOR -> throw ProblemType.HOST_SUCCESSOR_REQUIRED
+                    .because("Choose a participant to take over as host before leaving");
+            case SUCCESSOR_NOT_IN_ROOM -> throw ProblemType.SUCCESSOR_NOT_IN_ROOM
+                    .because("That participant is no longer in the room");
+            case TRANSFER -> {
+                UUID nextHostId = outcome.nextHostId();
+                VoiceRoom saved = rooms.update(room.withHost(nextHostId));
+                leases.deleteHostLease(roomId);
+                stage.clearUserMuteStates(roomId, hostId);
+                if (!outcome.nextHostWasOnStage()) {
+                    stage.clearUserMuteStates(roomId, nextHostId);
+                    gateway.setPublishPermission(roomId, nextHostId, true);
+                }
+                if (!abruptExpiry) {
+                    gateway.removeParticipant(roomId, hostId);
+                }
+                feed.updated(toResponse(saved));
+                events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
+                events.announce(roomId, RoomEventType.HOST_TRANSFERRED, nextHostId);
+                if (!outcome.nextHostWasOnStage()) {
+                    events.announceStage(roomId, RoomEventType.STAGE_UPDATED, nextHostId);
+                }
+                log.info("Host of room {} exited (abrupt={}); transferred host to {}", roomId, abruptExpiry, nextHostId);
+            }
+        }
+    }
+
     @Transactional
     @CacheInvalidate(value = "room-metadata", parameters = "roomId")
     @CacheInvalidate(value = FEED_CACHE, all = true)
@@ -306,20 +350,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         if (maybeRoom.isEmpty()) {
             return;
         }
-        VoiceRoom room = maybeRoom.get();
-        UUID nextHostId = roster.read(roomId).speakers().stream()
-                .filter(id -> !id.equals(room.hostId()))
-                .findFirst()
-                .orElse(null);
-        if (nextHostId == null) {
-            closeRoomIfActive(roomId);
-            return;
-        }
-        VoiceRoom saved = rooms.update(room.withHost(nextHostId));
-        feed.updated(toResponse(saved));
-        events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
-        events.announce(roomId, RoomEventType.HOST_TRANSFERRED, nextHostId);
-        log.info("Host grace lease expired in room {}; promoted speaker {} to host", roomId, nextHostId);
+        handleHostExit(roomId, maybeRoom.get().hostId(), null, true);
     }
 
     /**

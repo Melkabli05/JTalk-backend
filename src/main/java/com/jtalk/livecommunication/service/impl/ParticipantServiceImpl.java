@@ -81,17 +81,16 @@ class ParticipantServiceImpl implements ParticipantService {
 
     @Override
     public void leaveRoom(UUID roomId, UUID userId) {
-        RosterRepository.Departure left = rosterRepository.leave(roomId, userId);   // presence and hand dropped, seat looked up: one round trip
+        leaveRoom(roomId, userId, null);
+    }
+
+    @Override
+    public void leaveRoom(UUID roomId, UUID userId, @io.micronaut.core.annotation.Nullable UUID successorUserId) {
         if (isHost(roomId, userId)) {
-            if (rosterRepository.read(roomId).present().isEmpty()) {
-                rooms.closeRoom(roomId, userId);
-                return;
-            }
-            if (left.wasPresent()) {
-                events.userLeft(roomId, userId);
-            }
+            rooms.handleHostExit(roomId, userId, successorUserId, false);
             return;
         }
+        RosterRepository.Departure left = rosterRepository.leave(roomId, userId);   // presence and hand dropped, seat looked up: one round trip
         if (left.wasPresent()) {
             events.userLeft(roomId, userId);
         }
