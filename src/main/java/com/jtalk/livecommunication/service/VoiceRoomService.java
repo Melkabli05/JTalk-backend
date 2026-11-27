@@ -3,6 +3,7 @@ package com.jtalk.livecommunication.service;
 import com.jtalk.livecommunication.dto.request.CreateVoiceRoomRequest;
 import com.jtalk.livecommunication.dto.request.UpdateVoiceRoomRequest;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.dto.response.UserLivePresenceResponse;
 import com.jtalk.livecommunication.dto.response.VoiceRoomResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import io.micronaut.core.annotation.NonNull;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,4 +67,10 @@ public interface VoiceRoomService {
     VoiceRoom getRequiredActiveRoom(@NonNull UUID roomId);
 
     RoomSessionResponse sessionFor(@NonNull VoiceRoom room, @NonNull UUID userId, boolean onStage);
+
+    /** Whether {@code userId} is currently present in any active voice room. */
+    UserLivePresenceResponse getUserPresence(@NonNull UUID userId);
+
+    /** Batch lookup of live-room presence for multiple users. */
+    List<UserLivePresenceResponse> getBatchPresence(@NonNull Collection<UUID> userIds);
 }

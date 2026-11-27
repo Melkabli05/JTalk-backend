@@ -10,6 +10,11 @@ import jakarta.inject.Singleton;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -47,6 +52,61 @@ public class PresenceRepository extends RedisRepository {
     public boolean isPresent(UUID roomId, UUID userId) {
         Double lastSeen = connection.sync().zscore(key(roomId), userId.toString());
         return lastSeen != null && lastSeen >= freshnessCutoff().toEpochMilli();
+    }
+
+    /**
+     * Finds the first active room {@code userId} is currently present in, in one pipelined Redis round trip.
+     */
+    public Optional<UUID> findActiveRoomForUser(Collection<UUID> activeRoomIds, UUID userId) {
+        if (activeRoomIds.isEmpty()) {
+            return Optional.empty();
+        }
+        String member = userId.toString();
+        long cutoff = freshnessCutoff().toEpochMilli();
+        RedisAsyncCommands<String, String> redis = connection.async();
+        Map<UUID, RedisFuture<Double>> pending = new LinkedHashMap<>();
+        for (UUID roomId : activeRoomIds) {
+            pending.put(roomId, redis.zscore(key(roomId), member));
+        }
+        await(pending.values().toArray(RedisFuture[]::new));
+        return pending.entrySet().stream()
+                .filter(entry -> {
+                    Double score = entry.getValue().toCompletableFuture().join();
+                    return score != null && score >= cutoff;
+                })
+                .map(Map.Entry::getKey)
+                .findFirst();
+    }
+
+    /**
+     * Finds the active room (if any) each requested user is currently present in, in one pipelined Redis round trip.
+     */
+    public Map<UUID, UUID> findActiveRoomsForUsers(Collection<UUID> activeRoomIds, Collection<UUID> userIds) {
+        if (activeRoomIds.isEmpty() || userIds.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> distinctUsers = userIds.stream().distinct().toList();
+        String[] members = distinctUsers.stream().map(UUID::toString).toArray(String[]::new);
+        long cutoff = freshnessCutoff().toEpochMilli();
+
+        RedisAsyncCommands<String, String> redis = connection.async();
+        Map<UUID, RedisFuture<List<Double>>> pending = new LinkedHashMap<>();
+        for (UUID roomId : activeRoomIds) {
+            pending.put(roomId, redis.zmscore(key(roomId), members));
+        }
+        await(pending.values().toArray(RedisFuture[]::new));
+
+        Map<UUID, UUID> result = new LinkedHashMap<>();
+        pending.forEach((roomId, future) -> {
+            List<Double> scores = future.toCompletableFuture().join();
+            for (int i = 0; i < distinctUsers.size() && i < scores.size(); i++) {
+                Double score = scores.get(i);
+                if (score != null && score >= cutoff) {
+                    result.putIfAbsent(distinctUsers.get(i), roomId);
+                }
+            }
+        });
+        return result;
     }
 
     /** Bars a kicked user from joining this room again. */

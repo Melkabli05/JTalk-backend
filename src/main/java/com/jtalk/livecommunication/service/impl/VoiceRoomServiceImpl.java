@@ -3,6 +3,7 @@ package com.jtalk.livecommunication.service.impl;
 import com.jtalk.livecommunication.dto.request.CreateVoiceRoomRequest;
 import com.jtalk.livecommunication.dto.request.UpdateVoiceRoomRequest;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.dto.response.UserLivePresenceResponse;
 import com.jtalk.livecommunication.dto.response.VoiceRoomResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.ParticipantRole;
@@ -13,6 +14,7 @@ import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.domain.model.RoomSettings;
 import com.jtalk.livecommunication.domain.model.RoomSpeakerSummary;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
+import com.jtalk.livecommunication.repository.PresenceRepository;
 import com.jtalk.livecommunication.repository.RosterRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
 import com.jtalk.livecommunication.repository.VoiceRoomRepository;
@@ -40,6 +42,7 @@ import static com.jtalk.livecommunication.config.CommunicationConstants.MAX_PAGE
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,13 +54,17 @@ import java.util.UUID;
 class VoiceRoomServiceImpl implements VoiceRoomService {
 
     private static final String FEED_CACHE = "active-rooms-feed";
+    private static final String ACTIVE_ROOM_IDS_CACHE = "active-room-ids";
     @SuppressWarnings("unchecked")
     private static final Class<CursoredPage<VoiceRoomResponse>> FEED_PAGE = (Class<CursoredPage<VoiceRoomResponse>>) (Class<?>) CursoredPage.class;
+    @SuppressWarnings("unchecked")
+    private static final Class<List<UUID>> ROOM_ID_LIST = (Class<List<UUID>>) (Class<?>) List.class;
     private static final Sort NEWEST_FIRST = Sort.of(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final VoiceRoomRepository rooms;
     private final StageRepository stage;
     private final LiveStatsRepository liveStats;
+    private final PresenceRepository presence;
     private final RosterRepository roster;
     private final SpeakerProfileExpander speakerExpander;
     private final LiveKitGateway gateway;
@@ -70,6 +77,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     @Override
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = ACTIVE_ROOM_IDS_CACHE, all = true)
     public RoomSessionResponse createRoom(UUID hostId, CreateVoiceRoomRequest request) {
         return rooms.findFirstByHostIdAndStatus(hostId, VoiceRoomStatus.ACTIVE)
                 .map(existing -> rejoin(existing, hostId))   // a host runs one room at a time
@@ -158,6 +166,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @Transactional
     @CacheInvalidate(value = "room-metadata", parameters = "roomId")
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = ACTIVE_ROOM_IDS_CACHE, all = true)
     public void closeRoom(UUID roomId, UUID requesterId) {
         VoiceRoom room = loadForUpdate(roomId);
         access.requireHost(room, requesterId, "close this room");
@@ -210,11 +219,13 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
 
     @Override
     public List<UUID> openRoomIds() {
-        return rooms.findIdByStatus(VoiceRoomStatus.ACTIVE);
+        return caches.getCache(ACTIVE_ROOM_IDS_CACHE)
+                .get("all", ROOM_ID_LIST, () -> rooms.findIdByStatus(VoiceRoomStatus.ACTIVE));
     }
 
     @Override
     @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = ACTIVE_ROOM_IDS_CACHE, all = true)
     public void eraseRoomsHostedBy(UUID hostId) {
         rooms.deleteByHostId(hostId);
     }
@@ -265,6 +276,24 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         var live = liveStats.findForSession(room.id(), userId);
         return new RoomSessionResponse(mapper.toResponse(room, live.stats()), gateway.serverUrl(),
                 gateway.generateToken(room.id(), userId, onStage), room.roleOf(userId, onStage), onStage, live.chatMuted(), null);
+    }
+
+    @Override
+    public UserLivePresenceResponse getUserPresence(UUID userId) {
+        UUID roomId = presence.findActiveRoomForUser(openRoomIds(), userId).orElse(null);
+        return new UserLivePresenceResponse(userId, roomId != null, roomId);
+    }
+
+    @Override
+    public List<UserLivePresenceResponse> getBatchPresence(Collection<UUID> userIds) {
+        List<UUID> distinct = userIds.stream().distinct().toList();
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, UUID> active = presence.findActiveRoomsForUsers(openRoomIds(), distinct);
+        return distinct.stream()
+                .map(id -> new UserLivePresenceResponse(id, active.containsKey(id), active.get(id)))
+                .toList();
     }
 
     private VoiceRoomResponse toResponse(VoiceRoom room) {

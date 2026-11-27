@@ -1,9 +1,11 @@
 package com.jtalk.livecommunication.controller;
 
 import com.jtalk.livecommunication.dto.request.CreateVoiceRoomRequest;
+import com.jtalk.livecommunication.dto.request.BatchPresenceRequest;
 import com.jtalk.livecommunication.dto.request.TransferHostRequest;
 import com.jtalk.livecommunication.dto.request.UpdateVoiceRoomRequest;
 import com.jtalk.livecommunication.dto.response.RoomSessionResponse;
+import com.jtalk.livecommunication.dto.response.UserLivePresenceResponse;
 import com.jtalk.livecommunication.dto.response.VoiceRoomResponse;
 import com.jtalk.livecommunication.service.VoiceRoomService;
 import io.micronaut.core.annotation.Nullable;
@@ -33,6 +35,7 @@ import static com.jtalk.livecommunication.config.CommunicationConstants.MAX_PAGE
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Controller("/api/v1/voice-rooms")
@@ -83,5 +86,15 @@ class VoiceRoomController {
     @Status(HttpStatus.NO_CONTENT)
     void transferHost(UUID roomId, @CurrentUser UUID userId, @Body @Valid TransferHostRequest request) {
         rooms.transferHost(roomId, userId, request.toUserId());
+    }
+
+    @Get("/presence/{userId}")
+    UserLivePresenceResponse getUserPresence(UUID userId) {
+        return rooms.getUserPresence(userId);
+    }
+
+    @Post("/presence/batch")
+    List<UserLivePresenceResponse> getBatchPresence(@Body @Valid BatchPresenceRequest request) {
+        return rooms.getBatchPresence(request.userIds());
     }
 }
