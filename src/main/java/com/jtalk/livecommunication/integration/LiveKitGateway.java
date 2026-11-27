@@ -7,6 +7,7 @@ import com.jtalk.livecommunication.domain.model.RoomRealtimeEvent;
 import io.micronaut.core.annotation.NonNull;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -19,6 +20,11 @@ public interface LiveKitGateway {
 
     /** Disconnects everyone and discards the media room. Idempotent. */
     void deleteRoom(@NonNull UUID roomId);
+
+    /** Returns the UUIDs of rooms currently open on LiveKit. */
+    default Set<UUID> listActiveRoomIds() {
+        return Set.of();
+    }
 
     /** The websocket URL clients connect to with a token from {@link #generateToken}. */
     String serverUrl();

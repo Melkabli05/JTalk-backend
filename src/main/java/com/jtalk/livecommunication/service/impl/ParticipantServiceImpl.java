@@ -136,6 +136,10 @@ class ParticipantServiceImpl implements ParticipantService {
         }
         if (room.get().isHost(userId)) {
             dropPresence(roomId, userId);
+            if (leases.createHostLease(roomId)) {
+                log.info("Host {} media dropped in room {}. Starting host grace lease.", userId, roomId);
+                events.announce(roomId, RoomEventType.HOST_RECONNECTING, userId);
+            }
         } else if (stage.isOnStage(roomId, userId)) {
             log.info("Speaker {} media dropped in room {}. Starting the stage grace lease.", userId, roomId);
             if (leases.create(roomId, userId)) {
@@ -145,18 +149,32 @@ class ParticipantServiceImpl implements ParticipantService {
             dropPresence(roomId, userId);
             stage.removeHandRaise(roomId, userId);
         }
+        if (presence.count(roomId) == 1) {
+            leases.refreshSoloTimer(roomId);
+        }
     }
 
     @Override
     public void handleMediaConnected(UUID roomId, UUID userId) {
-        if (rooms.findActiveRoom(roomId).isEmpty() || presence.isBanned(roomId, userId)) {
+        Optional<VoiceRoom> room = rooms.findActiveRoom(roomId);
+        if (room.isEmpty() || presence.isBanned(roomId, userId)) {
             return;
         }
         if (presence.connected(roomId, userId)) {
             events.userJoined(roomId, userId);
         }
-        if (leases.delete(roomId, userId)) {
+        if (room.get().isHost(userId)) {
+            if (leases.deleteHostLease(roomId)) {
+                events.announce(roomId, RoomEventType.HOST_RECONNECTED, userId);
+            }
+        } else if (leases.delete(roomId, userId)) {
             events.announce(roomId, RoomEventType.SPEAKER_RECONNECTED, userId);
+        }
+        long count = presence.count(roomId);
+        if (count > 1) {
+            leases.clearSoloAndIdleTimers(roomId);
+        } else if (count == 1) {
+            leases.refreshSoloTimer(roomId);
         }
     }
 

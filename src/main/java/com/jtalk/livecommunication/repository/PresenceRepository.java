@@ -160,6 +160,12 @@ public class PresenceRepository extends RedisRepository {
         return connection.sync().sismember(bannedKey(roomId), userId.toString());
     }
 
+    public long count(UUID roomId) {
+        Long n = connection.sync().zcount(key(roomId),
+                Range.create((double) freshnessCutoff().toEpochMilli(), Double.POSITIVE_INFINITY));
+        return n == null ? 0L : n;
+    }
+
     public void clear(UUID roomId) {
         List<String> members = connection.sync().zrange(key(roomId), 0, -1);
         RedisAsyncCommands<String, String> redis = connection.async();

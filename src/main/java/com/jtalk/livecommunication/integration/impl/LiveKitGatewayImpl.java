@@ -36,6 +36,7 @@ import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -60,8 +61,26 @@ class LiveKitGatewayImpl implements LiveKitGateway {
     @Override
     public void createRoom(UUID roomId) {
         // name, emptyTimeout, maxParticipants, nodeId, metadata, minPlayoutDelay, maxPlayoutDelay, syncStreams, departureTimeout
-        execute(roomService.createRoom(roomId.toString(), properties.emptyRoomTimeoutSeconds(), null, null, null, null, null, null, null),
+        execute(roomService.createRoom(roomId.toString(), properties.emptyRoomTimeoutSeconds(), null, null, null, null, null, null,
+                        properties.departureRoomTimeoutSeconds()),
                 "create room");
+    }
+
+    @Override
+    public Set<UUID> listActiveRoomIds() {
+        var response = execute(roomService.listRooms(), "list rooms");
+        if (response == null || response.body() == null) {
+            return Set.of();
+        }
+        Set<UUID> ids = new java.util.HashSet<>();
+        for (livekit.LivekitModels.Room room : response.body()) {
+            try {
+                ids.add(UUID.fromString(room.getName()));
+            } catch (IllegalArgumentException _) {
+                // Ignore non-UUID rooms not created by this service.
+            }
+        }
+        return Set.copyOf(ids);
     }
 
     @Override

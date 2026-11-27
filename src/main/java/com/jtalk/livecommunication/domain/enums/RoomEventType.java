@@ -19,5 +19,13 @@ public enum RoomEventType {
     /** A comment was pinned. Carries the comment ID. */
     COMMENT_PINNED,
     /** A comment was unpinned. Carries the comment ID. */
-    COMMENT_UNPINNED
+    COMMENT_UNPINNED,
+    /** The host's media dropped; a grace lease is active before succession or closure. */
+    HOST_RECONNECTING,
+    /** The host reconnected before the grace lease expired. */
+    HOST_RECONNECTED,
+    /** Host role was automatically transferred to the longest-seated speaker. */
+    HOST_TRANSFERRED,
+    /** Solo room inactivity warning: host must tap Stay Live before the countdown expires. */
+    ROOM_IDLE_WARNING
 }

@@ -2,6 +2,7 @@ package com.jtalk.livecommunication.service.impl;
 
 import com.jtalk.livecommunication.service.LiveKitWebhookService;
 import com.jtalk.livecommunication.service.ParticipantService;
+import com.jtalk.livecommunication.service.VoiceRoomService;
 import com.jtalk.livecommunication.config.ProblemType;
 import io.livekit.server.WebhookReceiver;
 import jakarta.inject.Singleton;
@@ -17,10 +18,15 @@ class LiveKitWebhookServiceImpl implements LiveKitWebhookService {
 
     private final WebhookReceiver receiver;
     private final ParticipantService participants;
+    private final VoiceRoomService rooms;
 
     @Override
     public void handle(String body, String authorizationHeader) {
         WebhookEvent event = verify(body, authorizationHeader);
+        if ("room_finished".equals(event.getEvent())) {
+            MediaParticipant.parseId(event.getRoom().getName()).ifPresent(rooms::closeRoomIfActive);
+            return;
+        }
         // Not one of our voice rooms or not one of our users: nothing to do.
         MediaParticipant.of(event).ifPresent(who -> {
             switch (event.getEvent()) {

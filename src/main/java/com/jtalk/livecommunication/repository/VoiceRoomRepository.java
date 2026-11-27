@@ -32,6 +32,8 @@ public interface VoiceRoomRepository extends CrudRepository<VoiceRoom, UUID> {
     /** The ids of every room in this state: what a person must be taken out of when their account is deleted. */
     List<UUID> findIdByStatus(VoiceRoomStatus status);
 
+    List<VoiceRoom> findByStatus(VoiceRoomStatus status);
+
     /** Erases the rooms a host ever ran: their titles and topics are the person's own words. */
     void deleteByHostId(UUID hostId);
 

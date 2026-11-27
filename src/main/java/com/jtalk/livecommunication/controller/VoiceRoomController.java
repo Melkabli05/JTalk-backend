@@ -88,6 +88,12 @@ class VoiceRoomController {
         rooms.transferHost(roomId, userId, request.toUserId());
     }
 
+    @Post("/{roomId}/keepalive")
+    @Status(HttpStatus.NO_CONTENT)
+    void keepalive(UUID roomId, @CurrentUser UUID userId) {
+        rooms.keepalive(roomId, userId);
+    }
+
     @Get("/presence/{userId}")
     UserLivePresenceResponse getUserPresence(UUID userId) {
         return rooms.getUserPresence(userId);

@@ -3,6 +3,7 @@ package com.jtalk.livecommunication.service.impl;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.integration.LiveKitGateway;
 import com.jtalk.livecommunication.repository.CommentRepository;
+import com.jtalk.livecommunication.repository.LeaseRepository;
 import com.jtalk.livecommunication.repository.PresenceRepository;
 import com.jtalk.livecommunication.repository.PrunedTrackRepository;
 import com.jtalk.livecommunication.repository.StageRepository;
@@ -31,16 +32,19 @@ class RoomClosure {
     private final PrunedTrackRepository prunedTracks;
     private final PresenceRepository presence;
     private final CommentRepository comments;
+    private final LeaseRepository leases;
     private final LiveKitGateway gateway;
 
     RoomClosure(@Named(TaskExecutors.VIRTUAL) ExecutorService background, RoomFeed feed, StageRepository stage,
-                PrunedTrackRepository prunedTracks, PresenceRepository presence, CommentRepository comments, LiveKitGateway gateway) {
+                PrunedTrackRepository prunedTracks, PresenceRepository presence, CommentRepository comments,
+                LeaseRepository leases, LiveKitGateway gateway) {
         this.background = background;
         this.feed = feed;
         this.stage = stage;
         this.prunedTracks = prunedTracks;
         this.presence = presence;
         this.comments = comments;
+        this.leases = leases;
         this.gateway = gateway;
     }
 
@@ -55,6 +59,7 @@ class RoomClosure {
         attempt(roomId, "clear the pruned tracks", () -> prunedTracks.clear(roomId));
         attempt(roomId, "clear who is present", () -> presence.clear(roomId));
         attempt(roomId, "clear the chat", () -> comments.clear(roomId));
+        attempt(roomId, "clear room leases", () -> leases.clearRoomLeases(roomId));
         attempt(roomId, "delete the media room", () -> gateway.deleteRoom(roomId));
     }
 

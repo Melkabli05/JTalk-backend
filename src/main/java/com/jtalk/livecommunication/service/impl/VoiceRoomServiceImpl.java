@@ -7,12 +7,14 @@ import com.jtalk.livecommunication.dto.response.UserLivePresenceResponse;
 import com.jtalk.livecommunication.dto.response.VoiceRoomResponse;
 import com.jtalk.livecommunication.domain.entity.VoiceRoom;
 import com.jtalk.livecommunication.domain.enums.ParticipantRole;
+import com.jtalk.livecommunication.domain.enums.RoomEventType;
 import com.jtalk.livecommunication.domain.enums.VoiceRoomStatus;
 import com.jtalk.livecommunication.domain.event.VoiceRoomClosed;
 import com.jtalk.livecommunication.dto.ApiMapper;
 import com.jtalk.livecommunication.domain.model.RoomLiveStats;
 import com.jtalk.livecommunication.domain.model.RoomSettings;
 import com.jtalk.livecommunication.domain.model.RoomSpeakerSummary;
+import com.jtalk.livecommunication.repository.LeaseRepository;
 import com.jtalk.livecommunication.repository.LiveStatsRepository;
 import com.jtalk.livecommunication.repository.PresenceRepository;
 import com.jtalk.livecommunication.repository.RosterRepository;
@@ -67,6 +69,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     private final StageRepository stage;
     private final LiveStatsRepository liveStats;
     private final PresenceRepository presence;
+    private final LeaseRepository leases;
     private final RosterRepository roster;
     private final SpeakerProfileExpander speakerExpander;
     private final LiveKitGateway gateway;
@@ -100,6 +103,7 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
         try {
             gateway.createRoom(saved.id());
             stage.initializeStage(saved.id(), hostId);
+            leases.refreshSoloTimer(saved.id());
         } catch (RuntimeException e) {
             rooms.deleteById(saved.id());   // never leave an open room whose media room or stage does not exist
             throw e;
@@ -268,6 +272,54 @@ class VoiceRoomServiceImpl implements VoiceRoomService {
     @CacheInvalidate(value = ACTIVE_ROOM_IDS_CACHE, all = true)
     public void eraseRoomsHostedBy(UUID hostId) {
         rooms.deleteByHostId(hostId);
+    }
+
+    @Override
+    @Transactional
+    @CacheInvalidate(value = "room-metadata", parameters = "roomId")
+    @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
+    @CacheInvalidate(value = ACTIVE_ROOM_IDS_CACHE, all = true)
+    public void closeRoomIfActive(UUID roomId) {
+        if (rooms.closeIfActive(roomId) > 0) {
+            closedEvents.publishEvent(new VoiceRoomClosed(roomId));
+            log.info("Closed inactive/finished voice room {}", roomId);
+        }
+    }
+
+    @Override
+    public void keepalive(UUID roomId, UUID hostId) {
+        VoiceRoom room = getRequiredActiveRoom(roomId);
+        access.requireHost(room, hostId, "keep this room alive");
+        leases.clearIdleWarning(roomId);
+        if (presence.count(roomId) <= 1) {
+            leases.refreshSoloTimer(roomId);
+        }
+    }
+
+    @Transactional
+    @CacheInvalidate(value = "room-metadata", parameters = "roomId")
+    @CacheInvalidate(value = FEED_CACHE, all = true)
+    @CacheInvalidate(value = EXPANDED_FEED_CACHE, all = true)
+    void promoteNextSpeakerOrClose(UUID roomId) {
+        Optional<VoiceRoom> maybeRoom = rooms.findByIdAndStatus(roomId, VoiceRoomStatus.ACTIVE);
+        if (maybeRoom.isEmpty()) {
+            return;
+        }
+        VoiceRoom room = maybeRoom.get();
+        UUID nextHostId = roster.read(roomId).speakers().stream()
+                .filter(id -> !id.equals(room.hostId()))
+                .findFirst()
+                .orElse(null);
+        if (nextHostId == null) {
+            closeRoomIfActive(roomId);
+            return;
+        }
+        VoiceRoom saved = rooms.update(room.withHost(nextHostId));
+        feed.updated(toResponse(saved));
+        events.announceSettings(roomId, new RoomSettings(saved.title(), saved.topic(), saved.maxStageSeats(), saved.hostId()));
+        events.announce(roomId, RoomEventType.HOST_TRANSFERRED, nextHostId);
+        log.info("Host grace lease expired in room {}; promoted speaker {} to host", roomId, nextHostId);
     }
 
     /**

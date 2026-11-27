@@ -73,4 +73,10 @@ public interface VoiceRoomService {
 
     /** Batch lookup of live-room presence for multiple users. */
     List<UserLivePresenceResponse> getBatchPresence(@NonNull Collection<UUID> userIds);
+
+    /** Idempotent closure used by LiveKit room_finished webhooks, expiry timers, and reconciliation. */
+    void closeRoomIfActive(@NonNull UUID roomId);
+
+    /** One-shot host keepalive in response to a solo-room idle warning. */
+    void keepalive(@NonNull UUID roomId, @NonNull UUID hostId);
 }

@@ -21,7 +21,9 @@ public record LiveKitConfig(
            taken from the page is useless almost at once. */
         @Bindable(defaultValue = "PT2M") Duration tokenTtl,
         /* LiveKit closes a room this many seconds after the last participant leaves. */
-        @Bindable(defaultValue = "300") int emptyRoomTimeoutSeconds,
+        @Bindable(defaultValue = "120") int emptyRoomTimeoutSeconds,
+        /* LiveKit closes a room this many seconds after creation if nobody ever connects. */
+        @Bindable(defaultValue = "60") int departureRoomTimeoutSeconds,
         /* The longest one call to the media server may take. A slow or hung LiveKit then fails the request in this long (a 502) instead of
            holding it open for OkHttp's default of 10 s each for connecting, writing and reading. */
         @Bindable(defaultValue = "PT8S") Duration requestTimeout) {
