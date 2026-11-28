@@ -52,7 +52,7 @@ dependencies {
     implementation("io.micronaut.redis:micronaut-redis-lettuce-pubsub")
 
     // LiveKit: real-time audio (not managed by the Micronaut BOM)
-    implementation("io.livekit:livekit-server:0.17.0")
+    implementation("io.livekit:livekit-server:0.17.1")
 
     // HTTP/3 (QUIC), only active in the "quic" environment. Netty's QUIC codec needs a native library per platform.
     runtimeOnly("io.micronaut:micronaut-http-netty-http3")
